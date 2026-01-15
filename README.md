@@ -5,6 +5,7 @@ flutter pub get
 # 2. CONSTRUCCIÓN DEL ARTEFACTO (Crea la carpeta build/web)
 # Nota: Como pusiste vercel.json en /web, se copiará solo.
 flutter build web --release
+Copy-Item "web/vercel.json" -Destination "build/web/" -Force
 
 # 3. RESPALDO EN GITHUB (Guardar progreso)
 git add .

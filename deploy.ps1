@@ -1,32 +1,20 @@
-Write-Host "--- INICIANDO PROTOCOLO DE DESPLIEGUE AUTOMATICO ---" -ForegroundColor Cyan
-
-# 1. LIMPIEZA
-Write-Host "1. Limpiando motores..."
+# 1. LIMPIEZA Y PREPARACIÓN (Evita errores fantasma)
 flutter clean
 flutter pub get
 
-# 2. BUILD
-Write-Host "2. Compilando nucleo web..."
+# 2. CONSTRUCCIÓN DEL ARTEFACTO (Crea la carpeta build/web)
+# Nota: Como pusiste vercel.json en /web, se copiará solo.
 flutter build web --release
+Copy-Item "web/vercel.json" -Destination "build/web/" -Force
 
-# 3. GITHUB AUTOMATICO (Sin preguntas)
-$fecha = Get-Date -Format "yyyy-MM-dd HH:mm"
-$commitMsg = "Auto Deploy Web: $fecha"
-
-Write-Host "3. Guardando en GitHub ($commitMsg)..."
+# 3. RESPALDO EN GITHUB (Guardar progreso)
 git add .
-# El comando git commit puede fallar si no hay cambios, lo silenciamos con '2>$null' para que no pare el script
-git commit -m "$commitMsg" 2>$null 
+git commit -m "Actualización: Mejoras en UI y correcciones" 
 git push
 
-# 4. DESPLIEGUE A VERCEL
-Write-Host "4. Subiendo a la Nube (Vercel)..."
+# 4. DESPLIEGUE A PRODUCCIÓN (Maniobra de Inmersión)
 cd build\web
+vercel --prod
 
-# --prod: Producción
-# --yes: Sin preguntas
-vercel --prod --yes 
-
+# 5. RETORNO A BASE (Volver a la raíz para seguir programando)
 cd ..\..
-
-Write-Host "--- DESPLIEGUE COMPLETADO CON EXITO ---" -ForegroundColor Green
