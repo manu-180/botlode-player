@@ -7,7 +7,7 @@ flutter pub get
 
 # 2. BUILD (¡ESTA ES LA LÍNEA CLAVE!)
 Write-Host "2. Compilando nucleo web (Canvaskit)..."
-flutter build web --release --web-renderer canvaskit
+flutter build web --release 
 
 # 3. GITHUB AUTOMATICO
 $fecha = Get-Date -Format "yyyy-MM-dd HH:mm"
@@ -26,6 +26,6 @@ cd build\web
 # Vercel usará la configuración guardada en la carpeta .vercel oculta aquí.
 vercel --prod --yes 
 
-cd ..
+cd .
 
 Write-Host "--- DESPLIEGUE COMPLETADO CON EXITO ---" -ForegroundColor Green
