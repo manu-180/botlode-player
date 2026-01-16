@@ -7,8 +7,8 @@ import 'package:botlode_player/features/player/presentation/widgets/floating_bot
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:rive/rive.dart'; // Importación necesaria
 
-// Provider para el ID del Bot
 final currentBotIdProvider = Provider<String>((ref) {
   return AppConfig.fallbackBotId;
 });
@@ -16,20 +16,18 @@ final currentBotIdProvider = Provider<String>((ref) {
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 1. Cargar variables
+  // INICIALIZACIÓN OBLIGATORIA PARA 0.14.x
+  await RiveNative.init();
+
   try {
     await dotenv.load(fileName: ".env");
   } catch (e) {
-    print("⚠️ Error cargando .env: $e");
+    debugPrint("⚠️ Error cargando .env: $e");
   }
 
-  // 2. Lógica de URL
   final uri = Uri.base;
   final urlBotId = uri.queryParameters['bot_id'];
   final finalBotId = urlBotId ?? AppConfig.fallbackBotId;
-
-  print("🤖 BOTSLODE PLAYER INICIALIZADO");
-  print("🆔 BOT ID ACTIVO: $finalBotId");
 
   runApp(
     ProviderScope(
@@ -43,7 +41,6 @@ void main() async {
 
 class BotPlayerApp extends ConsumerStatefulWidget {
   const BotPlayerApp({super.key});
-
   @override
   ConsumerState<BotPlayerApp> createState() => _BotPlayerAppState();
 }
@@ -52,30 +49,18 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
   @override
   void initState() {
     super.initState();
-    
-    // --- TRUCO 1: Transparencia Forzada ---
-    // Obligamos al navegador a que el fondo del iframe sea transparente
     html.document.body!.style.backgroundColor = 'transparent';
     html.document.documentElement!.style.backgroundColor = 'transparent';
 
-    // --- TRUCO 2: El Saludo (Handshake) ---
-    // Avisamos al HTML padre: "¡Ya estoy vivo! Mándame órdenes"
-    // Usamos Future.delayed para asegurar que Riverpod esté listo
     Future.delayed(const Duration(milliseconds: 500), () {
-        print("📤 Enviando CMD_READY al padre...");
         html.window.parent?.postMessage('CMD_READY', '*');
     });
     
-    // --- ESCUCHA DE EVENTOS ---
     html.window.onMessage.listen((event) {
-      // Importante: Convertir a String para evitar errores de tipo
       final data = event.data.toString();
-      
       if (data == 'CMD_OPEN') {
-        print("📥 Recibido CMD_OPEN en Flutter");
         ref.read(chatOpenProvider.notifier).set(true);
       } else if (data == 'CMD_CLOSE') {
-        print("📥 Recibido CMD_CLOSE en Flutter");
         ref.read(chatOpenProvider.notifier).set(false);
       }
     });
@@ -90,13 +75,10 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
         canvasColor: Colors.transparent, 
         scaffoldBackgroundColor: Colors.transparent,
       ),
-      // Usamos un Builder para asegurar contexto transparente
-      builder: (context, child) {
-        return Scaffold(
-          backgroundColor: Colors.transparent,
-          body: child,
-        );
-      },
+      builder: (context, child) => Scaffold(
+        backgroundColor: Colors.transparent,
+        body: child,
+      ),
       home: const FloatingBotWidget(),
     );
   }

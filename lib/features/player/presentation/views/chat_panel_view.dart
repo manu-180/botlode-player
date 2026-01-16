@@ -46,6 +46,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
       }
     });
 
+    // YA NO NECESITAMOS MouseRegion AQUÍ. EL PADRE SE ENCARGA.
     return Container(
       width: isMobile ? double.infinity : null,
       height: isMobile ? double.infinity : null,
@@ -66,45 +67,38 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
         borderRadius: isMobile ? BorderRadius.zero : BorderRadius.circular(24),
         child: Column(
           children: [
-            // --- HEADER ---
+            // --- HEADER (ZONA DEL ROBOT) ---
             Container(
               height: 160,
               width: double.infinity,
               color: Colors.black,
               child: Stack(
                 children: [
-                  // 1. Fondo/Avatar
-                  Center(
-                    child: SizedBox(
-                      width: 200,
-                      height: 150,
+                  // 1. CAPA FONDO / AVATAR INTERACTIVO
+                  Positioned.fill(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
                       child: RiveAvatar(mood: chatState.currentMood),
                     ),
                   ),
                   
-                  // 2. BOTONES DE CONTROL (Overlay Superior)
+                  // 2. BOTONES DE CONTROL
                   Positioned(
                     top: 10,
                     right: 10,
                     child: Row(
                       mainAxisSize: MainAxisSize.min, 
                       children: [
-                        // BOTÓN REINICIAR (Único botón necesario)
                         IconButton(
                           icon: const Icon(Icons.refresh_rounded, color: Colors.white24, size: 20),
                           tooltip: "Reiniciar Chat",
                           onPressed: () => ref.read(chatResetProvider)(),
                         ),
-                        // NOTA: Eliminamos el botón de cerrar (X) aquí. 
-                        // Usaremos exclusivamente la X externa del HTML.
                       ],
                     ),
                   ),
 
-                  // NOTA: También eliminamos el botón "keyboard_arrow_down" para móviles.
-                  // La gestión de cierre es responsabilidad 100% del contenedor padre (HTML).
-
-                  // 3. Indicador de Estado (Abajo Izquierda)
+                  // 3. INDICADOR DE ESTADO
                   Positioned(
                     bottom: 16,
                     left: 20,
@@ -170,7 +164,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
                     decoration: const BoxDecoration(
                       color: Color(0xFFFFC000),
                       shape: BoxShape.circle,
-                    ),
+                      ),
                     child: IconButton(
                       onPressed: _sendMessage,
                       icon: const Icon(Icons.send_rounded, color: Colors.black, size: 20),
