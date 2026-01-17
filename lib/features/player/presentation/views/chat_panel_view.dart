@@ -18,6 +18,20 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
+  // --- TRADUCTOR DE HUMOR (String -> Int) ---
+  // Convierte "angry" en 1, "happy" en 2, etc. para Rive.
+  int _getMoodIndex(String mood) {
+    switch (mood.toLowerCase()) {
+      case 'angry': return 1;
+      case 'happy': return 2;
+      case 'sales': return 3;
+      case 'confused': return 4;
+      case 'tech': return 5;
+      case 'neutral':
+      default: return 0;
+    }
+  }
+
   void _sendMessage() {
     final text = _textController.text;
     if (text.trim().isEmpty) return;
@@ -36,17 +50,34 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    // Sincronización Inicial con Traducción
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final String moodString = ref.read(chatControllerProvider).currentMood;
+      final int moodInt = _getMoodIndex(moodString); // <--- Traducimos aquí
+      ref.read(botMoodProvider.notifier).state = moodInt;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final chatState = ref.watch(chatControllerProvider);
     final isMobile = MediaQuery.of(context).size.width < 600;
 
     ref.listen(chatControllerProvider, (prev, next) {
+      // Scroll automático
       if (next.messages.length > (prev?.messages.length ?? 0)) {
         Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
       }
+      
+      // Sincronización Reactiva con Traducción
+      if (prev?.currentMood != next.currentMood) {
+        final int newMoodInt = _getMoodIndex(next.currentMood); // <--- Traducimos aquí
+        ref.read(botMoodProvider.notifier).state = newMoodInt;
+      }
     });
 
-    // YA NO NECESITAMOS MouseRegion AQUÍ. EL PADRE SE ENCARGA.
     return Container(
       width: isMobile ? double.infinity : null,
       height: isMobile ? double.infinity : null,
@@ -75,10 +106,10 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
               child: Stack(
                 children: [
                   // 1. CAPA FONDO / AVATAR INTERACTIVO
-                  Positioned.fill(
+                  const Positioned.fill(
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 10),
-                      child: RiveAvatar(mood: chatState.currentMood),
+                      padding: EdgeInsets.symmetric(vertical: 10),
+                      child: BotAvatarWidget(), 
                     ),
                   ),
                   
@@ -104,7 +135,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
                     left: 20,
                     child: StatusIndicator(
                       isLoading: chatState.isLoading, 
-                      mood: chatState.currentMood
+                      mood: chatState.currentMood // Este sigue usando String, está bien para el texto
                     ),
                   ),
                 ],

@@ -1,6 +1,6 @@
 // Archivo: lib/features/player/presentation/widgets/floating_bot_widget.dart
 import 'dart:html' as html;
-import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart'; // <--- Importante
+import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
 import 'package:botlode_player/features/player/presentation/views/chat_panel_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
@@ -18,7 +18,6 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
   @override
   void initState() {
     super.initState();
-    // ESCUCHA PASIVA: Esperamos órdenes del HTML
     html.window.onMessage.listen((event) {
       final data = event.data;
       if (data == 'CMD_OPEN') {
@@ -36,24 +35,33 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     final isMobile = screenSize.width < 600; 
     final panelHeight = isMobile ? screenSize.height : (screenSize.height - 100).clamp(400.0, 700.0);
 
-    // SENSOR GLOBAL: Envuelve toda la pantalla
-  // SENSOR GLOBAL: Envuelve toda la pantalla
     return MouseRegion(
       hitTestBehavior: HitTestBehavior.translucent, 
       onHover: (event) {
-        // Mouse moviéndose: Actualizamos posición
         ref.read(pointerPositionProvider.notifier).state = event.position;
       },
       onExit: (event) {
-        // [NUEVO] Mouse sale de la ventana: Ponemos null para indicar "volver al centro"
         ref.read(pointerPositionProvider.notifier).state = null;
       },
       child: Stack(
         fit: StackFit.expand, 
         alignment: Alignment.bottomRight,
         children: [
-          // ... (El contenido de tus children sigue igual: ChatPanel y Botón)
-          // 1. CHAT PANEL
+          
+          // 1. CAPA "BACKDROP" (NUEVO): Detecta clics fuera del chat
+          if (isOpen)
+            Positioned.fill(
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent, // Atrapa clics en lo transparente
+                onTap: () {
+                  // Acción: Cerrar el chat
+                  ref.read(chatOpenProvider.notifier).set(false);
+                },
+                child: const SizedBox.expand(), // Ocupa todo el espacio
+              ),
+            ),
+
+          // 2. CHAT PANEL (Sobre el backdrop)
           if (isOpen)
             isMobile 
               ? Positioned.fill(child: const ChatPanelView().animate().fadeIn())
@@ -65,7 +73,7 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
                   ),
                 ),
 
-          // 2. BOTÓN VISUAL
+          // 3. BOTÓN FLOTANTE (Solo si está cerrado)
           if (!isOpen)
              Positioned(
               bottom: 10, right: 10,

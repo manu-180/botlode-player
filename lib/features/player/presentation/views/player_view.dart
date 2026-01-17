@@ -16,12 +16,24 @@ class _PlayerViewState extends ConsumerState<PlayerView> {
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
+  // --- TRADUCTOR DE HUMOR (String -> Int) ---
+  int _getMoodIndex(String mood) {
+    switch (mood.toLowerCase()) {
+      case 'angry': return 1;
+      case 'happy': return 2;
+      case 'sales': return 3;
+      case 'confused': return 4;
+      case 'tech': return 5;
+      case 'neutral':
+      default: return 0;
+    }
+  }
+
   void _sendMessage() {
     final text = _textController.text;
     if (text.trim().isEmpty) return;
 
     _textController.clear();
-    // Llamamos al provider para enviar
     ref.read(chatControllerProvider.notifier).sendMessage(text);
   }
 
@@ -37,13 +49,31 @@ class _PlayerViewState extends ConsumerState<PlayerView> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    // Sincronización Inicial con Traducción
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final String moodString = ref.read(chatControllerProvider).currentMood;
+      final int moodInt = _getMoodIndex(moodString); // <--- Traducción
+      ref.read(botMoodProvider.notifier).state = moodInt;
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     final chatState = ref.watch(chatControllerProvider);
 
-    // Efecto secundario: Scroll al fondo cuando la lista crece
+    // Efecto secundario: Scroll y Sincronización de Humor
     ref.listen(chatControllerProvider, (previous, next) {
+      // Scroll si hay nuevos mensajes
       if (next.messages.length > (previous?.messages.length ?? 0)) {
         Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
+      }
+      
+      // Actualizar la cara del robot (Traduciendo String a Int)
+      if (previous?.currentMood != next.currentMood) {
+        final int newMoodInt = _getMoodIndex(next.currentMood); // <--- Traducción
+        ref.read(botMoodProvider.notifier).state = newMoodInt;
       }
     });
 
@@ -51,8 +81,8 @@ class _PlayerViewState extends ConsumerState<PlayerView> {
       body: Stack(
         children: [
           // 1. FONDO / AVATAR (Capa Trasera)
-          Positioned.fill(
-            child: RiveAvatar(mood: chatState.currentMood),
+          const Positioned.fill(
+            child: BotAvatarWidget(), 
           ),
 
           // 2. CHAT UI (Capa Frontal - Flotante)

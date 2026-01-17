@@ -7,7 +7,6 @@ import 'package:botlode_player/features/player/presentation/widgets/floating_bot
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:rive/rive.dart'; // Importación necesaria
 
 final currentBotIdProvider = Provider<String>((ref) {
   return AppConfig.fallbackBotId;
@@ -17,7 +16,6 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // INICIALIZACIÓN OBLIGATORIA PARA 0.14.x
-  await RiveNative.init();
 
   try {
     await dotenv.load(fileName: ".env");

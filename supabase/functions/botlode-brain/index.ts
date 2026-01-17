@@ -34,11 +34,11 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    // Variables de entorno (Las configuraremos en el siguiente paso)
+    // Variables de entorno
     const apiKey = Deno.env.get('GEMINI_API_KEY');
     if (!apiKey) throw new Error('Falta GEMINI_API_KEY');
 
-    // DATOS ENTRANTES: Ahora pedimos el botId
+    // DATOS ENTRANTES: Pedimos sessionId, botId y el mensaje
     const { sessionId, botId, message } = await req.json();
     
     if (!message) throw new Error("Mensaje vacío");
@@ -51,7 +51,6 @@ serve(async (req) => {
 
     // 1. CARGAR CEREBRO DEL BOT (Dinámico)
     // Buscamos en la DB la configuración de ESTE bot específico
-    // NOTA: Asegúrate de tener una tabla 'bots' con estas columnas en Supabase
     const { data: botConfig, error: botError } = await supabaseAdmin
       .from('bots') 
       .select('name, description, system_prompt') 
@@ -60,7 +59,7 @@ serve(async (req) => {
 
     if (botError || !botConfig) throw new Error("Bot no encontrado o desconfigurado");
 
-    // 2. Obtener Historial de Chat
+    // 2. Obtener Historial de Chat (Contexto)
     const { data: history } = await supabaseAdmin
       .from('chat_history')
       .select('role, content')
@@ -69,6 +68,7 @@ serve(async (req) => {
       .limit(8);
 
     // 3. INYECTAR PERSONALIDAD (System Prompt Dinámico)
+    // AQUÍ ES DONDE DEFINIMOS LOS NUEVOS MOODS PARA RIVE
     const systemInstructionText = `
       ERES: "${botConfig.name}".
       TU OBJETIVO PRINCIPAL: ${botConfig.description}.
@@ -81,15 +81,16 @@ serve(async (req) => {
       Debes responder SIEMPRE en formato JSON estricto.
       NO uses bloques de código markdown (\`\`\`json). Solo el JSON crudo.
       
-      MOODS DISPONIBLES (Elige uno según el contexto):
-      - "neutral": Conversación normal.
-      - "happy": El usuario es amable, saluda o hay buenas noticias.
-      - "angry": El usuario insulta o es agresivo (Defiéndete con elegancia).
-      - "confused": No entiendes el input o es incoherente.
-      - "waiting": Preguntas algo al usuario y esperas respuesta.
-      - "tech": Explicaciones técnicas o complejas (Gafas/Inteligente).
+      MOODS DISPONIBLES (Elige uno según el contexto para cambiar tu avatar):
+      - "neutral": Conversación normal, informativa.
+      - "happy": El usuario es amable, agradece, te felicita o hay buenas noticias.
+      - "angry": El usuario insulta, es grosero o muy negativo (Defiéndete con elegancia).
+      - "sales": Oportunidad de venta, ofrecer upgrade, persuadir o cerrar un trato (Modo Vendedor).
+      - "confused": Input incoherente, error del usuario o no entiendes la solicitud.
+      - "tech": Explicaciones técnicas, código, logs o datos complejos (Modo Ingeniero).
+      - "waiting": Haces una pregunta directa al usuario y esperas su input ("En línea").
 
-      FORMATO DE RESPUESTA JSON:
+      FORMATO DE RESPUESTA JSON OBLIGATORIO:
       { "reply": "Tu respuesta en texto plano aquí", "mood": "happy" }
     `;
 
@@ -111,22 +112,31 @@ serve(async (req) => {
     };
 
     const data = await fetchGeminiWithRetry(url, payload);
+    
+    // Extracción segura de la respuesta
     let rawReply = data.candidates?.[0]?.content?.parts?.[0]?.text || '{"reply":"Error de conexión neuronal.","mood":"confused"}';
     
-    // Limpieza de seguridad por si la IA manda markdown
+    // Limpieza de seguridad por si la IA manda markdown accidentalmente
     rawReply = rawReply.replace(/```json|```/g, "").trim();
     
     let parsedResponse;
     try {
         parsedResponse = JSON.parse(rawReply);
     } catch (e) {
+        // Fallback robusto si el JSON falla
         parsedResponse = { reply: rawReply, mood: "neutral" };
     }
 
-    // 5. Persistencia (Guardamos lo que dijo + el mood)
+    // 5. Persistencia (Guardamos lo que dijo + el mood en metadata)
     await supabaseAdmin.from('chat_history').insert([
       { session_id: sessionId, role: 'user', content: message, bot_id: botId },
-      { session_id: sessionId, role: 'assistant', content: parsedResponse.reply, bot_id: botId, metadata: { mood: parsedResponse.mood } }
+      { 
+        session_id: sessionId, 
+        role: 'assistant', 
+        content: parsedResponse.reply, 
+        bot_id: botId, 
+        metadata: { mood: parsedResponse.mood } 
+      }
     ]);
 
     return new Response(JSON.stringify(parsedResponse), {
