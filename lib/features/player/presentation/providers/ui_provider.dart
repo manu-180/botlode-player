@@ -18,8 +18,11 @@ class ChatOpen extends _$ChatOpen {
   }
 }
 
-// Este provider ahora recibirá datos del mouse interno (Flutter) Y externo (JS)
+// Provider existente para posición
 final pointerPositionProvider = StateProvider<Offset?>((ref) => null);
+
+// --- NUEVO: Provider para Hover Externo (Controlado por HTML) ---
+final isHoveredExternalProvider = StateProvider<bool>((ref) => false);
 
 final chatResetProvider = Provider((ref) {
   return () {

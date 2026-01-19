@@ -1,6 +1,5 @@
 // Archivo: lib/main.dart
 import 'dart:html' as html; 
-import 'dart:ui'; // Necesario para Offset
 import 'package:botlode_player/core/config/app_config.dart';
 import 'package:botlode_player/core/config/app_theme.dart';
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart'; 
@@ -61,7 +60,7 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
         html.window.parent?.postMessage('CMD_READY', '*');
     });
     
-    // --- ESCUCHA DE COMANDOS EXTERNOS (JS -> DART) ---
+    // --- ESCUCHA DE COMANDOS EXTERNOS (PUENTE HTML <-> FLUTTER) ---
     html.window.onMessage.listen((event) {
       if (event.data == null) return;
       final String data = event.data.toString();
@@ -71,41 +70,27 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
       } else if (data == 'CMD_CLOSE') {
         ref.read(chatOpenProvider.notifier).set(false);
       } 
-      // NUEVO: Protocolo de Seguimiento de Mouse Remoto
-      else if (data.startsWith('MOUSE_MOVE:')) {
-        try {
-          // Formato esperado: "MOUSE_MOVE:500,300" (x,y relativos a la ventana)
-          final parts = data.split(':')[1].split(',');
-          final double x = double.parse(parts[0]);
-          final double y = double.parse(parts[1]);
-          
-          // Inyectamos la posición en el sistema de Flutter como si fuera nativa
-          // Pero necesitamos ajustar las coordenadas porque el iframe tiene su propio offset
-          // TRUCO: Pasamos coordenadas absolutas de pantalla para que el cálculo sea global
-          ref.read(pointerPositionProvider.notifier).state = Offset(x, y);
-        } catch (e) {
-          // Ignorar errores de parseo
-        }
+      // --- NUEVOS COMANDOS DEL INFORME TÉCNICO ---
+      else if (data == 'HOVER_ENTER') {
+        ref.read(isHoveredExternalProvider.notifier).state = true;
+      }
+      else if (data == 'HOVER_EXIT') {
+        ref.read(isHoveredExternalProvider.notifier).state = false;
       }
     });
   }
-
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'BotLode Player',
       debugShowCheckedModeBanner: false,
-      
-      // TEMA GLOBAL TRANSPARENTE
       theme: AppTheme.darkTheme.copyWith(
-        canvasColor: Colors.transparent, // Importante
-        scaffoldBackgroundColor: Colors.transparent, // Importante
+        canvasColor: Colors.transparent, 
+        scaffoldBackgroundColor: Colors.transparent,
       ),
-      
-      // BUILDER PARA FORZAR TRANSPARENCIA EN CAPAS SUPERIORES
       builder: (context, child) => Scaffold(
-        backgroundColor: Colors.transparent, // Fondo base nulo
+        backgroundColor: Colors.transparent,
         body: child,
       ),
       home: const FloatingBotWidget(),
