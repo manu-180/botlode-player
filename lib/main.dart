@@ -1,6 +1,6 @@
 // Archivo: lib/main.dart
 import 'dart:html' as html; 
-import 'dart:ui'; // Necesario para usar Offset
+import 'dart:ui'; 
 import 'package:botlode_player/core/config/app_config.dart';
 import 'package:botlode_player/core/config/app_theme.dart';
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart'; 
@@ -61,7 +61,7 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
         html.window.parent?.postMessage('CMD_READY', '*');
     });
     
-    // --- ESCUCHA DE COMANDOS EXTERNOS (PUENTE HTML <-> FLUTTER) ---
+    // LISTENERS DE MENSAJES (HTML -> FLUTTER)
     html.window.onMessage.listen((event) {
       if (event.data == null) return;
       final String data = event.data.toString();
@@ -77,19 +77,14 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
       else if (data == 'HOVER_EXIT') {
         ref.read(isHoveredExternalProvider.notifier).state = false;
       }
-      // --- ESTO ES LO QUE TE FALTABA PARA QUE LOS OJOS SE MUEVAN ---
       else if (data.startsWith('MOUSE_MOVE:')) {
         try {
-          // El formato es "MOUSE_MOVE:x,y"
           final parts = data.split(':')[1].split(',');
           final double x = double.parse(parts[0]);
           final double y = double.parse(parts[1]);
-          
-          // Actualizamos el provider de posición.
-          // Rive escuchará este cambio y moverá los ojos.
           ref.read(pointerPositionProvider.notifier).state = Offset(x, y);
         } catch (e) {
-          // Ignoramos errores de parseo por seguridad
+          // Ignorar error
         }
       }
     });
@@ -97,6 +92,16 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
 
   @override
   Widget build(BuildContext context) {
+    // [CORRECCIÓN CRÍTICA PARA SINCRONIZACIÓN]
+    // Escuchamos si Flutter decide cerrar el chat (ej. botón interno 'X')
+    // y le avisamos al HTML para que achique el Iframe.
+    ref.listen(chatOpenProvider, (prev, isOpen) {
+      if (!isOpen) { // Si se cerró...
+        // Avisar al padre (HTML) que debe colapsar
+        html.window.parent?.postMessage('CMD_CLOSE', '*');
+      }
+    });
+
     return MaterialApp(
       title: 'BotLode Player',
       debugShowCheckedModeBanner: false,

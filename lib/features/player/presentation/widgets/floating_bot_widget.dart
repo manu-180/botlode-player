@@ -34,19 +34,15 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     final isMobile = screenSize.width < 600; 
     final panelHeight = isMobile ? screenSize.height : (screenSize.height).clamp(400.0, 800.0);
 
-    // CÁLCULO MATEMÁTICO PARA CENTRAR EL BOTÓN EN EL IFRAME FANTASMA DE 350px
-    // Iframe (350) - Botón (72) = 278 espacio libre. / 2 = 139px de margen.
-    // Esto lo posiciona visualmente en el centro, pero anclado a la esquina.
+    // CÁLCULO FANTASMA: (350 - 72) / 2 = 139.
     const double ghostPadding = 139.0;
 
     return Stack(
       fit: StackFit.loose, 
-      // CORRECCIÓN 1: SIEMPRE ANCLADO A LA DERECHA ABAJO
-      // Esto evita que crezca hacia la derecha (fuera de pantalla)
       alignment: Alignment.bottomRight,
-      
       children: [
-        // --- CAPA DE CIERRE ---
+        
+        // --- CAPA CIERRE ---
         if (isOpen)
           Positioned.fill(
             child: GestureDetector(
@@ -56,7 +52,7 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
             ),
           ),
 
-        // --- PANEL DE CHAT ---
+        // --- CHAT PANEL ---
         if (isOpen)
           ConstrainedBox(
             constraints: BoxConstraints(
@@ -65,7 +61,6 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
             ),
             child: const ChatPanelView()
                 .animate()
-                // La animación ahora nace desde la esquina inferior derecha
                 .scale(curve: Curves.easeOutBack, alignment: Alignment.bottomRight, duration: 300.ms)
                 .fadeIn(),
           ),
@@ -73,12 +68,12 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
         // --- BOTÓN FLOTANTE ---
         if (!isOpen)
           Padding(
-            // CORRECCIÓN 2: Padding dinámico.
-            // En Vercel (pantalla completa) lo centramos.
-            // En Iframe (pantalla chica) usamos el padding matemático.
-            padding: screenSize.width > 500 
-                ? EdgeInsets.only(bottom: ghostPadding, right: ghostPadding) 
-                : const EdgeInsets.all(20), // Fallback para móviles
+            // CORRECCIÓN CRÍTICA: SIEMPRE USAR PADDING FANTASMA
+            // Eliminamos la condición de width > 500 porque dentro del iframe
+            // el ancho siempre es 350px. Esto forzará al bot a centrarse
+            // en el iframe fantasma visible.
+            padding: const EdgeInsets.only(bottom: ghostPadding, right: ghostPadding),
+            
             child: GestureDetector(
               onTap: () => ref.read(chatOpenProvider.notifier).set(true),
               child: MouseRegion(
