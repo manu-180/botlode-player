@@ -9,6 +9,7 @@ import 'package:botlode_player/features/player/presentation/widgets/chat_bubble.
 import 'package:botlode_player/features/player/presentation/widgets/rive_avatar.dart';
 import 'package:botlode_player/features/player/presentation/widgets/status_indicator.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_animate/flutter_animate.dart'; // NECESARIO
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class ChatPanelView extends ConsumerStatefulWidget {
@@ -97,16 +98,12 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
       if (prev?.currentMood != next.currentMood) ref.read(botMoodProvider.notifier).state = _getMoodIndex(next.currentMood);
     });
 
-    // CORRECCIÓN: MouseRegion para captura interna
     return MouseRegion(
-      hitTestBehavior: HitTestBehavior.translucent, // Captura todo
+      hitTestBehavior: HitTestBehavior.translucent, 
       onHover: (event) {
         final width = MediaQuery.of(context).size.width.clamp(0.0, 380.0);
-        // Calculamos la distancia al centro de la cabeza del avatar
         final double dx = event.localPosition.dx - (width / 2);
         final double dy = event.localPosition.dy - 100.0; 
-        
-        // Actualizamos el provider que mueve los ojos
         ref.read(pointerPositionProvider.notifier).state = Offset(dx, dy);
       },
       child: Container(
@@ -122,6 +119,8 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
         child: Stack(
           children: [
             BackdropFilter(filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10), child: Container(color: glassBg)),
+            
+            // CONTENIDO PRINCIPAL ANIMADO
             Column(
               children: [
                 // HEADER
@@ -185,7 +184,13 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
                   ),
                 ),
               ],
-            ),
+            )
+            // ANIMACIÓN DE ENTRADA (CASCADA)
+            // Espera 50ms para que el contenedor crezca un poco, y luego muestra el contenido
+            // deslizándolo desde abajo. Esto elimina el "flash blanco".
+            .animate()
+            .fadeIn(duration: 400.ms, delay: 50.ms, curve: Curves.easeOut)
+            .slideY(begin: 0.05, end: 0, duration: 400.ms, curve: Curves.easeOutQuart),
           ],
         ),
       ),

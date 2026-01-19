@@ -1,5 +1,5 @@
 // Archivo: lib/features/player/presentation/widgets/floating_bot_widget.dart
-import 'dart:math' as math; // Importante para usar max()
+import 'dart:math' as math;
 import 'dart:html' as html;
 import 'package:botlode_player/features/player/domain/models/bot_config.dart';
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
@@ -35,13 +35,13 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     final isMobile = screenSize.width < 600; 
     final panelHeight = isMobile ? screenSize.height : (screenSize.height).clamp(400.0, 800.0);
 
-    // Padding de anclaje derecho
     const double ghostPadding = 40.0;
 
     return Stack(
       fit: StackFit.loose, 
       alignment: Alignment.bottomRight,
       children: [
+        // CAPA DE CIERRE (Solo activa si abierto)
         if (isOpen)
           Positioned.fill(
             child: GestureDetector(
@@ -51,41 +51,53 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
             ),
           ),
 
-        if (isOpen)
-          ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: panelHeight, 
-              maxWidth: isMobile ? double.infinity : 380
-            ),
-            child: const ChatPanelView()
-                .animate()
-                .scale(curve: Curves.easeOutCubic, alignment: Alignment.bottomRight, duration: 400.ms)
-                .fadeIn(duration: 200.ms),
-          ),
-
-        if (!isOpen)
-          Padding(
-            padding: const EdgeInsets.only(bottom: ghostPadding, right: ghostPadding),
-            child: GestureDetector(
-              onTap: () => ref.read(chatOpenProvider.notifier).set(true),
-              child: MouseRegion(
-                cursor: SystemMouseCursors.click,
-                onEnter: (_) => ref.read(isHoveredExternalProvider.notifier).state = true,
-                onExit: (_) => ref.read(isHoveredExternalProvider.notifier).state = false,
-                child: botConfigAsync.when(
-                  loading: () => _buildFloatingButton(isHovered: false, name: "...", color: Colors.grey, subtext: "Cargando...", isDarkMode: true),
-                  error: (err, stack) => _buildFloatingButton(isHovered: false, name: "OFFLINE", color: Colors.red, subtext: "Error", isDarkMode: true),
-                  data: (config) => _buildFloatingButton(
-                    isHovered: isHovered, 
-                    name: config.name.toUpperCase(), 
-                    color: config.themeColor,
-                    subtext: "¿En qué te ayudo?",
-                    isDarkMode: config.isDarkMode,
+        // ANIMACIÓN DE TRANSICIÓN (MORPHING)
+        // Esto maneja tanto la apertura como el cierre suave
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 400),
+          // Curva elástica para que se sienta orgánico
+          switchInCurve: Curves.easeOutBack, 
+          switchOutCurve: Curves.easeInBack, 
+          transitionBuilder: (Widget child, Animation<double> animation) {
+            return ScaleTransition(
+              scale: animation,
+              alignment: Alignment.bottomRight, // Crece/Se encoge desde la esquina
+              child: FadeTransition(opacity: animation, child: child),
+            );
+          },
+          child: isOpen 
+            ? ConstrainedBox(
+                key: const ValueKey('ChatPanel'), // Key única para el switcher
+                constraints: BoxConstraints(
+                  maxHeight: panelHeight, 
+                  maxWidth: isMobile ? double.infinity : 380
+                ),
+                child: const ChatPanelView(),
+              )
+            : Padding(
+                key: const ValueKey('FloatingButton'), // Key única
+                padding: const EdgeInsets.only(bottom: ghostPadding, right: ghostPadding),
+                child: GestureDetector(
+                  onTap: () => ref.read(chatOpenProvider.notifier).set(true),
+                  child: MouseRegion(
+                    cursor: SystemMouseCursors.click,
+                    onEnter: (_) => ref.read(isHoveredExternalProvider.notifier).state = true,
+                    onExit: (_) => ref.read(isHoveredExternalProvider.notifier).state = false,
+                    child: botConfigAsync.when(
+                      loading: () => _buildFloatingButton(isHovered: false, name: "...", color: Colors.grey, subtext: "Cargando...", isDarkMode: true),
+                      error: (err, stack) => _buildFloatingButton(isHovered: false, name: "OFFLINE", color: Colors.red, subtext: "Error", isDarkMode: true),
+                      data: (config) => _buildFloatingButton(
+                        isHovered: isHovered, 
+                        name: config.name.toUpperCase(), 
+                        color: config.themeColor,
+                        subtext: "¿En qué te ayudo?",
+                        isDarkMode: config.isDarkMode,
+                      ),
+                    ),
                   ),
                 ),
               ),
-            ),
-          ),
+        ),
       ],
     );
   }
@@ -100,18 +112,9 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     const double closedSize = 72.0; 
     const double headSize = 58.0;   
     
-    // --- LÓGICA DE ANCHO ADAPTATIVO ---
-    // 1. Buscamos cuál es el texto más largo (Nombre o Subtítulo)
+    // Lógica de ancho dinámico
     int maxChars = math.max(name.length, subtext.length);
-    
-    // 2. Calculamos pixels:
-    // 120px base (espacio para la cabeza + padding)
-    // + 9px por cada letra (aproximado para fuente normal)
     double calculatedWidth = 120.0 + (maxChars * 9.0);
-
-    // 3. Clampeamos para seguridad:
-    // Mínimo 220px (para que no quede muy chico)
-    // Máximo 380px (para que no se salga del iframe de 450px)
     double openWidth = calculatedWidth.clamp(220.0, 380.0);
 
     final Color textColor = _getContrastingTextColor(color);
@@ -129,11 +132,8 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 400),
       curve: Curves.easeOutCubic, 
-      
-      // Usamos el ancho calculado dinámicamente
       width: isHovered ? openWidth : closedSize, 
       height: closedSize, 
-      
       clipBehavior: Clip.antiAlias, 
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -162,20 +162,9 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.end, 
                         children: [
-                          Text(
-                            name, 
-                            textAlign: TextAlign.right, 
-                            // Sin overflow para que intente mostrar todo
-                            style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 13, letterSpacing: 0.5, height: 1.1)
-                          ),
+                          Text(name, textAlign: TextAlign.right, style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 13, letterSpacing: 0.5, height: 1.1)),
                           const SizedBox(height: 2),
-                          Text(
-                            subtext, 
-                            textAlign: TextAlign.right, 
-                            // Ellipsis solo si supera el máximo de 380px
-                            overflow: TextOverflow.ellipsis, 
-                            style: TextStyle(color: subTextColor, fontWeight: FontWeight.w500, fontSize: 10)
-                          ),
+                          Text(subtext, textAlign: TextAlign.right, overflow: TextOverflow.ellipsis, style: TextStyle(color: subTextColor, fontWeight: FontWeight.w500, fontSize: 10)),
                         ],
                       ),
                     )
