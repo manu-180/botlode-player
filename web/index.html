@@ -1,59 +1,145 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
-  <base href="/">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Integration Test</title>
+    <style>
+        /* RESET BÁSICO */
+        body { font-family: 'Segoe UI', sans-serif; background-color: #e5e5e5; margin: 0; }
+        
+        /* --- CONTENEDOR MAESTRO --- */
+        #botlode-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 20000;
+            border: none;
+            
+            /* ESTADO 1: REPOSO (Solo la bola) */
+            width: 80px; 
+            height: 80px;
+            
+            /* Alineación del contenido del iframe a la derecha */
+            display: flex;
+            justify-content: flex-end; 
+            
+            background: transparent;
+            /* Transición suave para el efecto de expansión lateral */
+            transition: width 0.4s cubic-bezier(0.25, 0.8, 0.25, 1), height 0.4s cubic-bezier(0.25, 0.8, 0.25, 1), border-radius 0.4s;
+            
+            /* IMPORTANTE: Permitir que Flutter dibuje sombras fuera */
+            overflow: visible; 
+        }
 
-  <meta charset="UTF-8">
-  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="Web player for BotsLode units.">
-  <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="botlode_player">
-  
-  <link rel="apple-touch-icon" href="icons/Icon-192.png">
-  <link rel="icon" type="image/png" href="favicon.png"/>
+        /* --- ESTADO 2: HOVER (Solo mostrar nombre) --- */
+        /* Cuando el mouse entra, ensanchamos la jaula pero mantenemos la altura */
+        #botlode-container:hover {
+            width: 300px; /* Espacio suficiente para "PIZZABOT MARIO..." */
+        }
 
-  <title>BotLode Player</title>
-  <link rel="manifest" href="manifest.json">
+        /* --- ESTADO 3: ABIERTO (Chat Completo) --- */
+        #botlode-container.expanded {
+            width: 400px; 
+            height: 750px; 
+            
+            /* PROTECCIÓN DE APPBAR */
+            /* Restamos 100px para dejar aire arriba y que no choque con menús */
+            max-height: calc(100vh - 100px); 
+            
+            /* Al abrir, anulamos el comportamiento de hover simple */
+            pointer-events: auto; 
+        }
 
-  <style>
-    /* 1. Transparencia total al HTML y Body */
-    html, body {
-      height: 100%;
-      margin: 0;
-      padding: 0;
-      background-color: transparent !important; /* Fuerza bruta */
-      overflow: hidden;
-    }
-    /* 2. Asegurar que el host de Flutter no tenga color */
-    flt-glass-pane {
-      background-color: transparent !important;
-    }
-  </style>
+        /* Iframe transparente */
+        #botlode-iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            /* Esto permite clics a través de las partes transparentes del iframe si el navegador lo soporta */
+            color-scheme: normal; 
+        }
+
+        /* --- BOTÓN CERRAR EXTERNO --- */
+        #external-close-btn {
+            position: absolute;
+            top: 15px; right: 15px;
+            z-index: 20002;
+            background: rgba(0,0,0,0.5);
+            color: white; border: none; border-radius: 50%;
+            width: 32px; height: 32px;
+            cursor: pointer; display: none;
+            align-items: center; justify-content: center;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+        #external-close-btn:hover { background: rgba(0,0,0,0.8); }
+
+        /* MÓVIL */
+        @media (max-width: 600px) {
+            #botlode-container.expanded { 
+                width: 100%; height: 100%; max-height: 100vh; 
+                bottom: 0; right: 0; border-radius: 0; 
+            }
+            #external-close-btn { top: 10px; right: 10px; position: fixed; }
+            /* En móvil desactivamos la expansión por hover */
+            #botlode-container:hover { width: 80px; } 
+            #botlode-container.expanded { width: 100%; }
+        }
+    </style>
 </head>
 <body>
-  <script src="flutter_bootstrap.js" async></script>
-  
-  <script>
-    // Esperamos a que el loader de Flutter esté listo
-    window.addEventListener('load', function(ev) {
-      // Interceptamos la carga para configurar el motor
-      _flutter.loader.loadEntrypoint({
-        onEntrypointLoaded: async function(engineInitializer) {
-          
-          // AQUÍ ESTÁ LA MAGIA: Configuración del Engine
-          let appRunner = await engineInitializer.initializeEngine({
-            // Forzamos el renderizador automático (usa CanvasKit si puede)
-            renderer: "auto", 
-            // ESTO ES LO QUE ARREGLA EL FONDO BLANCO:
-            // 0x00000000 = Transparencia Total en Hex ARGB
-            background_color: "0x00000000" 
-          });
 
-          await appRunner.runApp();
-        }
-      });
-    });
-  </script>
+    <div id="activator-overlay" style="position:fixed; bottom:20px; right:20px; width:80px; height:80px; z-index:20001; cursor:pointer;"></div>
+
+    <div id="botlode-container">
+        <button id="external-close-btn">✕</button>
+        <iframe 
+            id="botlode-iframe" 
+            src="http://localhost:57945/" 
+            allow="microphone; clipboard-write"
+        ></iframe>
+    </div>
+
+    <script>
+        const container = document.getElementById('botlode-container');
+        const iframe = document.getElementById('botlode-iframe');
+        const activator = document.getElementById('activator-overlay');
+        const closeBtn = document.getElementById('external-close-btn');
+        let isFlutterReady = false;
+
+        // COMUNICACIÓN
+        window.addEventListener('message', (event) => {
+            if (event.data === 'CMD_READY') {
+                isFlutterReady = true;
+                if (container.classList.contains('expanded')) iframe.contentWindow.postMessage('CMD_OPEN', '*');
+            }
+            else if (event.data === 'CMD_CLOSE') closeBtn.click();
+        });
+
+        // TRACKING DE MOUSE (Mejorado)
+        document.addEventListener('mousemove', (e) => {
+            if (!isFlutterReady) return;
+            const rect = iframe.getBoundingClientRect();
+            // Enviamos coord relativas. Flutter decidirá si mirar o no.
+            iframe.contentWindow.postMessage(`MOUSE_MOVE:${e.clientX - rect.left},${e.clientY - rect.top}`, '*');
+        });
+
+        // APERTURA
+        activator.addEventListener('click', () => {
+            container.classList.add('expanded');
+            activator.style.display = 'none';
+            setTimeout(() => closeBtn.style.display = 'flex', 300);
+            if (isFlutterReady) iframe.contentWindow.postMessage('CMD_OPEN', '*');
+        });
+
+        // CIERRE
+        closeBtn.addEventListener('click', () => {
+            container.classList.remove('expanded');
+            activator.style.display = 'block';
+            closeBtn.style.display = 'none';
+            iframe.contentWindow.postMessage('CMD_CLOSE', '*');
+        });
+    </script>
 </body>
 </html>

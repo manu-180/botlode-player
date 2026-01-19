@@ -31,26 +31,26 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     final botConfigAsync = ref.watch(botConfigProvider);
 
     final screenSize = MediaQuery.of(context).size;
-    // DETECCIÓN INTELIGENTE: ¿Estamos comprimidos en el iframe pequeño?
-    // Si la altura es menor a 150px, asumimos modo "Burbuja Iframe"
-    final isIframeSmall = screenSize.height < 150; 
+    
+    // DETECCIÓN INTELIGENTE:
+    // Si la altura es pequeña (iframe cerrado o hover), usamos layout centrado.
+    final isIframeCompact = screenSize.height < 200; 
     
     final isMobile = screenSize.width < 600; 
-    final panelHeight = isMobile ? screenSize.height : (screenSize.height - 100).clamp(400.0, 700.0);
+    // Altura máxima del panel dentro del iframe
+    final panelHeight = isMobile ? screenSize.height : (screenSize.height).clamp(400.0, 800.0);
 
     return MouseRegion(
       hitTestBehavior: HitTestBehavior.translucent, 
-      // El tracking interno sigue funcionando, pero el externo (main.dart) tendrá prioridad
       onHover: (event) {
-        // Solo actualizamos si NO estamos en modo iframe pequeño cerrado,
-        // porque ahí dependemos del tracking externo del HTML padre.
         if (isOpen) {
              ref.read(pointerPositionProvider.notifier).state = event.position;
         }
       },
       child: Stack(
         fit: StackFit.expand, 
-        alignment: Alignment.bottomRight,
+        // Si está compacto, alineamos al centro derecha para permitir expansión a la izquierda
+        alignment: isIframeCompact ? Alignment.centerRight : Alignment.bottomRight,
         children: [
           
           if (isOpen)
@@ -66,7 +66,7 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
             isMobile 
               ? Positioned.fill(child: const ChatPanelView().animate().fadeIn())
               : Positioned(
-                  bottom: 20, right: 20,
+                  bottom: 0, right: 0, // Pegado a los bordes del iframe expandido
                   child: ConstrainedBox(
                     constraints: BoxConstraints(maxHeight: panelHeight, maxWidth: 380),
                     child: const ChatPanelView().animate().scale(curve: Curves.easeOutBack, alignment: Alignment.bottomRight).fadeIn(),
@@ -77,15 +77,15 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
           if (!isOpen)
             botConfigAsync.when(
               loading: () => _buildLayoutWrapper(
-                isIframeSmall, 
+                isIframeCompact, 
                 _buildFloatingButton(name: "...", color: Colors.grey, subtext: "Cargando", isDarkMode: true)
               ),
               error: (err, stack) => _buildLayoutWrapper(
-                isIframeSmall,
+                isIframeCompact,
                 _buildFloatingButton(name: "OFFLINE", color: Colors.red, subtext: "Error", isDarkMode: true)
               ),
               data: (config) => _buildLayoutWrapper(
-                isIframeSmall,
+                isIframeCompact,
                 _buildFloatingButton(
                   name: config.name.toUpperCase(), 
                   color: config.themeColor,
@@ -99,14 +99,16 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     );
   }
 
-  // WRAPPER DE LAYOUT: Soluciona el problema de "Desfazado"
-  Widget _buildLayoutWrapper(bool isSmall, Widget child) {
-    if (isSmall) {
-      // SI ES PEQUEÑO: Centramos el botón en el espacio disponible (el iframe 80x80)
-      // Eliminamos padding 'bottom' y 'right'
-      return Center(child: child);
+  // WRAPPER DE LAYOUT
+  Widget _buildLayoutWrapper(bool isCompact, Widget child) {
+    if (isCompact) {
+      // MODO BURBUJA: Padding derecho para que no se pegue al borde del iframe
+      return Padding(
+        padding: const EdgeInsets.only(right: 10.0), 
+        child: child
+      );
     } else {
-      // SI ES GRANDE (Modo Chat abierto o Pantalla completa): Posición normal
+      // MODO ABIERTO (Transición): Posición normal
       return Positioned(
         bottom: 25, 
         right: 25,
@@ -121,8 +123,9 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     required String subtext,
     required bool isDarkMode,
   }) {
-    const double closedSize = 70.0; 
-    const double headSize = 56.0;   
+    // --- DIMENSIONES AJUSTADAS (MÁS COMPACTO) ---
+    const double closedSize = 64.0; // Reducido de 70 a 64 para dar aire
+    const double headSize = 58.0;   // Aumentado proporción para llenar el círculo
     const double openWidth = 260.0; 
 
     final Color textColor = _getContrastingTextColor(color);
@@ -130,11 +133,11 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
 
     final List<BoxShadow> shadowList = isDarkMode
         ? [
-            BoxShadow(color: color.withOpacity(0.6), blurRadius: 20, spreadRadius: 2, offset: const Offset(0, 4)),
-            BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 10, offset: const Offset(0, 5))
+            BoxShadow(color: color.withOpacity(0.5), blurRadius: 15, spreadRadius: 1, offset: const Offset(0, 4)),
+            BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 8, offset: const Offset(0, 4))
           ]
         : [
-            BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 15, offset: const Offset(0, 8)),
+            BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 12, offset: const Offset(0, 6)),
           ];
 
     return MouseRegion(
@@ -154,19 +157,20 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
           height: closedSize, 
           
           clipBehavior: Clip.antiAlias, 
-          padding: const EdgeInsets.all(2), 
+          // ELIMINADO EL PADDING INTERNO QUE CAUSABA EL ESPACIO RARO
+          // padding: const EdgeInsets.all(2), 
           
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
               colors: [
-                color.withOpacity(0.9), 
-                Color.lerp(color, Colors.black, 0.2)!, 
+                color.withOpacity(0.95), // Más sólido
+                Color.lerp(color, Colors.black, 0.15)!, 
               ],
             ),
             borderRadius: BorderRadius.circular(closedSize / 2),
-            border: Border.all(color: Colors.white.withOpacity(0.25), width: 1.5),
+            border: Border.all(color: Colors.white.withOpacity(0.2), width: 1.0),
             boxShadow: shadowList, 
           ),
           child: Row(
@@ -182,14 +186,14 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
                     physics: const NeverScrollableScrollPhysics(),
                     child: _isHovered 
                       ? Padding(
-                          padding: const EdgeInsets.only(left: 20, right: 14),
+                          padding: const EdgeInsets.only(left: 20, right: 10),
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             crossAxisAlignment: CrossAxisAlignment.end, 
                             children: [
-                              Text(name, textAlign: TextAlign.right, style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 13, letterSpacing: 0.8, height: 1.1)),
+                              Text(name, textAlign: TextAlign.right, style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 13, letterSpacing: 0.5, height: 1.1)),
                               const SizedBox(height: 2),
-                              Text(subtext, textAlign: TextAlign.right, style: TextStyle(color: subTextColor, fontWeight: FontWeight.w500, fontSize: 11)),
+                              Text(subtext, textAlign: TextAlign.right, style: TextStyle(color: subTextColor, fontWeight: FontWeight.w500, fontSize: 10)),
                             ],
                           ),
                         )
@@ -197,10 +201,13 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
                   ), 
                 ),
               ),
+              
+              // CABEZA ROBOT
+              // Eliminado margen derecho excesivo para que quede bien centrado en modo cerrado
               Container(
                 width: headSize,
                 height: headSize,
-                margin: const EdgeInsets.only(right: 4), 
+                margin: const EdgeInsets.all(3), // Pequeño margen uniforme
                 decoration: const BoxDecoration(shape: BoxShape.circle),
                 child: const ClipOval(child: FloatingHeadWidget()), 
               ),
