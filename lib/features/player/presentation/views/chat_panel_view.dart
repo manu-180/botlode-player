@@ -11,16 +11,11 @@ import 'package:botlode_player/features/player/presentation/widgets/status_indic
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-/// ROBUST CHAT PANEL VIEW - EDICIÓN SCI-FI INDUSTRIAL
+/// ROBUST CHAT PANEL VIEW - EDICIÓN FINAL (HYBRID RENDERER SAFE)
 /// 
-/// Implementación blindada contra fallos de renderizado Web (WSOD).
-/// Arquitectura basada en 'Layer Decoupling' y 'FadeTransition' explícito.
-/// 
-/// [INGENIERÍA]
-/// - Reemplazo de AnimatedOpacity por FadeTransition (Optimizado para GPU).
-/// - Gestión de Blur: Aislado en Stack, con sigma seguro.
-/// - Material Ancestor: Inyectado para soporte de Inputs.
-/// - RepaintBoundary: Aísla el redibujado para rendimiento extremo.
+/// Implementación diseñada para resistir fallos del motor gráfico en Web.
+/// Incluye capas de seguridad visual para garantizar legibilidad incluso
+/// si el efecto de desenfoque (BackdropFilter) colapsa en iframes.
 class ChatPanelView extends ConsumerStatefulWidget {
   const ChatPanelView({super.key});
 
@@ -32,7 +27,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   
-  // Controlador explícito para la animación de entrada (Fade)
+  // Controlador para animación de entrada suave
   late AnimationController _fadeController;
   late Animation<double> _opacityAnimation;
 
@@ -42,7 +37,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
   void initState() {
     super.initState();
     
-    // Configuración de animación de entrada optimizada
+    // Configuración de animación (400ms para sensación premium)
     _fadeController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 400),
@@ -53,10 +48,9 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
       curve: Curves.easeOutQuart,
     );
 
-    // Iniciar animación de entrada
     _fadeController.forward();
 
-    // Sincronizar estado inicial del mood
+    // Sincronizar estado inicial
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final String moodString = ref.read(chatControllerProvider).currentMood;
       ref.read(botMoodProvider.notifier).state = _getMoodIndex(moodString);
@@ -86,7 +80,6 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
     final text = _textController.text;
     if (text.trim().isEmpty) return;
     _textController.clear();
-    // Scroll al fondo
     if (_scrollController.hasClients) {
       _scrollController.jumpTo(0.0);
     }
@@ -98,38 +91,18 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
     final chatState = ref.watch(chatControllerProvider);
     final isMobile = MediaQuery.of(context).size.width < 600;
     
-    // Configuración del Bot
     final botConfig = ref.watch(botConfigProvider).asData?.value;
     final themeColor = botConfig?.themeColor ?? const Color(0xFFFFC000);
     final isDarkMode = botConfig?.isDarkMode ?? true; 
     final showOfflineAlert = botConfig?.showOfflineAlert ?? true;
 
-    // Estado de Red
-    final isOnlineAsync = ref.watch(connectivityProvider);
-    final isOnline = isOnlineAsync.asData?.value ?? true;
+    final isOnline = ref.watch(connectivityProvider).asData?.value ?? true;
 
-    // --- SISTEMA DE DISEÑO (Colores y Gradientes) ---
-    final Color glassBg = isDarkMode 
-        ? const Color(0xFF121212).withOpacity(0.85) 
-        : const Color(0xFFFFFFFF).withOpacity(0.90);
-
-    final LinearGradient bgGradient = isDarkMode
-        ? LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              const Color(0xFF1E1E2C).withOpacity(0.9), 
-              const Color(0xFF000000).withOpacity(0.95)
-            ],
-          )
-        : const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              Color(0xFFFFFFFF), 
-              Color(0xFFF4F6F8)
-            ],
-          );
+    // --- SISTEMA DE DISEÑO ROBUSTO ---
+    // Colores de seguridad (Safety Tints) por si el Blur falla
+    final Color safetyBgColor = isDarkMode 
+        ? const Color(0xFF121212).withOpacity(0.95) // Casi opaco en dark mode para evitar white-screen
+        : const Color(0xFFFFFFFF).withOpacity(0.95);
 
     final Color inputFill = isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFFFFFFF);
     final Color inputText = isDarkMode ? Colors.white : const Color(0xFF2D3748);
@@ -144,20 +117,14 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
 
     final reversedMessages = chatState.messages.reversed.toList();
 
-    // --- LÓGICA DE EVENTOS (Side Effects) ---
+    // --- SIDE EFFECTS ---
     ref.listen(connectivityProvider, (prev, next) {
       next.whenData((online) {
         if (showOfflineAlert) {
           if (!online) {
-            if (!_wasOffline) { 
-              _wasOffline = true; 
-              html.window.parent?.postMessage('NETWORK_OFFLINE', '*'); 
-            }
+            if (!_wasOffline) { _wasOffline = true; html.window.parent?.postMessage('NETWORK_OFFLINE', '*'); }
           } else {
-            if (_wasOffline) { 
-              _wasOffline = false; 
-              html.window.parent?.postMessage('NETWORK_ONLINE', '*'); 
-            }
+            if (_wasOffline) { _wasOffline = false; html.window.parent?.postMessage('NETWORK_ONLINE', '*'); }
           }
         }
       });
@@ -165,16 +132,14 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
 
     ref.listen(chatControllerProvider, (prev, next) {
       if (next.messages.length > (prev?.messages.length ?? 0)) {
-         if (_scrollController.hasClients) {
-            _scrollController.jumpTo(0.0);
-         }
+         if (_scrollController.hasClients) _scrollController.jumpTo(0.0);
       }
       if (prev?.currentMood != next.currentMood) {
         ref.read(botMoodProvider.notifier).state = _getMoodIndex(next.currentMood);
       }
     });
 
-    // --- TEMA LOCAL FORZADO (Seguridad Visual) ---
+    // Inyección de Tema Local para garantizar contraste
     final ThemeData localTheme = ThemeData(
       brightness: isDarkMode ? Brightness.dark : Brightness.light,
       primaryColor: themeColor,
@@ -185,7 +150,6 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
       ),
     );
 
-    // --- ESTRUCTURA VISUAL BLINDADA ---
     return Theme(
       data: localTheme,
       child: MouseRegion(
@@ -196,10 +160,10 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
           final double dy = event.localPosition.dy - 100.0; 
           ref.read(pointerPositionProvider.notifier).state = Offset(dx, dy);
         },
-        // [INGENIERÍA] FadeTransition en lugar de AnimatedOpacity
+        // Transición de Entrada (Fade)
         child: FadeTransition(
           opacity: _opacityAnimation,
-          // [INGENIERÍA] LayoutBuilder para garantizar constraints
+          // LayoutBuilder: Prevención de colapso de geometría
           child: LayoutBuilder(
             builder: (context, constraints) {
               return Container(
@@ -212,16 +176,16 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
                   boxShadow: panelShadows,
                 ),
                 
-                // [INGENIERÍA] Recorte Estricto
+                // ClipRRect: Contención del renderizado
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(28),
                   
-                  // [INGENIERÍA] Desacoplamiento de Capas (Fondo vs UI)
+                  // STACK DE 3 CAPAS (El secreto de la estabilidad)
                   child: Stack(
                     fit: StackFit.expand, 
                     children: [
-                      // --- CAPA 0: MOTOR DE VIDRIO (FONDO) ---
-                      // Tween de Sigma para evitar bugs de opacidad en Web
+                      // --- CAPA 0: MOTOR DE VIDRIO (BLUR) ---
+                      // Si falla el renderizado HTML, esta capa puede volverse invisible o blanca.
                       TweenAnimationBuilder<double>(
                         tween: Tween<double>(begin: 0.0, end: 10.0),
                         duration: const Duration(milliseconds: 400),
@@ -229,23 +193,26 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
                         builder: (context, sigma, child) {
                           return BackdropFilter(
                             filter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                gradient: bgGradient, 
-                              ),
-                            ),
+                            child: Container(color: Colors.transparent), // Contenedor vacío para el filtro
                           );
                         },
                       ),
 
-                      // --- CAPA 1: MOTOR DE INTERFAZ (CONTENIDO) ---
-                      // [INGENIERÍA] Material Ancestor + RepaintBoundary
+                      // --- CAPA 1: TINTE DE SEGURIDAD (SAFETY TINT) ---
+                      // Esta capa es SÓLIDA (con opacidad). Si el Blur de la Capa 0 falla,
+                      // esta capa asegura que haya un fondo oscuro/claro para que el texto se lea.
+                      Container(
+                        color: safetyBgColor, 
+                      ),
+
+                      // --- CAPA 2: CONTENIDO (INTERFAZ) ---
+                      // Material Ancestor + RepaintBoundary
                       Material(
                         type: MaterialType.transparency,
                         child: RepaintBoundary(
                           child: Column(
                             children: [
-                              // SECCIÓN A: HEADER
+                              // HEADER
                               SizedBox(
                                 height: 180,
                                 width: double.infinity,
@@ -291,13 +258,12 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
                                 ),
                               ),
                               
-                              // Separador
                               Container(height: 1, width: double.infinity, color: borderColor),
                               
-                              // SECCIÓN B: CUERPO DEL CHAT (MENSAJES)
+                              // BODY
                               Expanded(
                                 child: Container(
-                                  color: Colors.transparent, // Seguro gracias al Material padre
+                                  color: Colors.transparent, 
                                   child: ListView.builder(
                                     controller: _scrollController,
                                     reverse: true,
@@ -305,7 +271,6 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
                                     physics: const BouncingScrollPhysics(),
                                     itemCount: reversedMessages.length + (chatState.isLoading ? 1 : 0),
                                     itemBuilder: (context, index) {
-                                      // Indicador de escritura
                                       if (chatState.isLoading) {
                                         if (index == 0) {
                                           return Padding(
@@ -325,7 +290,6 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
                                         final msg = reversedMessages[index - 1];
                                         return ChatBubble(message: msg, botThemeColor: themeColor, isDarkMode: isDarkMode);
                                       } 
-                                      // Mensaje normal
                                       final msg = reversedMessages[index];
                                       return ChatBubble(message: msg, botThemeColor: themeColor, isDarkMode: isDarkMode);
                                     },
@@ -333,16 +297,13 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
                                 ),
                               ),
                               
-                              // SECCIÓN C: ÁREA DE INPUT
+                              // INPUT
                               Container(
                                 padding: EdgeInsets.fromLTRB(16, 10, 16, 16 + (isMobile ? MediaQuery.of(context).padding.bottom : 0)),
                                 decoration: BoxDecoration(
                                   gradient: LinearGradient(
                                     begin: Alignment.topCenter, end: Alignment.bottomCenter,
-                                    colors: [
-                                      isDarkMode ? Colors.transparent : const Color(0xFFFAFAFA).withOpacity(0.0), 
-                                      isDarkMode ? Colors.black.withOpacity(0.8) : Colors.white.withOpacity(0.9)
-                                    ],
+                                    colors: [Colors.transparent, isDarkMode ? Colors.black.withOpacity(0.5) : Colors.white.withOpacity(0.5)],
                                   ),
                                 ),
                                 child: Container(
@@ -418,7 +379,6 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
   }
 }
 
-// Widget auxiliar para botones del header
 class _ControlButton extends StatelessWidget {
   final IconData icon;
   final Color color;
