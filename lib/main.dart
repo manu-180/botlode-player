@@ -9,36 +9,37 @@ import 'package:botlode_player/features/player/presentation/providers/loader_pro
 import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
 import 'package:botlode_player/features/player/presentation/widgets/floating_bot_widget.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+// Eliminamos la dependencia directa de dotenv aquí, AppConfig se encarga
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-// --- MAIN ROBUSTO (DIAGNÓSTICO) ---
 void main() {
-  // VECTOR 4: Captura de errores globales con runZonedGuarded
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
 
-    // 1. CARGA DE ENTORNO (.ENV) CON FALLBACK
-    try {
-      await dotenv.load(fileName: ".env");
-    } catch (e) {
-      print("⚠️ Advertencia: No se pudo cargar .env. Usando variables de entorno del sistema.");
-    }
+    // [CORRECCIÓN FINAL]
+    // Eliminamos 'await dotenv.load(...)' porque en producción el archivo no existe.
+    // AppConfig ya tiene la lógica para leer las variables del sistema (--dart-define).
 
-    // 2. INICIALIZACIÓN DE SUPABASE (VECTOR 2 - SAFE MODE)
     try {
+      // Usamos las variables desde AppConfig (que ya son seguras)
+      final sbUrl = AppConfig.supabaseUrl;
+      final sbKey = AppConfig.supabaseAnonKey;
+
+      if (sbUrl.isEmpty || sbKey.isEmpty) {
+        throw Exception("Variables de Supabase vacías. Revisa la config de Vercel.");
+      }
+
       await Supabase.initialize(
-        url: AppConfig.supabaseUrl,
-        anonKey: AppConfig.supabaseAnonKey,
-        // VECTOR 2 FIX: Deshabilitar persistencia para evitar bloqueo de cookies en Iframe
+        url: sbUrl,
+        anonKey: sbKey,
         authOptions: const FlutterAuthClientOptions(
           authFlowType: AuthFlowType.implicit,
         ),
       );
     } catch (e) {
       print("🔥 Error crítico iniciando Supabase: $e");
-      // No detenemos la app, dejamos que cargue para mostrar el error en UI si es necesario
+      // Si falla, permitimos que la app arranque para mostrar error en UI si es necesario
     }
 
     final uri = Uri.base;
@@ -55,25 +56,9 @@ void main() {
     );
 
   }, (error, stack) {
-    // PANTALLA ROJA DE LA MUERTE (CONTROLADA)
     print("🔥 CRASH NO CONTROLADO: $error");
-    runApp(
-      MaterialApp(
-        home: Scaffold(
-          backgroundColor: Colors.red.shade900,
-          body: Center(
-            child: Padding(
-              padding: const EdgeInsets.all(20.0),
-              child: Text(
-                "ERROR CRÍTICO DEL SISTEMA:\n$error",
-                style: const TextStyle(color: Colors.white, fontFamily: 'Courier'),
-                textAlign: TextAlign.center,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
+    // Pantalla de error visible
+    runApp(MaterialApp(home: Scaffold(backgroundColor: Colors.red, body: Center(child: Text("ERROR: $error", style: TextStyle(color: Colors.white))))));
   });
 }
 
@@ -88,15 +73,11 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
   void initState() {
     super.initState();
     
-    // Precarga de assets
     try {
       ref.read(riveFileLoaderProvider);       
       ref.read(riveHeadFileLoaderProvider);  
-    } catch (e) {
-      print("⚠️ Error precargando Rive: $e");
-    }
+    } catch (_) {}
 
-    // TRUCO WEB: Forzar transparencia
     try {
       html.document.body!.style.backgroundColor = 'transparent';
       html.document.documentElement!.style.backgroundColor = 'transparent';
@@ -106,7 +87,6 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
         html.window.parent?.postMessage('CMD_READY', '*');
     });
     
-    // LISTENERS DE MENSAJES (HTML -> FLUTTER)
     html.window.onMessage.listen((event) {
       if (event.data == null) return;
       final String data = event.data.toString();
@@ -128,16 +108,13 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
           final double x = double.parse(parts[0]);
           final double y = double.parse(parts[1]);
           ref.read(pointerPositionProvider.notifier).state = Offset(x, y);
-        } catch (e) {
-          // Ignorar error
-        }
+        } catch (_) {}
       }
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    // Escuchamos si Flutter decide cerrar el chat
     ref.listen(chatOpenProvider, (prev, isOpen) {
       if (!isOpen) { 
         html.window.parent?.postMessage('CMD_CLOSE', '*');

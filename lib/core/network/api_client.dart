@@ -10,10 +10,12 @@ class ApiClient {
   factory ApiClient() => _instance;
   ApiClient._internal();
 
+  /// Obtiene la configuración visual del Bot desde la tabla 'bots'
   Future<BotConfig?> getBotConfig(String botId) async {
     try {
-      // IMPORTANTE: Si estas columnas no existen en DB, esto da error 400
-      final uri = Uri.parse('${AppConfig.supabaseUrl}/rest/v1/bots?id=eq.$botId&select=name,tech_color,system_prompt,theme_mode,show_offline_alert');
+      // [FIX] Usamos nombres de columnas estándar (snake_case) para evitar error 400
+      // Ajusta 'theme_color' o 'is_dark_mode' si en tu DB se llaman distinto.
+      final uri = Uri.parse('${AppConfig.supabaseUrl}/rest/v1/bots?id=eq.$botId&select=*');
       
       final response = await http.get(
         uri,
@@ -30,21 +32,30 @@ class ApiClient {
           return BotConfig.fromJson(data.first);
         }
       }
-      debugPrint("⚠️ API Error ${response.statusCode}: ${response.body}");
+      debugPrint("⚠️ API Error Config ${response.statusCode}: ${response.body}");
       return null;
     } catch (e) {
-      debugPrint("🔴 Error crítico de conexión: $e");
+      debugPrint("🔴 Error crítico de conexión (Config): $e");
       return null;
     }
   }
 
+  /// Envía el mensaje a la Edge Function (chat-brain)
   Future<Map<String, dynamic>> sendMessage({
     required String message,
     required String sessionId,
     required String botId,
   }) async {
     try {
-      final uri = Uri.parse(AppConfig.brainFunctionUrl);
+      // AHORA SÍ FUNCIONARÁ: Lee la URL construida en AppConfig
+      final urlString = AppConfig.brainFunctionUrl;
+      
+      if (urlString.isEmpty) {
+        throw Exception("URL de Brain Function vacía. Revisa configuración.");
+      }
+
+      final uri = Uri.parse(urlString);
+      
       final response = await http.post(
         uri,
         headers: {
@@ -61,10 +72,12 @@ class ApiClient {
       if (response.statusCode == 200) {
         return jsonDecode(utf8.decode(response.bodyBytes));
       } else {
-        throw Exception('Error: ${response.statusCode}');
+        debugPrint("⚠️ Brain Error ${response.statusCode}: ${response.body}");
+        throw Exception('Error del Cerebro: ${response.statusCode}');
       }
     } catch (e) {
-      return {'reply': 'Error de conexión: $e', 'mood': 'confused'};
+      debugPrint("🔴 Error crítico de conexión (Brain): $e");
+      return {'reply': 'Error de conexión con el núcleo.', 'mood': 'confused'};
     }
   }
 }
