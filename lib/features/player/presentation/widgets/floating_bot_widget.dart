@@ -1,4 +1,5 @@
 // Archivo: lib/features/player/presentation/widgets/floating_bot_widget.dart
+import 'dart:math' as math; // Importante para usar max()
 import 'dart:html' as html;
 import 'package:botlode_player/features/player/domain/models/bot_config.dart';
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
@@ -34,9 +35,7 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     final isMobile = screenSize.width < 600; 
     final panelHeight = isMobile ? screenSize.height : (screenSize.height).clamp(400.0, 800.0);
 
-    // [CORRECCIÓN GEOMÉTRICA]
-    // Antes era 139.0 (centrado). Ahora es 40.0 (pegado a la derecha).
-    // Esto deja cientos de pixeles libres a la izquierda para que crezca sin cortarse.
+    // Padding de anclaje derecho
     const double ghostPadding = 40.0;
 
     return Stack(
@@ -66,7 +65,6 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
 
         if (!isOpen)
           Padding(
-            // Solo 40px de margen para la sombra. El resto es espacio libre.
             padding: const EdgeInsets.only(bottom: ghostPadding, right: ghostPadding),
             child: GestureDetector(
               onTap: () => ref.read(chatOpenProvider.notifier).set(true),
@@ -101,7 +99,20 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
   }) {
     const double closedSize = 72.0; 
     const double headSize = 58.0;   
-    const double openWidth = 300.0; 
+    
+    // --- LÓGICA DE ANCHO ADAPTATIVO ---
+    // 1. Buscamos cuál es el texto más largo (Nombre o Subtítulo)
+    int maxChars = math.max(name.length, subtext.length);
+    
+    // 2. Calculamos pixels:
+    // 120px base (espacio para la cabeza + padding)
+    // + 9px por cada letra (aproximado para fuente normal)
+    double calculatedWidth = 120.0 + (maxChars * 9.0);
+
+    // 3. Clampeamos para seguridad:
+    // Mínimo 220px (para que no quede muy chico)
+    // Máximo 380px (para que no se salga del iframe de 450px)
+    double openWidth = calculatedWidth.clamp(220.0, 380.0);
 
     final Color textColor = _getContrastingTextColor(color);
     final Color subTextColor = textColor.withOpacity(0.85);
@@ -118,8 +129,11 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 400),
       curve: Curves.easeOutCubic, 
+      
+      // Usamos el ancho calculado dinámicamente
       width: isHovered ? openWidth : closedSize, 
       height: closedSize, 
+      
       clipBehavior: Clip.antiAlias, 
       decoration: BoxDecoration(
         gradient: LinearGradient(
@@ -148,9 +162,20 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.end, 
                         children: [
-                          Text(name, textAlign: TextAlign.right, style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 13, letterSpacing: 0.5, height: 1.1)),
+                          Text(
+                            name, 
+                            textAlign: TextAlign.right, 
+                            // Sin overflow para que intente mostrar todo
+                            style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 13, letterSpacing: 0.5, height: 1.1)
+                          ),
                           const SizedBox(height: 2),
-                          Text(subtext, textAlign: TextAlign.right, overflow: TextOverflow.ellipsis, style: TextStyle(color: subTextColor, fontWeight: FontWeight.w500, fontSize: 10)),
+                          Text(
+                            subtext, 
+                            textAlign: TextAlign.right, 
+                            // Ellipsis solo si supera el máximo de 380px
+                            overflow: TextOverflow.ellipsis, 
+                            style: TextStyle(color: subTextColor, fontWeight: FontWeight.w500, fontSize: 10)
+                          ),
                         ],
                       ),
                     )
