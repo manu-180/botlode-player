@@ -27,7 +27,7 @@ class _FloatingHeadWidgetState extends ConsumerState<FloatingHeadWidget> with Si
   double _currentX = 50.0;
   double _currentY = 50.0;
   
-  // Siempre rastreando si hay datos
+  // Bandera de estado
   bool _isTracking = false; 
 
   final String _stateMachineName = 'State Machine 1'; 
@@ -46,12 +46,15 @@ class _FloatingHeadWidgetState extends ConsumerState<FloatingHeadWidget> with Si
 
   void _onTick(Duration elapsed) {
     if (_lookXInput == null || _lookYInput == null) return;
-    // Movimiento fluido (0.1 es más suave que 1.0)
-    final double smoothFactor = _isTracking ? 0.2 : 0.05;
-    
+
+    // [LÓGICA HÍBRIDA SOLICITADA]
+    // 1.0 = Instantáneo (Sin lag cuando sigue al mouse)
+    // 0.05 = Muy suave (Cuando vuelve al centro)
+    final double smoothFactor = _isTracking ? 1.0 : 0.05;
+
     _currentX = lerpDouble(_currentX, _targetX, smoothFactor) ?? 50;
     _currentY = lerpDouble(_currentY, _targetY, smoothFactor) ?? 50;
-    
+
     _lookXInput!.value = _currentX;
     _lookYInput!.value = _currentY;
   }
@@ -79,14 +82,14 @@ class _FloatingHeadWidgetState extends ConsumerState<FloatingHeadWidget> with Si
       final double dx = deltaPos.dx;
       final double dy = deltaPos.dy;
 
-      // CORRECCIÓN: Rango aumentado a 3000px para que cubra monitores grandes
-      const double maxInterestDistance = 3000.0; 
       final double distance = math.sqrt(dx * dx + dy * dy);
+      
+      // Rango aumentado a 5000 para que detecte el mouse en toda la pantalla
+      const double maxInterestDistance = 5000.0; 
 
       if (distance < maxInterestDistance) {
         _isTracking = true; 
-        // CORRECCIÓN: Sensibilidad ajustada (400) para que no se pegue a los bordes instantáneamente
-        const double sensitivity = 400.0; 
+        const double sensitivity = 250.0; 
         _targetX = (50 + (dx / sensitivity * 50)).clamp(0.0, 100.0);
         _targetY = (50 + (dy / sensitivity * 50)).clamp(0.0, 100.0);
       } else {

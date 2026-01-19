@@ -48,9 +48,15 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
 
   void _onTick(Duration elapsed) {
     if (_lookXInput == null || _lookYInput == null) return;
-    final double smoothFactor = _isTracking ? 0.2 : 0.05; // Movimiento suave
+    
+    // [LÓGICA HÍBRIDA SOLICITADA]
+    // 1.0 para respuesta 1:1 inmediata (Elimina el lag)
+    // 0.05 para suavidad al volver al centro
+    final double smoothFactor = _isTracking ? 1.0 : 0.05;
+    
     _currentX = lerpDouble(_currentX, _targetX, smoothFactor) ?? 50;
     _currentY = lerpDouble(_currentY, _targetY, smoothFactor) ?? 50;
+    
     _lookXInput!.value = _currentX;
     _lookYInput!.value = _currentY;
   }
@@ -85,13 +91,12 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       final double dx = deltaPos.dx;
       final double dy = deltaPos.dy;
 
-      // CORRECCIÓN: Rango Infinito (3000px)
-      const double maxInterestDistance = 3000.0; 
       final double distance = math.sqrt(dx * dx + dy * dy);
+      const double maxInterestDistance = 5000.0; // Rango infinito
 
       if (distance < maxInterestDistance) {
         _isTracking = true;
-        const double sensitivity = 400.0; // Sensibilidad ajustada
+        const double sensitivity = 400.0; 
         _targetX = (50 + (dx / sensitivity * 50)).clamp(0.0, 100.0);
         _targetY = (50 + (dy / sensitivity * 50)).clamp(0.0, 100.0);
       } else {

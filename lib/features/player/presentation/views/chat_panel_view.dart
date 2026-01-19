@@ -97,18 +97,16 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
       if (prev?.currentMood != next.currentMood) ref.read(botMoodProvider.notifier).state = _getMoodIndex(next.currentMood);
     });
 
-    // CORRECCIÓN CRÍTICA: MouseRegion local
-    // Como el Iframe bloquea al HTML, necesitamos rastrear el mouse aquí dentro.
+    // CORRECCIÓN: MouseRegion para captura interna
     return MouseRegion(
+      hitTestBehavior: HitTestBehavior.translucent, // Captura todo
       onHover: (event) {
-        // Obtenemos el ancho del panel para saber dónde está el centro
-        final width = MediaQuery.of(context).size.width.clamp(0.0, 380.0); // Ancho máximo del chat
-        
-        // Calculamos la posición relativa al AVATAR (aprox en el centro horizontal, y 100px desde arriba)
+        final width = MediaQuery.of(context).size.width.clamp(0.0, 380.0);
+        // Calculamos la distancia al centro de la cabeza del avatar
         final double dx = event.localPosition.dx - (width / 2);
-        final double dy = event.localPosition.dy - 100.0; // Altura aproximada del centro de la cabeza del avatar
-
-        // Actualizamos el provider directamente
+        final double dy = event.localPosition.dy - 100.0; 
+        
+        // Actualizamos el provider que mueve los ojos
         ref.read(pointerPositionProvider.notifier).state = Offset(dx, dy);
       },
       child: Container(
