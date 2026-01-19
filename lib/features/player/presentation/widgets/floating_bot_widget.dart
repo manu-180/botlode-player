@@ -41,7 +41,6 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
       fit: StackFit.loose, 
       alignment: Alignment.bottomRight,
       children: [
-        // 1. CAPA DE FONDO (Cierra al hacer click fuera)
         if (isOpen)
           Positioned.fill(
             child: GestureDetector(
@@ -51,26 +50,20 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
             ),
           ),
 
-        // 2. CAPA DEL CHAT (INTERFAZ)
-        // Se anima independientemente de la burbuja.
         Positioned(
           bottom: 0, 
           right: 0,
           child: IgnorePointer(
             ignoring: !isOpen, 
             child: AnimatedOpacity(
-              // Fade rápido al cerrar para dar paso a la burbuja
-              duration: Duration(milliseconds: isOpen ? 300 : 200),
+              duration: const Duration(milliseconds: 250),
               opacity: isOpen ? 1.0 : 0.0,
-              curve: Curves.easeInOut,
+              curve: Curves.easeOut,
               child: AnimatedScale(
-                // Efecto POP:
-                // Abierto: 1.0 (Tamaño real)
-                // Cerrado: 0.9 (Se achica un poquito hacia el fondo al desaparecer)
                 scale: isOpen ? 1.0 : 0.9, 
                 alignment: Alignment.bottomRight,
-                duration: Duration(milliseconds: isOpen ? 400 : 250),
-                curve: isOpen ? Curves.easeOutBack : Curves.easeIn, 
+                duration: const Duration(milliseconds: 350),
+                curve: isOpen ? Curves.easeOutBack : Curves.easeInCubic, 
                 child: ConstrainedBox(
                   constraints: BoxConstraints(
                     maxHeight: panelHeight, 
@@ -83,20 +76,14 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
           ),
         ),
 
-        // 3. CAPA DE LA BURBUJA (BOTÓN)
         Positioned(
           bottom: ghostPadding, 
           right: ghostPadding,
           child: IgnorePointer(
             ignoring: isOpen, 
             child: AnimatedScale(
-              // Si está abierto el chat -> Escala 0 (Desaparece)
-              // Si está cerrado -> Escala 1 (Aparece)
               scale: isOpen ? 0.0 : 1.0, 
               duration: const Duration(milliseconds: 300),
-              // Curvas opuestas para sincronizar:
-              // Al cerrar chat: Delay muy leve y luego POP (easeOutBack)
-              // Al abrir chat: Se va rápido (easeInBack)
               curve: isOpen ? Curves.easeInBack : Curves.easeOutBack, 
               alignment: Alignment.center,
               child: GestureDetector(

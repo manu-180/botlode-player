@@ -9,7 +9,6 @@ import 'package:botlode_player/features/player/presentation/widgets/chat_bubble.
 import 'package:botlode_player/features/player/presentation/widgets/rive_avatar.dart';
 import 'package:botlode_player/features/player/presentation/widgets/status_indicator.dart';
 import 'package:flutter/material.dart';
-// Eliminado flutter_animate de aquí para evitar conflictos de renderizado
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class ChatPanelView extends ConsumerStatefulWidget {
@@ -107,8 +106,9 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
         ref.read(pointerPositionProvider.notifier).state = Offset(dx, dy);
       },
       child: Container(
-        width: isMobile ? double.infinity : null,
-        height: isMobile ? double.infinity : null,
+        // CORRECCIÓN DE LAYOUT: Forzamos llenar el espacio disponible
+        width: double.infinity,
+        height: double.infinity,
         clipBehavior: Clip.hardEdge, 
         decoration: BoxDecoration(
           gradient: bgGradient, 
@@ -117,10 +117,17 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
           boxShadow: panelShadows,
         ),
         child: Stack(
+          fit: StackFit.expand, // CORRECCIÓN: Los hijos deben llenar el Stack
           children: [
-            BackdropFilter(filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10), child: Container(color: glassBg)),
+            // Fondo Blur
+            Positioned.fill(
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                child: Container(color: glassBg),
+              ),
+            ),
             
-            // CONTENIDO SIN ANIMACIONES INTERNAS (Fix de pantalla blanca)
+            // Contenido Real
             Column(
               children: [
                 SizedBox(
