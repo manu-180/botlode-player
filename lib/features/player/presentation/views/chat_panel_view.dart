@@ -1,5 +1,5 @@
 // Archivo: lib/features/player/presentation/views/chat_panel_view.dart
-import 'dart:html' as html; // Necesario para hablar con el HTML
+import 'dart:html' as html; 
 import 'dart:ui'; 
 import 'package:botlode_player/core/network/connectivity_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
@@ -58,18 +58,16 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
     final chatState = ref.watch(chatControllerProvider);
     final isMobile = MediaQuery.of(context).size.width < 600;
     
-    // Configuración
     final botConfigAsync = ref.watch(botConfigProvider);
     final botConfig = botConfigAsync.asData?.value;
 
     final themeColor = botConfig?.themeColor ?? const Color(0xFFFFC000);
     final isDarkMode = botConfig?.isDarkMode ?? true; 
-    final showOfflineAlert = botConfig?.showOfflineAlert ?? true; // Respetamos la config
+    final showOfflineAlert = botConfig?.showOfflineAlert ?? true;
 
     final isOnlineAsync = ref.watch(connectivityProvider);
     final isOnline = isOnlineAsync.asData?.value ?? true;
 
-    // Colores
     final Color glassBg = isDarkMode 
         ? const Color(0xFF121212).withOpacity(0.85) 
         : const Color(0xFFFFFFFF).withOpacity(0.90);
@@ -99,15 +97,15 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
 
     final reversedMessages = chatState.messages.reversed.toList();
 
-    // --- PUENTE DE COMUNICACIÓN DE RED ---
+    // --- LOGICA DE RED (SOLO ENVÍA SEÑALES, NO DIBUJA NADA) ---
     ref.listen(connectivityProvider, (prev, next) {
       next.whenData((online) {
         if (showOfflineAlert) {
           if (!online) {
-            // SE FUE INTERNET: Avisar al HTML para que muestre el banner global
+            // SE FUE: Avisar al HTML
             html.window.parent?.postMessage('NETWORK_OFFLINE', '*');
           } else if (prev?.value == false && online) {
-            // VOLVIÓ INTERNET: Avisar al HTML para quitar el banner
+            // VOLVIÓ: Avisar al HTML
             html.window.parent?.postMessage('NETWORK_ONLINE', '*');
           }
         }
