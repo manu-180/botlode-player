@@ -34,9 +34,16 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     final isMobile = screenSize.width < 600; 
     final panelHeight = isMobile ? screenSize.height : (screenSize.height).clamp(400.0, 800.0);
 
+    // CÁLCULO MATEMÁTICO PARA CENTRAR EL BOTÓN EN EL IFRAME FANTASMA DE 350px
+    // Iframe (350) - Botón (72) = 278 espacio libre. / 2 = 139px de margen.
+    // Esto lo posiciona visualmente en el centro, pero anclado a la esquina.
+    const double ghostPadding = 139.0;
+
     return Stack(
       fit: StackFit.loose, 
-      alignment: Alignment.center, // Mantiene el centrado en el iframe fantasma
+      // CORRECCIÓN 1: SIEMPRE ANCLADO A LA DERECHA ABAJO
+      // Esto evita que crezca hacia la derecha (fuera de pantalla)
+      alignment: Alignment.bottomRight,
       
       children: [
         // --- CAPA DE CIERRE ---
@@ -51,38 +58,43 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
 
         // --- PANEL DE CHAT ---
         if (isOpen)
-          Positioned(
-            bottom: 0, right: 0,
-            left: isMobile ? 0 : null, top: isMobile ? 0 : null,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxHeight: panelHeight, 
-                maxWidth: isMobile ? double.infinity : 380
-              ),
-              child: const ChatPanelView().animate().scale(curve: Curves.easeOutBack, alignment: Alignment.bottomRight, duration: 300.ms).fadeIn(),
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: panelHeight, 
+              maxWidth: isMobile ? double.infinity : 380
             ),
+            child: const ChatPanelView()
+                .animate()
+                // La animación ahora nace desde la esquina inferior derecha
+                .scale(curve: Curves.easeOutBack, alignment: Alignment.bottomRight, duration: 300.ms)
+                .fadeIn(),
           ),
 
         // --- BOTÓN FLOTANTE ---
         if (!isOpen)
-          // [CORRECCIÓN]: Agregamos GestureDetector AQUÍ TAMBIÉN.
-          // Esto permite que funcione en Vercel (standalone) y actúe como respaldo en la web.
-          GestureDetector(
-            onTap: () => ref.read(chatOpenProvider.notifier).set(true),
-            // MouseRegion para detectar hover interno si falla el externo (opcional pero robusto)
-            child: MouseRegion(
-              cursor: SystemMouseCursors.click,
-              onEnter: (_) => ref.read(isHoveredExternalProvider.notifier).state = true,
-              onExit: (_) => ref.read(isHoveredExternalProvider.notifier).state = false,
-              child: botConfigAsync.when(
-                loading: () => _buildFloatingButton(isHovered: false, name: "...", color: Colors.grey, subtext: "Cargando...", isDarkMode: true),
-                error: (err, stack) => _buildFloatingButton(isHovered: false, name: "OFFLINE", color: Colors.red, subtext: "Error", isDarkMode: true),
-                data: (config) => _buildFloatingButton(
-                  isHovered: isHovered, 
-                  name: config.name.toUpperCase(), 
-                  color: config.themeColor,
-                  subtext: "¿En qué te ayudo?",
-                  isDarkMode: config.isDarkMode,
+          Padding(
+            // CORRECCIÓN 2: Padding dinámico.
+            // En Vercel (pantalla completa) lo centramos.
+            // En Iframe (pantalla chica) usamos el padding matemático.
+            padding: screenSize.width > 500 
+                ? EdgeInsets.only(bottom: ghostPadding, right: ghostPadding) 
+                : const EdgeInsets.all(20), // Fallback para móviles
+            child: GestureDetector(
+              onTap: () => ref.read(chatOpenProvider.notifier).set(true),
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                onEnter: (_) => ref.read(isHoveredExternalProvider.notifier).state = true,
+                onExit: (_) => ref.read(isHoveredExternalProvider.notifier).state = false,
+                child: botConfigAsync.when(
+                  loading: () => _buildFloatingButton(isHovered: false, name: "...", color: Colors.grey, subtext: "Cargando...", isDarkMode: true),
+                  error: (err, stack) => _buildFloatingButton(isHovered: false, name: "OFFLINE", color: Colors.red, subtext: "Error", isDarkMode: true),
+                  data: (config) => _buildFloatingButton(
+                    isHovered: isHovered, 
+                    name: config.name.toUpperCase(), 
+                    color: config.themeColor,
+                    subtext: "¿En qué te ayudo?",
+                    isDarkMode: config.isDarkMode,
+                  ),
                 ),
               ),
             ),
@@ -105,19 +117,13 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     final Color textColor = _getContrastingTextColor(color);
     final Color subTextColor = textColor.withOpacity(0.85);
 
-    // SOMBRAS MINIMALISTAS
     final List<BoxShadow> shadowList = isDarkMode
         ? [
             BoxShadow(
               color: Colors.black.withOpacity(0.25), 
-              blurRadius: 10, 
-              offset: const Offset(0, 4) 
+              blurRadius: 10, offset: const Offset(0, 4) 
             ),
-            BoxShadow(
-              color: color.withOpacity(0.1),
-              blurRadius: 0,
-              spreadRadius: 1, 
-            )
+            BoxShadow(color: color.withOpacity(0.1), blurRadius: 0, spreadRadius: 1)
           ]
         : [
              BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8, offset: const Offset(0, 4)),
@@ -126,19 +132,13 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeOutCubic, 
-      
       width: isHovered ? openWidth : closedSize, 
       height: closedSize, 
-      
       clipBehavior: Clip.antiAlias, 
-      
       decoration: BoxDecoration(
         gradient: LinearGradient(
           begin: Alignment.topLeft, end: Alignment.bottomRight,
-          colors: [
-            color, 
-            Color.lerp(color, Colors.black, 0.1)!, 
-          ],
+          colors: [color, Color.lerp(color, Colors.black, 0.1)!],
         ),
         borderRadius: BorderRadius.circular(closedSize / 2),
         border: Border.all(color: Colors.white.withOpacity(0.15), width: 1.0),
@@ -172,7 +172,6 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
               ), 
             ),
           ),
-          
           Container(
             width: headSize, height: headSize,
             margin: const EdgeInsets.all(7), 
