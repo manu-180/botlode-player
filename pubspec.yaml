@@ -11,6 +11,7 @@ dependencies:
     sdk: flutter
   flutter_animate: ^4.5.0
   flutter_dotenv: ^5.1.0
+  flutter_launcher_icons: ^0.14.4
   flutter_riverpod: 2.5.1
   google_fonts: ^6.2.1
   http: ^1.2.0
@@ -31,10 +32,31 @@ dev_dependencies:
   riverpod_generator: ^2.4.0
   riverpod_lint: ^2.3.10
 
+flutter_launcher_icons:
+
+  android: false
+
+  ios: false
+
+  remove_alpha_ios: true
+
+  image_path: "assets/icons/favicon.png"
+
+  web:
+
+    generate: true
+
+    image_path: "assets/icons/favicon.png"
+
+    background_color: "#000000"
+
+    theme_color: "#000000"
+
 flutter:
   uses-material-design: true
 
   assets:
     - assets/animations/
     - assets/images/
+    - assets/icons/
     - .env
