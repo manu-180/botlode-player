@@ -5,8 +5,7 @@ flutter pub get
 
 # 2. CONSTRUCCIÓN DEL ARTEFACTO
 # Generamos la web optimizada
-flutter build web --release --web-renderer auto
-
+flutter build web --release
 # Copiamos la configuración de rutas (SPA)
 Copy-Item "web/vercel.json" -Destination "build/web/" -Force
 
