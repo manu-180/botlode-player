@@ -34,15 +34,12 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     final isMobile = screenSize.width < 600; 
     final panelHeight = isMobile ? screenSize.height : (screenSize.height).clamp(400.0, 800.0);
 
-    // CÁLCULO FANTASMA: (350 - 72) / 2 = 139.
     const double ghostPadding = 139.0;
 
     return Stack(
       fit: StackFit.loose, 
       alignment: Alignment.bottomRight,
       children: [
-        
-        // --- CAPA CIERRE ---
         if (isOpen)
           Positioned.fill(
             child: GestureDetector(
@@ -52,7 +49,6 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
             ),
           ),
 
-        // --- CHAT PANEL ---
         if (isOpen)
           ConstrainedBox(
             constraints: BoxConstraints(
@@ -61,19 +57,14 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
             ),
             child: const ChatPanelView()
                 .animate()
-                .scale(curve: Curves.easeOutBack, alignment: Alignment.bottomRight, duration: 300.ms)
-                .fadeIn(),
+                // SINCRONIZACIÓN: 400ms para igualar al HTML
+                .scale(curve: Curves.easeOutCubic, alignment: Alignment.bottomRight, duration: 400.ms)
+                .fadeIn(duration: 200.ms),
           ),
 
-        // --- BOTÓN FLOTANTE ---
         if (!isOpen)
           Padding(
-            // CORRECCIÓN CRÍTICA: SIEMPRE USAR PADDING FANTASMA
-            // Eliminamos la condición de width > 500 porque dentro del iframe
-            // el ancho siempre es 350px. Esto forzará al bot a centrarse
-            // en el iframe fantasma visible.
             padding: const EdgeInsets.only(bottom: ghostPadding, right: ghostPadding),
-            
             child: GestureDetector(
               onTap: () => ref.read(chatOpenProvider.notifier).set(true),
               child: MouseRegion(
@@ -107,17 +98,16 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
   }) {
     const double closedSize = 72.0; 
     const double headSize = 58.0;   
-    const double openWidth = 260.0; 
+    
+    // CORRECCIÓN 1: Más ancho para que entren nombres largos
+    const double openWidth = 300.0; 
 
     final Color textColor = _getContrastingTextColor(color);
     final Color subTextColor = textColor.withOpacity(0.85);
 
     final List<BoxShadow> shadowList = isDarkMode
         ? [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.25), 
-              blurRadius: 10, offset: const Offset(0, 4) 
-            ),
+            BoxShadow(color: Colors.black.withOpacity(0.25), blurRadius: 10, offset: const Offset(0, 4)),
             BoxShadow(color: color.withOpacity(0.1), blurRadius: 0, spreadRadius: 1)
           ]
         : [
@@ -125,7 +115,8 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
           ];
 
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
+      // SINCRONIZACIÓN: 400ms
+      duration: const Duration(milliseconds: 400),
       curve: Curves.easeOutCubic, 
       width: isHovered ? openWidth : closedSize, 
       height: closedSize, 
@@ -152,14 +143,22 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
                 physics: const NeverScrollableScrollPhysics(),
                 child: isHovered 
                   ? Padding(
-                      padding: const EdgeInsets.only(left: 20, right: 10),
+                      // CORRECCIÓN 2: Ajuste de padding para que el texto no toque el borde izquierdo
+                      padding: const EdgeInsets.only(left: 25, right: 12),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
+                        // Alineamos el texto a la derecha (cerca del avatar)
                         crossAxisAlignment: CrossAxisAlignment.end, 
                         children: [
                           Text(name, textAlign: TextAlign.right, style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 13, letterSpacing: 0.5, height: 1.1)),
                           const SizedBox(height: 2),
-                          Text(subtext, textAlign: TextAlign.right, style: TextStyle(color: subTextColor, fontWeight: FontWeight.w500, fontSize: 10)),
+                          // Subtítulo con overflow ellipsis por si acaso
+                          Text(
+                            subtext, 
+                            textAlign: TextAlign.right, 
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(color: subTextColor, fontWeight: FontWeight.w500, fontSize: 10)
+                          ),
                         ],
                       ),
                     )
@@ -177,7 +176,7 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
       ),
     ).animate().scale(
       end: isHovered ? const Offset(1.02, 1.02) : const Offset(1.0, 1.0), 
-      duration: 300.ms, curve: Curves.easeOutBack
+      duration: 400.ms, curve: Curves.easeOutCubic // Curva más suave
     );
   }
 }
