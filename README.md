@@ -28,3 +28,6 @@ vercel --prod --name botlode-player --yes
 # 5. RETORNO A BASE
 cd ..\..
 Write-Host "✅ Misión Cumplida: BotLode Player actualizado." -ForegroundColor Green
+
+
+# Metodo viejo
