@@ -1,7 +1,8 @@
 // Archivo: lib/features/player/presentation/providers/chat_provider.dart
 import 'package:botlode_player/core/network/api_client.dart';
 import 'package:botlode_player/features/player/domain/models/chat_message.dart';
-import 'package:botlode_player/main.dart'; // Importar para acceder a currentBotIdProvider
+// [CORRECCIÓN] Importamos el provider desde su nueva ubicación
+import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart'; 
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:uuid/uuid.dart';
 
@@ -42,7 +43,6 @@ class ChatController extends _$ChatController {
   @override
   ChatState build() {
     return ChatState(messages: [
-      // Mensaje inicial neutro (ya que ahora puede ser CUALQUIER bot)
       ChatMessage(
         id: 'init',
         text: 'Sistema en línea. ¿En qué puedo ayudarte hoy?',
@@ -56,7 +56,6 @@ class ChatController extends _$ChatController {
     if (text.trim().isEmpty) return;
 
     // 1. LEER EL ID DINÁMICO
-    // Usamos ref.read para obtener el ID que inyectamos en el main.dart
     final botId = ref.read(currentBotIdProvider);
 
     // 2. Agregar mensaje del usuario (Optimistic UI)
@@ -73,11 +72,11 @@ class ChatController extends _$ChatController {
       currentMood: 'thinking', 
     );
 
-    // 3. Llamar a la Edge Function (Usando el botId dinámico)
+    // 3. Llamar a la Edge Function
     final response = await ApiClient().sendMessage(
       message: text,
       sessionId: _sessionId,
-      botId: botId, // <--- AQUÍ ESTÁ EL CAMBIO CLAVE
+      botId: botId, 
     );
 
     // 4. Procesar respuesta

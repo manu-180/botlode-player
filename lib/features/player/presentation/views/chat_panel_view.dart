@@ -1,4 +1,7 @@
 // Archivo: lib/features/player/presentation/views/chat_panel_view.dart
+import 'dart:ui'; // Para ImageFilter
+import 'package:botlode_player/core/network/connectivity_provider.dart';
+import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/chat_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
 import 'package:botlode_player/features/player/presentation/widgets/chat_bubble.dart';
@@ -18,8 +21,6 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
-  // --- TRADUCTOR DE HUMOR (String -> Int) ---
-  // Convierte "angry" en 1, "happy" en 2, etc. para Rive.
   int _getMoodIndex(String mood) {
     switch (mood.toLowerCase()) {
       case 'angry': return 1;
@@ -36,26 +37,20 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
     final text = _textController.text;
     if (text.trim().isEmpty) return;
     _textController.clear();
-    ref.read(chatControllerProvider.notifier).sendMessage(text);
-  }
-
-  void _scrollToBottom() {
+    
     if (_scrollController.hasClients) {
-      _scrollController.animateTo(
-        _scrollController.position.maxScrollExtent + 100,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeOut,
-      );
+      _scrollController.jumpTo(0.0);
     }
+    
+    ref.read(chatControllerProvider.notifier).sendMessage(text);
   }
 
   @override
   void initState() {
     super.initState();
-    // Sincronización Inicial con Traducción
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final String moodString = ref.read(chatControllerProvider).currentMood;
-      final int moodInt = _getMoodIndex(moodString); // <--- Traducimos aquí
+      final int moodInt = _getMoodIndex(moodString); 
       ref.read(botMoodProvider.notifier).state = moodInt;
     });
   }
@@ -64,149 +59,300 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
   Widget build(BuildContext context) {
     final chatState = ref.watch(chatControllerProvider);
     final isMobile = MediaQuery.of(context).size.width < 600;
+    
+    // --- 1. CONFIGURACIÓN ---
+    final botConfigAsync = ref.watch(botConfigProvider);
+    final botConfig = botConfigAsync.asData?.value;
+
+    final themeColor = botConfig?.themeColor ?? const Color(0xFFFFC000);
+    final isDarkMode = botConfig?.isDarkMode ?? true; 
+    final showOfflineAlert = botConfig?.showOfflineAlert ?? true;
+
+    final isOnlineAsync = ref.watch(connectivityProvider);
+    final isOnline = isOnlineAsync.asData?.value ?? true;
+
+    // --- 2. SISTEMA DE DISEÑO ---
+    final Color glassBg = isDarkMode 
+        ? const Color(0xFF121212).withOpacity(0.85) 
+        : const Color(0xFFFFFFFF).withOpacity(0.90);
+
+    final LinearGradient bgGradient = isDarkMode
+        ? LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [const Color(0xFF1E1E2C).withOpacity(0.9), const Color(0xFF000000).withOpacity(0.95)],
+          )
+        : const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFFFFFFF), Color(0xFFF4F6F8)],
+          );
+
+    final Color inputFill = isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFFFFFFF);
+    final Color inputText = isDarkMode ? Colors.white : const Color(0xFF2D3748);
+    final Color hintColor = isDarkMode ? Colors.white38 : Colors.black38;
+    final Color borderColor = isDarkMode ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.1);
+    final Color iconColor = isDarkMode ? Colors.white60 : const Color(0xFF4A5568);
+
+    // --- COLORES INTELIGENTES (Adaptive Colors) ---
+    
+    // 1. Flecha y Borde Activo
+    // Dark Mode: Usa el color del tema (Cyberpunk).
+    // Light Mode: Usa negro elegante (Minimalista).
+    final Color accentColor = isDarkMode ? themeColor : const Color(0xFF1A1A1A);
+
+    final List<BoxShadow> panelShadows = isDarkMode 
+        ? [BoxShadow(color: Colors.black.withOpacity(0.6), blurRadius: 40, offset: const Offset(0, 20))]
+        : [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 30, offset: const Offset(0, 15))];
+
+    final reversedMessages = chatState.messages.reversed.toList();
+
+    // --- LISTENERS (Lógica de Alertas) ---
+    ref.listen(connectivityProvider, (prev, next) {
+      next.whenData((online) {
+        
+        // COLORES COMUNES PARA SNACKBARS
+        // Fondo oscuro en Dark Mode, Blanco en Light Mode
+        final snackBg = isDarkMode ? const Color(0xFF1A0505).withOpacity(0.98) : Colors.white; 
+        final snackTextPrimary = isDarkMode ? Colors.white : Colors.black87;
+        final snackTextSecondary = isDarkMode ? Colors.white70 : Colors.black54;
+
+        if (!online && showOfflineAlert) {
+          // --- ALERTA ROJA (OFFLINE) ---
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              backgroundColor: Colors.transparent, 
+              elevation: 0,
+              duration: const Duration(days: 365), // Persistente
+              behavior: SnackBarBehavior.floating,
+              margin: const EdgeInsets.only(bottom: 20, left: 20, right: 20),
+              content: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  color: isDarkMode ? const Color(0xFF1A0505).withOpacity(0.98) : Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFFF003C), width: 1), // Borde Rojo
+                  boxShadow: [
+                    BoxShadow(color: const Color(0xFFFF003C).withOpacity(0.15), blurRadius: 20, offset: const Offset(0, 4))
+                  ]
+                ),
+                child: Row(children: [
+                  const Icon(Icons.wifi_off_rounded, color: Color(0xFFFF003C), size: 18), 
+                  const SizedBox(width: 12), 
+                  Expanded(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    const Text("SIN CONEXIÓN", style: TextStyle(color: Color(0xFFFF003C), fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 1)), 
+                    const SizedBox(height: 2), 
+                    Text("Esperando red...", style: TextStyle(color: snackTextSecondary, fontSize: 11))
+                  ]))
+                ]),
+              ),
+            ));
+        } else if (prev?.value == false && online) {
+          // --- ALERTA VERDE (ONLINE - RECUPERADA) ---
+          ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          
+          if (showOfflineAlert) { // Solo mostrar éxito si el usuario tiene alertas activadas
+             ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                backgroundColor: Colors.transparent,
+                elevation: 0,
+                duration: const Duration(seconds: 4), // Dura un poco para que se vea
+                behavior: SnackBarBehavior.floating,
+                margin: const EdgeInsets.only(bottom: 20, left: 20, right: 20),
+                content: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: isDarkMode ? const Color(0xFF051A10).withOpacity(0.98) : Colors.white, // Fondo adaptativo
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: const Color(0xFF00FF94), width: 1), // Borde Verde Neón
+                    boxShadow: [
+                      BoxShadow(color: const Color(0xFF00FF94).withOpacity(0.15), blurRadius: 20, offset: const Offset(0, 4))
+                    ]
+                  ),
+                  child: Row(children: [
+                    const Icon(Icons.check_circle_outline_rounded, color: Color(0xFF00FF94), size: 20), 
+                    const SizedBox(width: 12), 
+                    Expanded(child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      const Text("ENLACE RESTABLECIDO", style: TextStyle(color: Color(0xFF00FF94), fontWeight: FontWeight.bold, fontSize: 11, letterSpacing: 1)), 
+                      const SizedBox(height: 2), 
+                      Text("Sincronizando sistemas...", style: TextStyle(color: snackTextSecondary, fontSize: 11))
+                    ]))
+                  ]),
+                ),
+              ));
+          }
+        }
+      });
+    });
 
     ref.listen(chatControllerProvider, (prev, next) {
-      // Scroll automático
       if (next.messages.length > (prev?.messages.length ?? 0)) {
-        Future.delayed(const Duration(milliseconds: 100), _scrollToBottom);
+         if (_scrollController.hasClients) {
+            _scrollController.jumpTo(0.0);
+         }
       }
-      
-      // Sincronización Reactiva con Traducción
       if (prev?.currentMood != next.currentMood) {
-        final int newMoodInt = _getMoodIndex(next.currentMood); // <--- Traducimos aquí
-        ref.read(botMoodProvider.notifier).state = newMoodInt;
+        ref.read(botMoodProvider.notifier).state = _getMoodIndex(next.currentMood);
       }
     });
 
     return Container(
       width: isMobile ? double.infinity : null,
       height: isMobile ? double.infinity : null,
-      
+      clipBehavior: Clip.hardEdge, 
       decoration: BoxDecoration(
-        color: const Color(0xFF111111),
-        borderRadius: isMobile ? null : BorderRadius.circular(24),
-        border: isMobile ? null : Border.all(color: Colors.white.withOpacity(0.1)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.5),
-            blurRadius: 30,
-            offset: const Offset(0, 10),
-          )
-        ],
+        gradient: bgGradient, 
+        borderRadius: isMobile ? null : BorderRadius.circular(28),
+        border: isMobile ? null : Border.all(color: borderColor, width: 1.5),
+        boxShadow: panelShadows,
       ),
-      child: ClipRRect(
-        borderRadius: isMobile ? BorderRadius.zero : BorderRadius.circular(24),
-        child: Column(
-          children: [
-            // --- HEADER (ZONA DEL ROBOT) ---
-            Container(
-              height: 160,
-              width: double.infinity,
-              color: Colors.black,
-              child: Stack(
-                children: [
-                  // 1. CAPA FONDO / AVATAR INTERACTIVO
-                  const Positioned.fill(
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(vertical: 10),
-                      child: BotAvatarWidget(), 
+      child: Stack(
+        children: [
+          BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+            child: Container(color: glassBg),
+          ),
+          Column(
+            children: [
+              // HEADER
+              SizedBox(
+                height: 180,
+                width: double.infinity,
+                child: Stack(
+                  children: [
+                    const Positioned.fill(
+                      child: Padding(
+                        padding: EdgeInsets.only(bottom: 20),
+                        child: BotAvatarWidget(), 
+                      ),
                     ),
-                  ),
-                  
-                  // 2. BOTONES DE CONTROL
-                  Positioned(
-                    top: 10,
-                    right: 10,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min, 
-                      children: [
-                        IconButton(
-                          icon: const Icon(Icons.refresh_rounded, color: Colors.white24, size: 20),
-                          tooltip: "Reiniciar Chat",
-                          onPressed: () => ref.read(chatResetProvider)(),
-                        ),
-                      ],
+                    Positioned(
+                      top: 16, right: 16,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min, 
+                        children: [
+                          _ControlButton(icon: Icons.refresh_rounded, color: iconColor, onTap: () => ref.read(chatResetProvider)(), tooltip: "Reiniciar"),
+                          const SizedBox(width: 8),
+                          _ControlButton(icon: Icons.close_rounded, color: iconColor, onTap: () => ref.read(chatOpenProvider.notifier).set(false), tooltip: "Cerrar"),
+                        ],
+                      ),
                     ),
-                  ),
-
-                  // 3. INDICADOR DE ESTADO
-                  Positioned(
-                    bottom: 16,
-                    left: 20,
-                    child: StatusIndicator(
-                      isLoading: chatState.isLoading, 
-                      mood: chatState.currentMood // Este sigue usando String, está bien para el texto
+                    Positioned(
+                      bottom: 10, left: 24,
+                      child: StatusIndicator(
+                        isLoading: chatState.isLoading, 
+                        isOnline: isOnline, 
+                        mood: chatState.currentMood,
+                        isDarkMode: isDarkMode,
+                      ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-
-            // --- CHAT BODY ---
-            Expanded(
-              child: Container(
-                color: const Color(0xFF151515),
-                child: ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-                  itemCount: chatState.messages.length + (chatState.isLoading ? 1 : 0),
-                  itemBuilder: (context, index) {
-                    if (index == chatState.messages.length) {
-                       return const Padding(
-                         padding: EdgeInsets.only(left: 16, top: 8),
-                         child: Text("Escribiendo...", style: TextStyle(color: Colors.white30, fontSize: 10)),
-                       );
-                    }
-                    return ChatBubble(message: chatState.messages[index]);
-                  },
+                  ],
                 ),
               ),
-            ),
 
-            // --- INPUT ---
-            Container(
-              padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + (isMobile ? MediaQuery.of(context).padding.bottom : 0)),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1A1A1A),
-                border: Border(top: BorderSide(color: Colors.white.withOpacity(0.05))),
+              Container(height: 1, width: double.infinity, color: borderColor),
+
+              // CHAT BODY
+              Expanded(
+                child: Container(
+                  color: isDarkMode ? Colors.transparent : const Color(0xFFFAFAFA).withOpacity(0.5),
+                  child: ListView.builder(
+                    controller: _scrollController,
+                    reverse: true,
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+                    physics: const BouncingScrollPhysics(),
+                    itemCount: reversedMessages.length + (chatState.isLoading ? 1 : 0),
+                    itemBuilder: (context, index) {
+                      if (chatState.isLoading) {
+                        if (index == 0) {
+                          return Padding(
+                             padding: const EdgeInsets.only(left: 16, top: 8, bottom: 20),
+                             child: Row(
+                               children: [
+                                 SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2, color: iconColor.withOpacity(0.5))),
+                                 const SizedBox(width: 8),
+                                 Text("Escribiendo...", style: TextStyle(color: hintColor, fontSize: 11)),
+                               ],
+                             ),
+                           );
+                        }
+                        final msg = reversedMessages[index - 1];
+                        return ChatBubble(message: msg, botThemeColor: themeColor, isDarkMode: isDarkMode);
+                      } 
+                      final msg = reversedMessages[index];
+                      return ChatBubble(message: msg, botThemeColor: themeColor, isDarkMode: isDarkMode);
+                    },
+                  ),
+                ),
               ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _textController,
-                      style: const TextStyle(color: Colors.white),
-                      onSubmitted: (_) => _sendMessage(),
-                      decoration: const InputDecoration(
-                        hintText: "Escribe aquí...",
-                        hintStyle: TextStyle(color: Colors.white30),
-                        filled: true,
-                        fillColor: Colors.black,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.all(Radius.circular(30)),
-                          borderSide: BorderSide.none
+
+              // INPUT FLOTANTE
+              Container(
+                padding: EdgeInsets.fromLTRB(16, 10, 16, 16 + (isMobile ? MediaQuery.of(context).padding.bottom : 0)),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter, end: Alignment.bottomCenter,
+                    colors: [isDarkMode ? Colors.transparent : const Color(0xFFFAFAFA).withOpacity(0.0), isDarkMode ? Colors.black.withOpacity(0.8) : Colors.white.withOpacity(0.9)],
+                  ),
+                ),
+                child: Container(
+                  decoration: BoxDecoration(color: inputFill, borderRadius: BorderRadius.circular(40), boxShadow: [BoxShadow(color: Colors.black.withOpacity(isDarkMode ? 0.3 : 0.08), blurRadius: 15, offset: const Offset(0, 5))]),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                  child: Row(
+                    children: [
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          controller: _textController,
+                          style: TextStyle(color: inputText, fontSize: 14),
+                          enabled: isOnline,
+                          onSubmitted: (_) => isOnline ? _sendMessage() : null,
+                          cursorColor: accentColor, // Cursor negro o neón según tema
+                          decoration: InputDecoration(
+                            hintText: isOnline ? "Escribe aquí..." : "Sin conexión",
+                            hintStyle: TextStyle(color: hintColor, fontSize: 14),
+                            isDense: true,
+                            contentPadding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                            filled: true, fillColor: Colors.transparent, 
+                            // Borde pasivo
+                            enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(40), borderSide: BorderSide(color: borderColor, width: 1)),
+                            // Borde activo: NEGRO en Light, COLOR en Dark
+                            focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(40), borderSide: BorderSide(color: accentColor.withOpacity(0.4), width: 1.0)),
+                          ),
                         ),
-                        contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Container(
-                    decoration: const BoxDecoration(
-                      color: Color(0xFFFFC000),
-                      shape: BoxShape.circle,
+                      const SizedBox(width: 8),
+                      AnimatedOpacity(
+                        duration: const Duration(milliseconds: 200),
+                        opacity: isOnline ? 1.0 : 0.5,
+                        child: IconButton(
+                          onPressed: isOnline ? _sendMessage : null, 
+                          icon: Icon(Icons.send_rounded, color: accentColor, size: 28), // Flecha negra o neón según tema
+                          tooltip: "Enviar", 
+                          splashRadius: 24
+                        ),
                       ),
-                    child: IconButton(
-                      onPressed: _sendMessage,
-                      icon: const Icon(Icons.send_rounded, color: Colors.black, size: 20),
-                    ),
+                      const SizedBox(width: 4),
+                    ],
                   ),
-                ],
+                ),
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
+        ],
       ),
     );
+  }
+}
+
+class _ControlButton extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+  final String tooltip;
+
+  const _ControlButton({required this.icon, required this.color, required this.onTap, required this.tooltip});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(color: Colors.transparent, child: InkWell(onTap: onTap, borderRadius: BorderRadius.circular(20), child: Padding(padding: const EdgeInsets.all(8.0), child: Icon(icon, color: color, size: 20))));
   }
 }
