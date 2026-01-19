@@ -1,5 +1,6 @@
 // Archivo: lib/main.dart
 import 'dart:html' as html; 
+import 'dart:ui'; // Necesario para Offset
 import 'package:botlode_player/core/config/app_config.dart';
 import 'package:botlode_player/core/config/app_theme.dart';
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart'; 
@@ -9,27 +10,22 @@ import 'package:botlode_player/features/player/presentation/widgets/floating_bot
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-// IMPORTANTE: Paquete oficial para Realtime
 import 'package:supabase_flutter/supabase_flutter.dart'; 
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 1. Carga de variables de entorno
   try {
     await dotenv.load(fileName: ".env");
   } catch (e) {
     debugPrint("⚠️ Error cargando .env: $e");
   }
 
-  // 2. INICIALIZACIÓN DE SUPABASE (Realtime)
-  // Esto conecta el socket para escuchar cambios
   await Supabase.initialize(
     url: AppConfig.supabaseUrl,
     anonKey: AppConfig.supabaseAnonKey,
   );
 
-  // 3. Obtención de ID desde URL
   final uri = Uri.base;
   final urlBotId = uri.queryParameters['bot_id'];
   final finalBotId = urlBotId ?? AppConfig.fallbackBotId;
@@ -55,26 +51,41 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
   void initState() {
     super.initState();
     
-    // Pre-carga de assets Rive
     ref.read(riveFileLoaderProvider);      
     ref.read(riveHeadFileLoaderProvider);  
 
-    // Configuración para fondo transparente en Web
     html.document.body!.style.backgroundColor = 'transparent';
     html.document.documentElement!.style.backgroundColor = 'transparent';
 
-    // Notificar al padre (iframe) que estamos listos
     Future.delayed(const Duration(milliseconds: 500), () {
         html.window.parent?.postMessage('CMD_READY', '*');
     });
     
-    // Escuchar comandos externos (JS)
+    // --- ESCUCHA DE COMANDOS EXTERNOS (JS -> DART) ---
     html.window.onMessage.listen((event) {
-      final data = event.data.toString();
+      if (event.data == null) return;
+      final String data = event.data.toString();
+
       if (data == 'CMD_OPEN') {
         ref.read(chatOpenProvider.notifier).set(true);
       } else if (data == 'CMD_CLOSE') {
         ref.read(chatOpenProvider.notifier).set(false);
+      } 
+      // NUEVO: Protocolo de Seguimiento de Mouse Remoto
+      else if (data.startsWith('MOUSE_MOVE:')) {
+        try {
+          // Formato esperado: "MOUSE_MOVE:500,300" (x,y relativos a la ventana)
+          final parts = data.split(':')[1].split(',');
+          final double x = double.parse(parts[0]);
+          final double y = double.parse(parts[1]);
+          
+          // Inyectamos la posición en el sistema de Flutter como si fuera nativa
+          // Pero necesitamos ajustar las coordenadas porque el iframe tiene su propio offset
+          // TRUCO: Pasamos coordenadas absolutas de pantalla para que el cálculo sea global
+          ref.read(pointerPositionProvider.notifier).state = Offset(x, y);
+        } catch (e) {
+          // Ignorar errores de parseo
+        }
       }
     });
   }
