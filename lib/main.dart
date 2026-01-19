@@ -51,9 +51,10 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
   void initState() {
     super.initState();
     
-    ref.read(riveFileLoaderProvider);      
+    ref.read(riveFileLoaderProvider);       
     ref.read(riveHeadFileLoaderProvider);  
 
+    // TRUCO WEB: Forzar transparencia en el DOM real
     html.document.body!.style.backgroundColor = 'transparent';
     html.document.documentElement!.style.backgroundColor = 'transparent';
 
@@ -92,12 +93,9 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
 
   @override
   Widget build(BuildContext context) {
-    // [CORRECCIÓN CRÍTICA PARA SINCRONIZACIÓN]
-    // Escuchamos si Flutter decide cerrar el chat (edasdsadasj. botón interno 'X')
-    // y le avisamos al HTML para que achique el Iframe.
+    // Escuchamos si Flutter decide cerrar el chat
     ref.listen(chatOpenProvider, (prev, isOpen) {
-      if (!isOpen) { // Si se cerró...
-        // Avisar al padre (HTML) que debe colapsar
+      if (!isOpen) { 
         html.window.parent?.postMessage('CMD_CLOSE', '*');
       }
     });
@@ -106,11 +104,12 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
       title: 'BotLode Player',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme.copyWith(
+        // EXTREMA TRANSPARENCIA
         canvasColor: Colors.transparent, 
         scaffoldBackgroundColor: Colors.transparent,
       ),
       builder: (context, child) => Scaffold(
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.transparent, // <--- REQUISITO
         body: child,
       ),
       home: const FloatingBotWidget(),

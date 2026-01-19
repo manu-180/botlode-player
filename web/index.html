@@ -6,29 +6,28 @@
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="description" content="Web player for BotsLode units.">
-  
+
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="BotLode Player">
-  
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
   <link rel="icon" type="image/png" href="favicon.png"/>
 
   <title>BotLode Player</title>
   <link rel="manifest" href="manifest.json">
 
   <style>
-    /* 1. ELIMINAR EL FLASH BLANCO DEL NAVEGADOR */
+    /* CSS CRÍTICO: Asegura que el contenedor HTML/Body sea transparente */
     html, body {
       height: 100%;
       margin: 0;
       padding: 0;
-      background-color: transparent !important;
-      overflow: hidden; /* Evita scrollers dobles */
+      background-color: transparent !important; /* <--- IMPORTANTE */
+      overflow: hidden;
     }
     
-    /* 2. ELIMINAR EL FONDO DEL CONTENEDOR DE FLUTTER */
-    /* Este selector apunta al div que Flutter inyecta */
+    /* Elimina cualquier fondo del Glass Pane de Flutter */
     flt-glass-pane {
       background-color: transparent !important;
     }
@@ -38,24 +37,22 @@
   <script src="flutter_bootstrap.js" async></script>
   
   <script>
-    // Esperamos a que el navegador termine de cargar
+    // Inicialización del Motor Gráfico
     window.addEventListener('load', function(ev) {
       
-      // Accedemos al loader de Flutter
       _flutter.loader.loadEntrypoint({
         onEntrypointLoaded: async function(engineInitializer) {
           
-          // INICIALIZAMOS EL MOTOR CON TRANSPARENCIA
+          // CONFIGURACIÓN MAESTRA DE TRANSPARENCIA
           let appRunner = await engineInitializer.initializeEngine({
-            // 'auto' elige lo mejor entre HTML y CanvasKit
-            renderer: "auto", 
+            // Renderer automático (HTML en móviles, CanvasKit en PC)
+            renderer: "auto",
             
-            // EL SECRETO: Hexadecimal ARGB para Transparencia Total
-            // 0x (Hex) + 00 (Alpha 0%) + 000000 (Color Negro)
+            // EL SECRETO: ARGB Hexadecimal para Transparencia Total
+            // 0x (Prefijo) + 00 (Alpha 0) + 000000 (Color Negro)
             background_color: "0x00000000" 
           });
 
-          // Arrancamos la App
           await appRunner.runApp();
         }
       });
