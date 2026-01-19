@@ -36,8 +36,10 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
 
     return Stack(
       fit: StackFit.loose, 
-      // PUNTO 2: Alineamos a la derecha para que crezca hacia la izquierda
-      alignment: Alignment.centerRight,
+      // CORRECCIÓN CLAVE 1: Alineación CENTRADA.
+      // Como el HTML centra el iframe sobre el botón invisible, 
+      // nosotros debemos centrar el botón visual en el iframe.
+      alignment: Alignment.center,
       
       children: [
         // --- CAPA DE CIERRE ---
@@ -66,20 +68,17 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
 
         // --- BOTÓN FLOTANTE ---
         if (!isOpen)
-          // PUNTO 1 y 2: Padding para separarlo del borde del iframe invisible
-          // y darle "aire" a la derecha.
-          Padding(
-            padding: const EdgeInsets.only(right: 20.0), 
-            child: botConfigAsync.when(
-              loading: () => _buildFloatingButton(isHovered: false, name: "...", color: Colors.grey, subtext: "Cargando...", isDarkMode: true),
-              error: (err, stack) => _buildFloatingButton(isHovered: false, name: "OFFLINE", color: Colors.red, subtext: "Error", isDarkMode: true),
-              data: (config) => _buildFloatingButton(
-                isHovered: isHovered, 
-                name: config.name.toUpperCase(), 
-                color: config.themeColor,
-                subtext: "¿En qué te ayudo?",
-                isDarkMode: config.isDarkMode,
-              ),
+          // CORRECCIÓN CLAVE 2: Quitamos el Padding.
+          // El botón debe flotar libremente en el centro exacto del iframe fantasma.
+          botConfigAsync.when(
+            loading: () => _buildFloatingButton(isHovered: false, name: "...", color: Colors.grey, subtext: "Cargando...", isDarkMode: true),
+            error: (err, stack) => _buildFloatingButton(isHovered: false, name: "OFFLINE", color: Colors.red, subtext: "Error", isDarkMode: true),
+            data: (config) => _buildFloatingButton(
+              isHovered: isHovered, 
+              name: config.name.toUpperCase(), 
+              color: config.themeColor,
+              subtext: "¿En qué te ayudo?",
+              isDarkMode: config.isDarkMode,
             ),
           ),
       ],
@@ -93,27 +92,32 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     required String subtext,
     required bool isDarkMode,
   }) {
-    // PUNTO 1: Aumentamos el tamaño base para dar "aire"
-    const double closedSize = 72.0; // Antes 64.0
-    const double headSize = 58.0;   // La cabeza mantiene su tamaño
+    // Dimensiones
+    const double closedSize = 72.0; 
+    const double headSize = 58.0;   
     const double openWidth = 260.0; 
 
     final Color textColor = _getContrastingTextColor(color);
     final Color subTextColor = textColor.withOpacity(0.85);
 
-    // PUNTO 2: Sombras mucho más sutiles
+    // CORRECCIÓN CLAVE 3: Sombras Minimalistas (Estilo Vercel)
     final List<BoxShadow> shadowList = isDarkMode
         ? [
+            // Sombra ambiental muy suave y pegada
             BoxShadow(
-              color: color.withOpacity(isHovered ? 0.6 : 0.3), // Menos opacidad
-              blurRadius: isHovered ? 20 : 12, // Menos desenfoque
-              spreadRadius: 0, // Sin expansión agresiva
-              offset: const Offset(0, 4)
+              color: Colors.black.withOpacity(0.25), 
+              blurRadius: 10, 
+              offset: const Offset(0, 4) // Sombra solo hacia abajo
             ),
-             BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 4))
+            // Sutil brillo interior (opcional)
+            BoxShadow(
+              color: color.withOpacity(0.1),
+              blurRadius: 0,
+              spreadRadius: 1, // Borde muy fino del color del tema
+            )
           ]
         : [
-             BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 10, offset: const Offset(0, 5)),
+             BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8, offset: const Offset(0, 4)),
           ];
 
     return AnimatedContainer(
@@ -126,16 +130,20 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
       clipBehavior: Clip.antiAlias, 
       
       decoration: BoxDecoration(
+        // Gradiente más sólido y menos transparente
         gradient: LinearGradient(
           begin: Alignment.topLeft, end: Alignment.bottomRight,
-          colors: [color.withOpacity(0.95), Color.lerp(color, Colors.black, 0.15)!],
+          colors: [
+            color, // Color puro arriba
+            Color.lerp(color, Colors.black, 0.1)!, // Apenas oscurecido abajo
+          ],
         ),
         borderRadius: BorderRadius.circular(closedSize / 2),
-        border: Border.all(color: Colors.white.withOpacity(0.2), width: 1.0),
+        // Borde sutil para definición
+        border: Border.all(color: Colors.white.withOpacity(0.15), width: 1.0),
         boxShadow: shadowList, 
       ),
       child: Row(
-        // Alineación a la derecha asegura que el texto empuje hacia la izquierda
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
           Flexible(
@@ -166,14 +174,15 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
           
           Container(
             width: headSize, height: headSize,
-            margin: const EdgeInsets.all(7), // Margen ajustado para el nuevo tamaño
+            margin: const EdgeInsets.all(7), 
             decoration: const BoxDecoration(shape: BoxShape.circle),
             child: const ClipOval(child: FloatingHeadWidget()), 
           ),
         ],
       ),
     ).animate().scale(
-      end: isHovered ? const Offset(1.03, 1.03) : const Offset(1.0, 1.0), 
+      // Efecto de escala muy sutil al hover (Latido)
+      end: isHovered ? const Offset(1.02, 1.02) : const Offset(1.0, 1.0), 
       duration: 300.ms, curve: Curves.easeOutBack
     );
   }
