@@ -50,29 +50,31 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
             ),
           ),
 
-        // TRANSICIÓN INTELIGENTE (Split Transition)
+        // TRANSICIÓN LIMPIA (Clean Cut)
         AnimatedSwitcher(
-          duration: const Duration(milliseconds: 400),
-          // Curvas asimétricas para sensación de "peso"
+          duration: const Duration(milliseconds: 350), // Un poco más rápido
           switchInCurve: Curves.easeOutBack, 
-          switchOutCurve: Curves.easeInQuad, // Salida más rápida y suave
+          switchOutCurve: Curves.easeIn,
           
           transitionBuilder: (Widget child, Animation<double> animation) {
-            // DETECTAMOS QUÉ SE ESTÁ ANIMANDO
             final isChatPanel = child.key == const ValueKey('ChatPanel');
 
             if (isChatPanel) {
-              // ANIMACIÓN DEL CHAT: Crece desde la esquina (como una ventana)
+              // CHAT: Se expande/contrae desde la esquina
               return ScaleTransition(
                 scale: animation,
                 alignment: Alignment.bottomRight, 
                 child: FadeTransition(opacity: animation, child: child),
               );
             } else {
-              // ANIMACIÓN DEL BOTÓN: Solo aparece (Fade) en su lugar exacto.
-              // Eliminamos el ScaleTransition aquí para evitar que "viaje" o salte.
+              // BOTÓN: SOLO FADE (Sin movimiento, sin rebote)
+              // Usamos un CurvedAnimation para darle un pequeño delay
+              // Así el botón aparece cuando el chat ya casi se fue.
               return FadeTransition(
-                opacity: animation, 
+                opacity: CurvedAnimation(
+                  parent: animation, 
+                  curve: const Interval(0.5, 1.0, curve: Curves.easeOut) // Delay de entrada
+                ), 
                 child: child
               );
             }

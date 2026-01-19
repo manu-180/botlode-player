@@ -29,9 +29,8 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
   double _currentX = 50.0;
   double _currentY = 50.0;
   
-  // ESTADOS
   bool _isTracking = false;
-  bool _isAcquiring = false; // Nuevo estado
+  bool _isAcquiring = false; 
 
   final String _stateMachineName = 'State Machine';
   final String _artboardName = 'Catbot';
@@ -51,23 +50,26 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
   void _onTick(Duration elapsed) {
     if (_lookXInput == null || _lookYInput == null) return;
     
-    double smoothFactor = 0.05; // Por defecto lento
+    double smoothFactor = 0.05; // Por defecto lento (Reposo)
 
     if (_isTracking) {
       if (_isAcquiring) {
-        // FASE ADQUISICIÓN (Suave)
+        // MODO ADQUISICIÓN: Suave (0.05) hasta alcanzar al mouse
         smoothFactor = 0.05;
-        // Chequeo de llegada
+        
         final dist = math.sqrt(math.pow(_targetX - _currentX, 2) + math.pow(_targetY - _currentY, 2));
-        if (dist < 2.0) {
-          _isAcquiring = false; // Llegamos, activar modo rápido
+        
+        // CORRECCIÓN: Umbral aumentado a 10.0 (antes 2.0). 
+        // Esto hace que sea más fácil "atrapar" al mouse y pasar a modo rápido.
+        if (dist < 10.0) {
+          _isAcquiring = false; 
         }
       } else {
-        // FASE SEGUIMIENTO (Rápido)
-        smoothFactor = 0.5;
+        // MODO SEGUIMIENTO: Instantáneo (1.0) para máxima respuesta
+        smoothFactor = 1.0;
       }
     } else {
-      // FASE REPOSO (Suave)
+      // MODO REPOSO: Suave (0.05) al volver al centro
       smoothFactor = 0.05;
     }
     
@@ -109,13 +111,12 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       final double dy = deltaPos.dy;
 
       final double distance = math.sqrt(dx * dx + dy * dy);
-      const double maxInterestDistance = 2000.0; // Rango amplio para chat
+      const double maxInterestDistance = 600.0; 
 
       final bool isNowTracking = distance < maxInterestDistance;
 
-      // DETECCIÓN DE FLANCO
       if (isNowTracking && !_isTracking) {
-        _isAcquiring = true; // Empezar suave al re-encontrar el mouse
+        _isAcquiring = true; // Activar transición suave al entrar
       }
       _isTracking = isNowTracking;
 
