@@ -2,6 +2,10 @@
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class AppConfig {
+  // ESTRATEGIA HÍBRIDA:
+  // 1. Producción: Busca variables "horneadas" (--dart-define)
+  // 2. Desarrollo: Busca en archivo .env (si existe)
+
   static String get supabaseUrl {
     const envUrl = String.fromEnvironment('SUPABASE_URL');
     if (envUrl.isNotEmpty) return envUrl;
@@ -14,13 +18,17 @@ class AppConfig {
     return dotenv.env['SUPABASE_ANON_KEY'] ?? '';
   }
 
-  // [NUEVO] URL para la Edge Function
-  // Construye automáticamente: https://tu-proyecto.supabase.co/functions/v1/chat-brain
+  // [NUEVO] URL calculada para la Edge Function
+  // Construye: https://TU_PROYECTO.supabase.co/functions/v1/chat-brain
   static String get brainFunctionUrl {
     final baseUrl = supabaseUrl;
     if (baseUrl.isEmpty) return '';
-    // Aseguramos que no haya doble slash o falte slash
-    final cleanUrl = baseUrl.endsWith('/') ? baseUrl.substring(0, baseUrl.length - 1) : baseUrl;
+    
+    // Quitamos la barra final si existe para evitar dobles barras
+    final cleanUrl = baseUrl.endsWith('/') 
+        ? baseUrl.substring(0, baseUrl.length - 1) 
+        : baseUrl;
+        
     return '$cleanUrl/functions/v1/chat-brain'; 
   }
 
