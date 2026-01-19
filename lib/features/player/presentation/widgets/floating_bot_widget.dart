@@ -41,8 +41,7 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
       fit: StackFit.loose, 
       alignment: Alignment.bottomRight,
       children: [
-        // 1. CAPA DE FONDO (DETECTOR DE CLICKS AFUERA)
-        // Solo visible cuando el chat está abierto para cerrarlo si tocas fuera
+        // 1. CAPA DE FONDO (Cierra al hacer click fuera)
         if (isOpen)
           Positioned.fill(
             child: GestureDetector(
@@ -53,22 +52,25 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
           ),
 
         // 2. CAPA DEL CHAT (INTERFAZ)
-        // Siempre está en el árbol, pero jugamos con su opacidad y escala
+        // Se anima independientemente de la burbuja.
         Positioned(
           bottom: 0, 
           right: 0,
           child: IgnorePointer(
-            ignoring: !isOpen, // Si está cerrado, no bloquea clicks
+            ignoring: !isOpen, 
             child: AnimatedOpacity(
-              duration: const Duration(milliseconds: 250),
-              opacity: isOpen ? 1.0 : 0.0, // Fade In/Out suave
-              curve: Curves.easeOut,
+              // Fade rápido al cerrar para dar paso a la burbuja
+              duration: Duration(milliseconds: isOpen ? 300 : 200),
+              opacity: isOpen ? 1.0 : 0.0,
+              curve: Curves.easeInOut,
               child: AnimatedScale(
-                // Efecto de Zoom: 1.0 (Abierto) - 0.9 (Cerrado, se va hacia el fondo)
+                // Efecto POP:
+                // Abierto: 1.0 (Tamaño real)
+                // Cerrado: 0.9 (Se achica un poquito hacia el fondo al desaparecer)
                 scale: isOpen ? 1.0 : 0.9, 
                 alignment: Alignment.bottomRight,
-                duration: const Duration(milliseconds: 350),
-                curve: isOpen ? Curves.easeOutBack : Curves.easeInCubic, 
+                duration: Duration(milliseconds: isOpen ? 400 : 250),
+                curve: isOpen ? Curves.easeOutBack : Curves.easeIn, 
                 child: ConstrainedBox(
                   constraints: BoxConstraints(
                     maxHeight: panelHeight, 
@@ -81,20 +83,20 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
           ),
         ),
 
-        // 3. CAPA DEL BOTÓN FLOTANTE (BURBUJA)
-        // Vive independiente del chat.
+        // 3. CAPA DE LA BURBUJA (BOTÓN)
         Positioned(
           bottom: ghostPadding, 
           right: ghostPadding,
           child: IgnorePointer(
-            ignoring: isOpen, // Si el chat está abierto, el botón no debe molestar
+            ignoring: isOpen, 
             child: AnimatedScale(
-              // Si abierto -> 0.0 (Desaparece chiquito). Si cerrado -> 1.0 (Aparece)
+              // Si está abierto el chat -> Escala 0 (Desaparece)
+              // Si está cerrado -> Escala 1 (Aparece)
               scale: isOpen ? 0.0 : 1.0, 
-              duration: const Duration(milliseconds: 400),
-              // Curva asimétrica:
-              // Al cerrar chat: Aparece con rebote elástico (easeOutBack).
-              // Al abrir chat: Se encoge rápido para dar paso a la interfaz (easeInBack).
+              duration: const Duration(milliseconds: 300),
+              // Curvas opuestas para sincronizar:
+              // Al cerrar chat: Delay muy leve y luego POP (easeOutBack)
+              // Al abrir chat: Se va rápido (easeInBack)
               curve: isOpen ? Curves.easeInBack : Curves.easeOutBack, 
               alignment: Alignment.center,
               child: GestureDetector(
@@ -133,7 +135,6 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     const double closedSize = 72.0; 
     const double headSize = 58.0;   
     
-    // Cálculo de ancho dinámico
     int maxChars = math.max(name.length, subtext.length);
     double calculatedWidth = 120.0 + (maxChars * 9.0);
     double openWidth = calculatedWidth.clamp(220.0, 380.0);

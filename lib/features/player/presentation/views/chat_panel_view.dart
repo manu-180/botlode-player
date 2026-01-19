@@ -9,7 +9,7 @@ import 'package:botlode_player/features/player/presentation/widgets/chat_bubble.
 import 'package:botlode_player/features/player/presentation/widgets/rive_avatar.dart';
 import 'package:botlode_player/features/player/presentation/widgets/status_indicator.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
+// Eliminado flutter_animate de aquí para evitar conflictos de renderizado
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class ChatPanelView extends ConsumerStatefulWidget {
@@ -120,7 +120,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
           children: [
             BackdropFilter(filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10), child: Container(color: glassBg)),
             
-            // ANIMACIÓN DE ENTRADA DEL CONTENIDO
+            // CONTENIDO SIN ANIMACIONES INTERNAS (Fix de pantalla blanca)
             Column(
               children: [
                 SizedBox(
@@ -181,10 +181,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
                   ),
                 ),
               ],
-            )
-            .animate()
-            .fadeIn(duration: 400.ms, delay: 50.ms, curve: Curves.easeOut)
-            .slideY(begin: 0.05, end: 0, duration: 400.ms, curve: Curves.easeOutQuart),
+            ),
           ],
         ),
       ),
