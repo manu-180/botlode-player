@@ -17,14 +17,15 @@
   <link rel="manifest" href="manifest.json">
 
   <style>
-    /* Fondo transparente para que el iframe no se vea blanco mientras carga */
+    /* 1. Transparencia total al HTML y Body */
     html, body {
       height: 100%;
       margin: 0;
       padding: 0;
-      background-color: transparent !important;
+      background-color: transparent !important; /* Fuerza bruta */
       overflow: hidden;
     }
+    /* 2. Asegurar que el host de Flutter no tenga color */
     flt-glass-pane {
       background-color: transparent !important;
     }
@@ -32,5 +33,27 @@
 </head>
 <body>
   <script src="flutter_bootstrap.js" async></script>
+  
+  <script>
+    // Esperamos a que el loader de Flutter esté listo
+    window.addEventListener('load', function(ev) {
+      // Interceptamos la carga para configurar el motor
+      _flutter.loader.loadEntrypoint({
+        onEntrypointLoaded: async function(engineInitializer) {
+          
+          // AQUÍ ESTÁ LA MAGIA: Configuración del Engine
+          let appRunner = await engineInitializer.initializeEngine({
+            // Forzamos el renderizador automático (usa CanvasKit si puede)
+            renderer: "auto", 
+            // ESTO ES LO QUE ARREGLA EL FONDO BLANCO:
+            // 0x00000000 = Transparencia Total en Hex ARGB
+            background_color: "0x00000000" 
+          });
+
+          await appRunner.runApp();
+        }
+      });
+    });
+  </script>
 </body>
 </html>

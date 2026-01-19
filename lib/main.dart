@@ -90,17 +90,22 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
     });
   }
 
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'BotLode Player',
       debugShowCheckedModeBanner: false,
+      
+      // TEMA GLOBAL TRANSPARENTE
       theme: AppTheme.darkTheme.copyWith(
-        canvasColor: Colors.transparent, 
-        scaffoldBackgroundColor: Colors.transparent,
+        canvasColor: Colors.transparent, // Importante
+        scaffoldBackgroundColor: Colors.transparent, // Importante
       ),
+      
+      // BUILDER PARA FORZAR TRANSPARENCIA EN CAPAS SUPERIORES
       builder: (context, child) => Scaffold(
-        backgroundColor: Colors.transparent,
+        backgroundColor: Colors.transparent, // Fondo base nulo
         body: child,
       ),
       home: const FloatingBotWidget(),
