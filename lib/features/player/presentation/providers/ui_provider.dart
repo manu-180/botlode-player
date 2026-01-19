@@ -22,6 +22,7 @@ class ChatOpen extends _$ChatOpen {
 final pointerPositionProvider = StateProvider<Offset?>((ref) => null);
 
 // --- NUEVO: Provider para Hover Externo (Controlado por HTML) ---
+//asdsad
 final isHoveredExternalProvider = StateProvider<bool>((ref) => false);
 
 final chatResetProvider = Provider((ref) {

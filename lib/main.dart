@@ -93,7 +93,7 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
   @override
   Widget build(BuildContext context) {
     // [CORRECCIÓN CRÍTICA PARA SINCRONIZACIÓN]
-    // Escuchamos si Flutter decide cerrar el chat (ej. botón interno 'X')
+    // Escuchamos si Flutter decide cerrar el chat (edasdsadasj. botón interno 'X')
     // y le avisamos al HTML para que achique el Iframe.
     ref.listen(chatOpenProvider, (prev, isOpen) {
       if (!isOpen) { // Si se cerró...
