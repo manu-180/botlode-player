@@ -27,8 +27,9 @@ class _FloatingHeadWidgetState extends ConsumerState<FloatingHeadWidget> with Si
   double _currentX = 50.0;
   double _currentY = 50.0;
   
-  // Bandera de estado
+  // ESTADOS
   bool _isTracking = false; 
+  bool _isAcquiring = false; // Nuevo estado: "Buscando objetivo"
 
   final String _stateMachineName = 'State Machine 1'; 
 
@@ -47,10 +48,28 @@ class _FloatingHeadWidgetState extends ConsumerState<FloatingHeadWidget> with Si
   void _onTick(Duration elapsed) {
     if (_lookXInput == null || _lookYInput == null) return;
 
-    // [LÓGICA HÍBRIDA SOLICITADA]
-    // 1.0 = Instantáneo (Sin lag cuando sigue al mouse)
-    // 0.05 = Muy suave (Cuando vuelve al centro)
-    final double smoothFactor = _isTracking ? 1.0 : 0.05;
+    double smoothFactor = 0.05; // Por defecto lento (Reposo)
+
+    if (_isTracking) {
+      if (_isAcquiring) {
+        // FASE 2: ADQUISICIÓN (El mouse apareció, vamos suave hacia él)
+        smoothFactor = 0.05; 
+        
+        // Calculamos distancia actual vs objetivo
+        final dist = math.sqrt(math.pow(_targetX - _currentX, 2) + math.pow(_targetY - _currentY, 2));
+        
+        // Si estamos muy cerca (ya lo alcanzamos), pasamos a modo RÁPIDO
+        if (dist < 2.0) {
+          _isAcquiring = false;
+        }
+      } else {
+        // FASE 3: SEGUIMIENTO (Ya lo tenemos, movimiento rápido 1:1)
+        smoothFactor = 0.5; 
+      }
+    } else {
+      // FASE 1: REPOSO (Volver al centro suave)
+      smoothFactor = 0.05;
+    }
 
     _currentX = lerpDouble(_currentX, _targetX, smoothFactor) ?? 50;
     _currentY = lerpDouble(_currentY, _targetY, smoothFactor) ?? 50;
@@ -82,18 +101,24 @@ class _FloatingHeadWidgetState extends ConsumerState<FloatingHeadWidget> with Si
       final double dx = deltaPos.dx;
       final double dy = deltaPos.dy;
 
+      // Rango de interés (600px para que se relaje si alejas mucho)
+      const double maxInterestDistance = 600.0; 
       final double distance = math.sqrt(dx * dx + dy * dy);
-      
-      // Rango aumentado a 5000 para que detecte el mouse en toda la pantalla
-      const double maxInterestDistance = 5000.0; 
 
-      if (distance < maxInterestDistance) {
-        _isTracking = true; 
+      final bool isNowTracking = distance < maxInterestDistance;
+
+      // DETECCIÓN DE FLANCO: Si antes no miraba y ahora sí...
+      if (isNowTracking && !_isTracking) {
+        _isAcquiring = true; // ...activamos el modo "Acquisición Suave"
+      }
+
+      _isTracking = isNowTracking;
+
+      if (_isTracking) {
         const double sensitivity = 250.0; 
         _targetX = (50 + (dx / sensitivity * 50)).clamp(0.0, 100.0);
         _targetY = (50 + (dy / sensitivity * 50)).clamp(0.0, 100.0);
       } else {
-        _isTracking = false; 
         _targetX = 50.0;
         _targetY = 50.0;
       }

@@ -41,7 +41,6 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
       fit: StackFit.loose, 
       alignment: Alignment.bottomRight,
       children: [
-        // CAPA DE CIERRE (Solo activa si abierto)
         if (isOpen)
           Positioned.fill(
             child: GestureDetector(
@@ -51,23 +50,36 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
             ),
           ),
 
-        // ANIMACIÓN DE TRANSICIÓN (MORPHING)
-        // Esto maneja tanto la apertura como el cierre suave
+        // TRANSICIÓN INTELIGENTE (Split Transition)
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 400),
-          // Curva elástica para que se sienta orgánico
+          // Curvas asimétricas para sensación de "peso"
           switchInCurve: Curves.easeOutBack, 
-          switchOutCurve: Curves.easeInBack, 
+          switchOutCurve: Curves.easeInQuad, // Salida más rápida y suave
+          
           transitionBuilder: (Widget child, Animation<double> animation) {
-            return ScaleTransition(
-              scale: animation,
-              alignment: Alignment.bottomRight, // Crece/Se encoge desde la esquina
-              child: FadeTransition(opacity: animation, child: child),
-            );
+            // DETECTAMOS QUÉ SE ESTÁ ANIMANDO
+            final isChatPanel = child.key == const ValueKey('ChatPanel');
+
+            if (isChatPanel) {
+              // ANIMACIÓN DEL CHAT: Crece desde la esquina (como una ventana)
+              return ScaleTransition(
+                scale: animation,
+                alignment: Alignment.bottomRight, 
+                child: FadeTransition(opacity: animation, child: child),
+              );
+            } else {
+              // ANIMACIÓN DEL BOTÓN: Solo aparece (Fade) en su lugar exacto.
+              // Eliminamos el ScaleTransition aquí para evitar que "viaje" o salte.
+              return FadeTransition(
+                opacity: animation, 
+                child: child
+              );
+            }
           },
           child: isOpen 
             ? ConstrainedBox(
-                key: const ValueKey('ChatPanel'), // Key única para el switcher
+                key: const ValueKey('ChatPanel'), 
                 constraints: BoxConstraints(
                   maxHeight: panelHeight, 
                   maxWidth: isMobile ? double.infinity : 380
@@ -75,7 +87,7 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
                 child: const ChatPanelView(),
               )
             : Padding(
-                key: const ValueKey('FloatingButton'), // Key única
+                key: const ValueKey('FloatingButton'), 
                 padding: const EdgeInsets.only(bottom: ghostPadding, right: ghostPadding),
                 child: GestureDetector(
                   onTap: () => ref.read(chatOpenProvider.notifier).set(true),
@@ -112,7 +124,6 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     const double closedSize = 72.0; 
     const double headSize = 58.0;   
     
-    // Lógica de ancho dinámico
     int maxChars = math.max(name.length, subtext.length);
     double calculatedWidth = 120.0 + (maxChars * 9.0);
     double openWidth = calculatedWidth.clamp(220.0, 380.0);

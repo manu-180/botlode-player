@@ -29,7 +29,9 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
   double _currentX = 50.0;
   double _currentY = 50.0;
   
+  // ESTADOS
   bool _isTracking = false;
+  bool _isAcquiring = false; // Nuevo estado
 
   final String _stateMachineName = 'State Machine';
   final String _artboardName = 'Catbot';
@@ -49,10 +51,25 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
   void _onTick(Duration elapsed) {
     if (_lookXInput == null || _lookYInput == null) return;
     
-    // LÓGICA DE PERSONALIDAD:
-    // - Si te mira (_isTracking): 1.0 (Instantáneo, eléctrico, rápido).
-    // - Si se relaja (!tracking): 0.05 (Cinemático, lento, suave).
-    final double smoothFactor = _isTracking ? 1.0 : 0.05;
+    double smoothFactor = 0.05; // Por defecto lento
+
+    if (_isTracking) {
+      if (_isAcquiring) {
+        // FASE ADQUISICIÓN (Suave)
+        smoothFactor = 0.05;
+        // Chequeo de llegada
+        final dist = math.sqrt(math.pow(_targetX - _currentX, 2) + math.pow(_targetY - _currentY, 2));
+        if (dist < 2.0) {
+          _isAcquiring = false; // Llegamos, activar modo rápido
+        }
+      } else {
+        // FASE SEGUIMIENTO (Rápido)
+        smoothFactor = 0.5;
+      }
+    } else {
+      // FASE REPOSO (Suave)
+      smoothFactor = 0.05;
+    }
     
     _currentX = lerpDouble(_currentX, _targetX, smoothFactor) ?? 50;
     _currentY = lerpDouble(_currentY, _targetY, smoothFactor) ?? 50;
@@ -92,19 +109,21 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       final double dy = deltaPos.dy;
 
       final double distance = math.sqrt(dx * dx + dy * dy);
-      
-      // AJUSTE CLAVE: Rango limitado a 600px.
-      // Esto permite que si alejas el mouse más allá de esa distancia,
-      // el robot "pierda interés" y active el modo suave de retorno al centro.
-      const double maxInterestDistance = 600.0; 
+      const double maxInterestDistance = 2000.0; // Rango amplio para chat
 
-      if (distance < maxInterestDistance) {
-        _isTracking = true; // Activa modo RÁPIDO
+      final bool isNowTracking = distance < maxInterestDistance;
+
+      // DETECCIÓN DE FLANCO
+      if (isNowTracking && !_isTracking) {
+        _isAcquiring = true; // Empezar suave al re-encontrar el mouse
+      }
+      _isTracking = isNowTracking;
+
+      if (_isTracking) {
         const double sensitivity = 400.0; 
         _targetX = (50 + (dx / sensitivity * 50)).clamp(0.0, 100.0);
         _targetY = (50 + (dy / sensitivity * 50)).clamp(0.0, 100.0);
       } else {
-        _isTracking = false; // Activa modo LENTO (vuelve al centro)
         _targetX = 50.0;
         _targetY = 50.0;
       }
