@@ -22,13 +22,11 @@ class _FloatingHeadWidgetState extends ConsumerState<FloatingHeadWidget> with Si
 
   late Ticker _ticker;
   
-  // Estado de la física
   double _targetX = 50.0;
   double _targetY = 50.0;
   double _currentX = 50.0;
   double _currentY = 50.0;
   
-  // [NUEVO] Bandera para saber si estamos en modo "Seguimiento" o "Reposo"
   bool _isTracking = false; 
 
   final String _stateMachineName = 'State Machine 1'; 
@@ -47,25 +45,15 @@ class _FloatingHeadWidgetState extends ConsumerState<FloatingHeadWidget> with Si
 
   void _onTick(Duration elapsed) {
     if (_lookXInput == null || _lookYInput == null) return;
-
-    // [LÓGICA HÍBRIDA]
-    // Si está rastreando (_isTracking): 1.0 = Movimiento instantáneo (rápido).
-    // Si está volviendo al centro: 0.05 = Movimiento muy suave (cinemático).
     final double smoothFactor = _isTracking ? 1.0 : 0.05;
-
     _currentX = lerpDouble(_currentX, _targetX, smoothFactor) ?? 50;
     _currentY = lerpDouble(_currentY, _targetY, smoothFactor) ?? 50;
-
     _lookXInput!.value = _currentX;
     _lookYInput!.value = _currentY;
   }
 
   void _onRiveInit(Artboard artboard) {
-    final controller = StateMachineController.fromArtboard(
-      artboard,
-      _stateMachineName,
-    );
-
+    final controller = StateMachineController.fromArtboard(artboard, _stateMachineName);
     if (controller != null) {
       artboard.addController(controller);
       _controller = controller;
@@ -81,30 +69,24 @@ class _FloatingHeadWidgetState extends ConsumerState<FloatingHeadWidget> with Si
     final riveHeadAsync = ref.watch(riveHeadFileLoaderProvider);
     const double verticalOffset = -8.0; 
 
-    ref.listen(pointerPositionProvider, (prev, mousePos) {
-      if (mousePos == null) return;
+    // CORRECCIÓN MATEMÁTICA: Usamos el delta directo
+    ref.listen(pointerPositionProvider, (prev, deltaPos) {
+      if (deltaPos == null) return;
       
-      final renderBox = context.findRenderObject() as RenderBox?;
-      if (renderBox == null) return;
-      
-      final headCenter = renderBox.localToGlobal(
-        Offset(renderBox.size.width / 2, renderBox.size.height / 2)
-      );
-
-      final double dx = mousePos.dx - headCenter.dx;
-      final double dy = mousePos.dy - headCenter.dy;
+      // 'deltaPos' ya es la distancia calculada por el HTML (dx, dy)
+      final double dx = deltaPos.dx;
+      final double dy = deltaPos.dy;
 
       final double distance = math.sqrt(dx * dx + dy * dy);
-      const double maxInterestDistance = 450.0;
+      const double maxInterestDistance = 600.0; // Rango visual amplio
 
       if (distance < maxInterestDistance) {
-        // [MODO ACTIVO]
         _isTracking = true; 
-        const double sensitivity = 250.0; 
+        const double sensitivity = 250.0; // Ajustar sensibilidad si los ojos se mueven poco
+        // Mapeamos el delta a rango 0-100 para Rive
         _targetX = (50 + (dx / sensitivity * 50)).clamp(0.0, 100.0);
         _targetY = (50 + (dy / sensitivity * 50)).clamp(0.0, 100.0);
       } else {
-        // [MODO REPOSO]
         _isTracking = false; 
         _targetX = 50.0;
         _targetY = 50.0;
@@ -112,19 +94,14 @@ class _FloatingHeadWidgetState extends ConsumerState<FloatingHeadWidget> with Si
     });
 
     return SizedBox(
-      width: 70,
-      height: 70,
+      width: 70, height: 70,
       child: riveHeadAsync.when(
         data: (riveFile) {
           return Transform.translate(
             offset: const Offset(0, verticalOffset), 
             child: Transform.scale(
               scale: 1.2, 
-              child: RiveAnimation.direct(
-                riveFile,
-                fit: BoxFit.cover,
-                onInit: _onRiveInit,
-              ),
+              child: RiveAnimation.direct(riveFile, fit: BoxFit.cover, onInit: _onRiveInit),
             ),
           );
         },

@@ -29,7 +29,6 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
   double _currentX = 50.0;
   double _currentY = 50.0;
   
-  // [NUEVO] Bandera de seguimiento
   bool _isTracking = false;
 
   final String _stateMachineName = 'State Machine';
@@ -49,34 +48,22 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
 
   void _onTick(Duration elapsed) {
     if (_lookXInput == null || _lookYInput == null) return;
-
-    // [LÓGICA HÍBRIDA]
-    // Tracking activo = 1.0 (Instantáneo)
-    // Volviendo al centro = 0.05 (Suave)
     final double smoothFactor = _isTracking ? 1.0 : 0.05;
-
     _currentX = lerpDouble(_currentX, _targetX, smoothFactor) ?? 50;
     _currentY = lerpDouble(_currentY, _targetY, smoothFactor) ?? 50;
-
     _lookXInput!.value = _currentX;
     _lookYInput!.value = _currentY;
   }
 
   void _onRiveInit(Artboard artboard) {
-    final controller = StateMachineController.fromArtboard(
-      artboard,
-      _stateMachineName,
-    );
-
+    final controller = StateMachineController.fromArtboard(artboard, _stateMachineName);
     if (controller != null) {
       artboard.addController(controller);
       _controller = controller;
-
       _moodInput = controller.getNumberInput('Mood');
       _lookXInput = controller.getNumberInput('LookX');
       _lookYInput = controller.getNumberInput('LookY');
       _errorInput = controller.getBoolInput('Error');
-
       _errorInput?.value = false;
       _moodInput?.value = ref.read(botMoodProvider).toDouble();
       _lookXInput?.value = 50; 
@@ -92,30 +79,23 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
        if (_moodInput != null) _moodInput!.value = next.toDouble();
     });
 
-    ref.listen(pointerPositionProvider, (prev, mousePos) {
-      if (mousePos == null) return;
+    // CORRECCIÓN MATEMÁTICA: Usamos el delta directo
+    ref.listen(pointerPositionProvider, (prev, deltaPos) {
+      if (deltaPos == null) return;
 
-      final renderBox = context.findRenderObject() as RenderBox?;
-      if (renderBox == null) return;
-
-      final center = renderBox.localToGlobal(
-        Offset(renderBox.size.width / 2, renderBox.size.height / 2)
-      );
-
-      final double dx = mousePos.dx - center.dx;
-      final double dy = mousePos.dy - center.dy;
+      // HTML ya calculó la distancia al centro del avatar
+      final double dx = deltaPos.dx;
+      final double dy = deltaPos.dy;
 
       final double distance = math.sqrt(dx * dx + dy * dy);
-      const double maxInterestDistance = 500.0; 
+      const double maxInterestDistance = 800.0; // Rango más amplio para el chat
 
       if (distance < maxInterestDistance) {
-        // [MODO ACTIVO]
         _isTracking = true;
         const double sensitivity = 400.0; 
         _targetX = (50 + (dx / sensitivity * 50)).clamp(0.0, 100.0);
         _targetY = (50 + (dy / sensitivity * 50)).clamp(0.0, 100.0);
       } else {
-        // [MODO REPOSO]
         _isTracking = false;
         _targetX = 50.0;
         _targetY = 50.0;
@@ -123,33 +103,15 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
     });
 
     return SizedBox(
-      width: 300,
-      height: 300,
+      width: 300, height: 300,
       child: riveFileAsync.when(
         data: (riveFile) {
           return RiveAnimation.direct(
-            riveFile,
-            artboard: _artboardName,
-            fit: BoxFit.contain,
-            onInit: _onRiveInit,
+            riveFile, artboard: _artboardName, fit: BoxFit.contain, onInit: _onRiveInit,
           );
         },
-        loading: () => const Center(
-          child: SizedBox(
-            width: 20, height: 20, 
-            child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFFC000))
-          )
-        ), 
-        error: (err, stack) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Text(
-              "Error: $err", 
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: Colors.red, fontSize: 10)
-            ),
-          )
-        ),
+        loading: () => const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFFC000)))), 
+        error: (err, stack) => Center(child: Padding(padding: const EdgeInsets.all(8.0), child: Text("Error: $err", textAlign: TextAlign.center, style: const TextStyle(color: Colors.red, fontSize: 10)))),
       ),
     );
   }
