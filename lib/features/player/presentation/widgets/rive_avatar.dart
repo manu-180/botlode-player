@@ -49,9 +49,9 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
   void _onTick(Duration elapsed) {
     if (_lookXInput == null || _lookYInput == null) return;
     
-    // [LÓGICA HÍBRIDA SOLICITADA]
-    // 1.0 para respuesta 1:1 inmediata (Elimina el lag)
-    // 0.05 para suavidad al volver al centro
+    // LÓGICA DE PERSONALIDAD:
+    // - Si te mira (_isTracking): 1.0 (Instantáneo, eléctrico, rápido).
+    // - Si se relaja (!tracking): 0.05 (Cinemático, lento, suave).
     final double smoothFactor = _isTracking ? 1.0 : 0.05;
     
     _currentX = lerpDouble(_currentX, _targetX, smoothFactor) ?? 50;
@@ -92,15 +92,19 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       final double dy = deltaPos.dy;
 
       final double distance = math.sqrt(dx * dx + dy * dy);
-      const double maxInterestDistance = 5000.0; // Rango infinito
+      
+      // AJUSTE CLAVE: Rango limitado a 600px.
+      // Esto permite que si alejas el mouse más allá de esa distancia,
+      // el robot "pierda interés" y active el modo suave de retorno al centro.
+      const double maxInterestDistance = 600.0; 
 
       if (distance < maxInterestDistance) {
-        _isTracking = true;
+        _isTracking = true; // Activa modo RÁPIDO
         const double sensitivity = 400.0; 
         _targetX = (50 + (dx / sensitivity * 50)).clamp(0.0, 100.0);
         _targetY = (50 + (dy / sensitivity * 50)).clamp(0.0, 100.0);
       } else {
-        _isTracking = false;
+        _isTracking = false; // Activa modo LENTO (vuelve al centro)
         _targetX = 50.0;
         _targetY = 50.0;
       }
