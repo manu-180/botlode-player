@@ -21,6 +21,10 @@ class ChatPanelView extends ConsumerStatefulWidget {
 class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  
+  // VARIABLE DE ESTADO LOCAL PARA CONTROLAR LA RED
+  // Esto es más seguro que confiar solo en el "previous" de Riverpod
+  bool _wasOffline = false;
 
   int _getMoodIndex(String mood) {
     switch (mood.toLowerCase()) {
@@ -97,15 +101,21 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
 
     final reversedMessages = chatState.messages.reversed.toList();
 
-    // --- LOGICA DE RED (SOLO ENVÍA SEÑALES, NO DIBUJA NADA) ---
+    // --- LÓGICA DE RED ROBUSTA ---
     ref.listen(connectivityProvider, (prev, next) {
       next.whenData((online) {
-        if (showOfflineAlert) {
-          if (!online) {
-            // SE FUE: Avisar al HTML
+        if (!showOfflineAlert) return;
+
+        if (!online) {
+          // SE FUE INTERNET
+          if (!_wasOffline) { // Solo si es un cambio de estado
+            _wasOffline = true;
             html.window.parent?.postMessage('NETWORK_OFFLINE', '*');
-          } else if (prev?.value == false && online) {
-            // VOLVIÓ: Avisar al HTML
+          }
+        } else {
+          // HAY INTERNET
+          if (_wasOffline) { // Solo si venimos de estar offline
+            _wasOffline = false;
             html.window.parent?.postMessage('NETWORK_ONLINE', '*');
           }
         }
