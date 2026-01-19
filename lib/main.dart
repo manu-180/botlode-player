@@ -1,5 +1,6 @@
 // Archivo: lib/main.dart
 import 'dart:html' as html; 
+import 'dart:ui'; // Necesario para usar Offset
 import 'package:botlode_player/core/config/app_config.dart';
 import 'package:botlode_player/core/config/app_theme.dart';
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart'; 
@@ -70,12 +71,26 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
       } else if (data == 'CMD_CLOSE') {
         ref.read(chatOpenProvider.notifier).set(false);
       } 
-      // --- NUEVOS COMANDOS DEL INFORME TÉCNICO ---
       else if (data == 'HOVER_ENTER') {
         ref.read(isHoveredExternalProvider.notifier).state = true;
       }
       else if (data == 'HOVER_EXIT') {
         ref.read(isHoveredExternalProvider.notifier).state = false;
+      }
+      // --- ESTO ES LO QUE TE FALTABA PARA QUE LOS OJOS SE MUEVAN ---
+      else if (data.startsWith('MOUSE_MOVE:')) {
+        try {
+          // El formato es "MOUSE_MOVE:x,y"
+          final parts = data.split(':')[1].split(',');
+          final double x = double.parse(parts[0]);
+          final double y = double.parse(parts[1]);
+          
+          // Actualizamos el provider de posición.
+          // Rive escuchará este cambio y moverá los ojos.
+          ref.read(pointerPositionProvider.notifier).state = Offset(x, y);
+        } catch (e) {
+          // Ignoramos errores de parseo por seguridad
+        }
       }
     });
   }
