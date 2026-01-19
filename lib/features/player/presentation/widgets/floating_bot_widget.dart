@@ -30,21 +30,26 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     final botConfigAsync = ref.watch(botConfigProvider);
     
     // --- ESTADO SINCRONIZADO CON HTML ---
-    // Ya no usamos un estado local setState(), usamos el provider global
     final isHovered = ref.watch(isHoveredExternalProvider);
 
     final screenSize = MediaQuery.of(context).size;
     final isMobile = screenSize.width < 600; 
+    
+    // Altura del chat cuando está abierto
     final panelHeight = isMobile ? screenSize.height : (screenSize.height).clamp(400.0, 800.0);
 
     return Stack(
-      fit: StackFit.expand, 
-      // CENTRADO ABSOLUTO: Esencial para la arquitectura de Iframe Fantasma.
-      // El HTML centra el iframe sobre el proxy, así que nosotros centramos el botón en el iframe.
+      // IMPORTANTE: 'loose' permite que los hijos tengan su propio tamaño.
+      // Ya no forzamos a llenar todo el iframe.
+      fit: StackFit.loose, 
+      
+      // Alineamos todo al CENTRO del iframe. 
+      // El HTML se encarga de posicionar el iframe en la esquina de la pantalla.
       alignment: Alignment.center,
+      
       children: [
         
-        // --- CAPA DE CIERRE (Solo activa si está abierto) ---
+        // --- 1. CAPA DE CIERRE (Solo activa si está abierto) ---
         if (isOpen)
           Positioned.fill(
             child: GestureDetector(
@@ -54,37 +59,49 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
             ),
           ),
 
-        // --- PANEL DE CHAT ---
+        // --- 2. PANEL DE CHAT (Cuando está abierto) ---
         if (isOpen)
-          isMobile 
-            ? Positioned.fill(child: const ChatPanelView().animate().fadeIn())
-            : Positioned(
-                bottom: 0, right: 0, 
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(maxHeight: panelHeight, maxWidth: 380),
-                  child: const ChatPanelView().animate().scale(curve: Curves.easeOutBack, alignment: Alignment.bottomRight).fadeIn(),
-                ),
+          // Cuando está abierto, queremos que ocupe todo el espacio disponible en el iframe expandido
+          Positioned(
+            bottom: 0, 
+            right: 0,
+            left: isMobile ? 0 : null,
+            top: isMobile ? 0 : null,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: panelHeight, 
+                maxWidth: isMobile ? double.infinity : 380
               ),
+              child: const ChatPanelView()
+                  .animate()
+                  .scale(
+                    curve: Curves.easeOutBack, 
+                    alignment: Alignment.bottomRight,
+                    duration: 300.ms
+                  )
+                  .fadeIn(),
+            ),
+          ),
 
-        // --- BOTÓN FLOTANTE (VISUALIZACIÓN PURA) ---
-        // Nota: Ya no tiene MouseRegion ni GestureDetector propios para Hover.
-        // Solo reacciona visualmente a 'isHovered' y al click que manda el HTML.
+        // --- 3. BOTÓN FLOTANTE (Solo visible si el chat está CERRADO) ---
         if (!isOpen)
-          botConfigAsync.when(
-            loading: () => _buildFloatingButton(
-              isHovered: false,
-              name: "...", color: Colors.grey, subtext: "Cargando", isDarkMode: true
-            ),
-            error: (err, stack) => _buildFloatingButton(
-              isHovered: false,
-              name: "OFFLINE", color: Colors.red, subtext: "Error", isDarkMode: true
-            ),
-            data: (config) => _buildFloatingButton(
-              isHovered: isHovered, // ESTADO QUE VIENE DEL HTML
-              name: config.name.toUpperCase(), 
-              color: config.themeColor,
-              subtext: "¿En qué te ayudo?",
-              isDarkMode: config.isDarkMode,
+          Center( // <--- ESTO EVITA QUE SE ESTIRE EN EL IFRAME GIGANTE
+            child: botConfigAsync.when(
+              loading: () => _buildFloatingButton(
+                isHovered: false,
+                name: "...", color: Colors.grey, subtext: "Cargando", isDarkMode: true
+              ),
+              error: (err, stack) => _buildFloatingButton(
+                isHovered: false,
+                name: "OFFLINE", color: Colors.red, subtext: "Error", isDarkMode: true
+              ),
+              data: (config) => _buildFloatingButton(
+                isHovered: isHovered, 
+                name: config.name.toUpperCase(), 
+                color: config.themeColor,
+                subtext: "¿En qué te ayudo?",
+                isDarkMode: config.isDarkMode,
+              ),
             ),
           ),
       ],
@@ -98,7 +115,7 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     required String subtext,
     required bool isDarkMode,
   }) {
-    // --- DIMENSIONES ---
+    // --- DIMENSIONES FIJAS ---
     const double closedSize = 64.0; 
     const double headSize = 58.0;   
     const double openWidth = 260.0; 
@@ -108,25 +125,24 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
 
     final List<BoxShadow> shadowList = isDarkMode
         ? [
-            // SOMBRA INTENSA (Ahora no se cortará porque el iframe es gigante)
+            // Sombra Intensa (No se cortará gracias al iframe gigante)
             BoxShadow(
-              color: color.withOpacity(isHovered ? 0.8 : 0.5), // Brilla más al hover
-              blurRadius: isHovered ? 25 : 15, 
-              spreadRadius: isHovered ? 2 : 1, 
+              color: color.withOpacity(isHovered ? 0.8 : 0.5), 
+              blurRadius: isHovered ? 30 : 20, 
+              spreadRadius: isHovered ? 2 : 0, 
               offset: const Offset(0, 4)
             ),
-            BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 8, offset: const Offset(0, 4))
+            BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 10, offset: const Offset(0, 4))
           ]
         : [
-            BoxShadow(color: Colors.black.withOpacity(0.15), blurRadius: 12, offset: const Offset(0, 6)),
+            BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 15, offset: const Offset(0, 8)),
           ];
 
-    // ANIMACIÓN VISUAL PURA
-    // Ya no necesita lógica de toque aquí, porque el HTML manda la orden de 'CMD_OPEN'
     return AnimatedContainer(
       duration: const Duration(milliseconds: 300),
       curve: Curves.easeOutCubic, 
       
+      // Aquí definimos el tamaño real visual
       width: isHovered ? openWidth : closedSize, 
       height: closedSize, 
       
@@ -184,7 +200,6 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
         ],
       ),
     ).animate().scale(
-      // Efecto sutil de latido al hacer hover
       end: isHovered ? const Offset(1.05, 1.05) : const Offset(1.0, 1.0), 
       duration: 300.ms, 
       curve: Curves.easeOutBack
