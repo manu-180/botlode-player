@@ -50,32 +50,36 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
             ),
           ),
 
-        // TRANSICIÓN LIMPIA (Clean Cut)
         AnimatedSwitcher(
-          duration: const Duration(milliseconds: 350), // Un poco más rápido
+          duration: const Duration(milliseconds: 450), // Un poco más de tiempo para la secuencia
           switchInCurve: Curves.easeOutBack, 
-          switchOutCurve: Curves.easeIn,
+          switchOutCurve: Curves.easeInCubic, 
           
           transitionBuilder: (Widget child, Animation<double> animation) {
             final isChatPanel = child.key == const ValueKey('ChatPanel');
 
             if (isChatPanel) {
-              // CHAT: Se expande/contrae desde la esquina
+              // CHAT: Se anima primero al abrir, y último al cerrar
               return ScaleTransition(
                 scale: animation,
                 alignment: Alignment.bottomRight, 
                 child: FadeTransition(opacity: animation, child: child),
               );
             } else {
-              // BOTÓN: SOLO FADE (Sin movimiento, sin rebote)
-              // Usamos un CurvedAnimation para darle un pequeño delay
-              // Así el botón aparece cuando el chat ya casi se fue.
-              return FadeTransition(
-                opacity: CurvedAnimation(
+              // BOTÓN: Espera un poco antes de aparecer (Interval 0.4 -> 1.0)
+              // Esto hace que el chat se cierre un poco antes de que el botón haga "POP"
+              return ScaleTransition(
+                scale: CurvedAnimation(
                   parent: animation, 
-                  curve: const Interval(0.5, 1.0, curve: Curves.easeOut) // Delay de entrada
-                ), 
-                child: child
+                  curve: const Interval(0.4, 1.0, curve: Curves.easeOutBack) // Delay + Rebote
+                ),
+                child: FadeTransition(
+                  opacity: CurvedAnimation(
+                    parent: animation, 
+                    curve: const Interval(0.2, 1.0, curve: Curves.easeIn)
+                  ),
+                  child: child
+                ),
               );
             }
           },
@@ -193,9 +197,6 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
           ),
         ],
       ),
-    ).animate().scale(
-      end: isHovered ? const Offset(1.02, 1.02) : const Offset(1.0, 1.0), 
-      duration: 400.ms, curve: Curves.easeOutCubic
     );
   }
 }

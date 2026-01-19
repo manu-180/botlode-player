@@ -9,7 +9,7 @@ import 'package:botlode_player/features/player/presentation/widgets/chat_bubble.
 import 'package:botlode_player/features/player/presentation/widgets/rive_avatar.dart';
 import 'package:botlode_player/features/player/presentation/widgets/status_indicator.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart'; // NECESARIO
+import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class ChatPanelView extends ConsumerStatefulWidget {
@@ -120,10 +120,9 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
           children: [
             BackdropFilter(filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10), child: Container(color: glassBg)),
             
-            // CONTENIDO PRINCIPAL ANIMADO
+            // ANIMACIÓN DE ENTRADA DEL CONTENIDO
             Column(
               children: [
-                // HEADER
                 SizedBox(
                   height: 180,
                   width: double.infinity,
@@ -146,7 +145,6 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
                   ),
                 ),
                 Container(height: 1, width: double.infinity, color: borderColor),
-                // BODY
                 Expanded(
                   child: Container(
                     color: isDarkMode ? Colors.transparent : const Color(0xFFFAFAFA).withOpacity(0.5),
@@ -167,7 +165,6 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
                     ),
                   ),
                 ),
-                // INPUT
                 Container(
                   padding: EdgeInsets.fromLTRB(16, 10, 16, 16 + (isMobile ? MediaQuery.of(context).padding.bottom : 0)),
                   decoration: BoxDecoration(gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [isDarkMode ? Colors.transparent : const Color(0xFFFAFAFA).withOpacity(0.0), isDarkMode ? Colors.black.withOpacity(0.8) : Colors.white.withOpacity(0.9)])),
@@ -185,9 +182,6 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
                 ),
               ],
             )
-            // ANIMACIÓN DE ENTRADA (CASCADA)
-            // Espera 50ms para que el contenedor crezca un poco, y luego muestra el contenido
-            // deslizándolo desde abajo. Esto elimina el "flash blanco".
             .animate()
             .fadeIn(duration: 400.ms, delay: 50.ms, curve: Curves.easeOut)
             .slideY(begin: 0.05, end: 0, duration: 400.ms, curve: Curves.easeOutQuart),

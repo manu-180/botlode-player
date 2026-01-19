@@ -30,7 +30,6 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
   double _currentY = 50.0;
   
   bool _isTracking = false;
-  bool _isAcquiring = false; 
 
   final String _stateMachineName = 'State Machine';
   final String _artboardName = 'Catbot';
@@ -50,28 +49,10 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
   void _onTick(Duration elapsed) {
     if (_lookXInput == null || _lookYInput == null) return;
     
-    double smoothFactor = 0.05; // Por defecto lento (Reposo)
-
-    if (_isTracking) {
-      if (_isAcquiring) {
-        // MODO ADQUISICIÓN: Suave (0.05) hasta alcanzar al mouse
-        smoothFactor = 0.05;
-        
-        final dist = math.sqrt(math.pow(_targetX - _currentX, 2) + math.pow(_targetY - _currentY, 2));
-        
-        // CORRECCIÓN: Umbral aumentado a 10.0 (antes 2.0). 
-        // Esto hace que sea más fácil "atrapar" al mouse y pasar a modo rápido.
-        if (dist < 10.0) {
-          _isAcquiring = false; 
-        }
-      } else {
-        // MODO SEGUIMIENTO: Instantáneo (1.0) para máxima respuesta
-        smoothFactor = 1.0;
-      }
-    } else {
-      // MODO REPOSO: Suave (0.05) al volver al centro
-      smoothFactor = 0.05;
-    }
+    // LÓGICA PURA: 
+    // Tracking = 1.0 (Sin lag). 
+    // Reposo = 0.05 (Suave).
+    final double smoothFactor = _isTracking ? 1.0 : 0.05;
     
     _currentX = lerpDouble(_currentX, _targetX, smoothFactor) ?? 50;
     _currentY = lerpDouble(_currentY, _targetY, smoothFactor) ?? 50;
@@ -113,18 +94,13 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       final double distance = math.sqrt(dx * dx + dy * dy);
       const double maxInterestDistance = 600.0; 
 
-      final bool isNowTracking = distance < maxInterestDistance;
-
-      if (isNowTracking && !_isTracking) {
-        _isAcquiring = true; // Activar transición suave al entrar
-      }
-      _isTracking = isNowTracking;
-
-      if (_isTracking) {
+      if (distance < maxInterestDistance) {
+        _isTracking = true;
         const double sensitivity = 400.0; 
         _targetX = (50 + (dx / sensitivity * 50)).clamp(0.0, 100.0);
         _targetY = (50 + (dy / sensitivity * 50)).clamp(0.0, 100.0);
       } else {
+        _isTracking = false;
         _targetX = 50.0;
         _targetY = 50.0;
       }
