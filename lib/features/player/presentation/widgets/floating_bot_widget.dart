@@ -41,6 +41,8 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
       fit: StackFit.loose, 
       alignment: Alignment.bottomRight,
       children: [
+        // 1. CAPA DE FONDO (DETECTOR DE CLICKS AFUERA)
+        // Solo visible cuando el chat está abierto para cerrarlo si tocas fuera
         if (isOpen)
           Positioned.fill(
             child: GestureDetector(
@@ -50,71 +52,72 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
             ),
           ),
 
-        AnimatedSwitcher(
-          duration: const Duration(milliseconds: 450), // Un poco más de tiempo para la secuencia
-          switchInCurve: Curves.easeOutBack, 
-          switchOutCurve: Curves.easeInCubic, 
-          
-          transitionBuilder: (Widget child, Animation<double> animation) {
-            final isChatPanel = child.key == const ValueKey('ChatPanel');
-
-            if (isChatPanel) {
-              // CHAT: Se anima primero al abrir, y último al cerrar
-              return ScaleTransition(
-                scale: animation,
-                alignment: Alignment.bottomRight, 
-                child: FadeTransition(opacity: animation, child: child),
-              );
-            } else {
-              // BOTÓN: Espera un poco antes de aparecer (Interval 0.4 -> 1.0)
-              // Esto hace que el chat se cierre un poco antes de que el botón haga "POP"
-              return ScaleTransition(
-                scale: CurvedAnimation(
-                  parent: animation, 
-                  curve: const Interval(0.4, 1.0, curve: Curves.easeOutBack) // Delay + Rebote
-                ),
-                child: FadeTransition(
-                  opacity: CurvedAnimation(
-                    parent: animation, 
-                    curve: const Interval(0.2, 1.0, curve: Curves.easeIn)
+        // 2. CAPA DEL CHAT (INTERFAZ)
+        // Siempre está en el árbol, pero jugamos con su opacidad y escala
+        Positioned(
+          bottom: 0, 
+          right: 0,
+          child: IgnorePointer(
+            ignoring: !isOpen, // Si está cerrado, no bloquea clicks
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 250),
+              opacity: isOpen ? 1.0 : 0.0, // Fade In/Out suave
+              curve: Curves.easeOut,
+              child: AnimatedScale(
+                // Efecto de Zoom: 1.0 (Abierto) - 0.9 (Cerrado, se va hacia el fondo)
+                scale: isOpen ? 1.0 : 0.9, 
+                alignment: Alignment.bottomRight,
+                duration: const Duration(milliseconds: 350),
+                curve: isOpen ? Curves.easeOutBack : Curves.easeInCubic, 
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: panelHeight, 
+                    maxWidth: isMobile ? double.infinity : 380
                   ),
-                  child: child
+                  child: const ChatPanelView(),
                 ),
-              );
-            }
-          },
-          child: isOpen 
-            ? ConstrainedBox(
-                key: const ValueKey('ChatPanel'), 
-                constraints: BoxConstraints(
-                  maxHeight: panelHeight, 
-                  maxWidth: isMobile ? double.infinity : 380
-                ),
-                child: const ChatPanelView(),
-              )
-            : Padding(
-                key: const ValueKey('FloatingButton'), 
-                padding: const EdgeInsets.only(bottom: ghostPadding, right: ghostPadding),
-                child: GestureDetector(
-                  onTap: () => ref.read(chatOpenProvider.notifier).set(true),
-                  child: MouseRegion(
-                    cursor: SystemMouseCursors.click,
-                    onEnter: (_) => ref.read(isHoveredExternalProvider.notifier).state = true,
-                    onExit: (_) => ref.read(isHoveredExternalProvider.notifier).state = false,
-                    child: botConfigAsync.when(
-                      loading: () => _buildFloatingButton(isHovered: false, name: "...", color: Colors.grey, subtext: "Cargando...", isDarkMode: true),
-                      error: (err, stack) => _buildFloatingButton(isHovered: false, name: "OFFLINE", color: Colors.red, subtext: "Error", isDarkMode: true),
-                      data: (config) => _buildFloatingButton(
-                        isHovered: isHovered, 
-                        name: config.name.toUpperCase(), 
-                        color: config.themeColor,
-                        subtext: "¿En qué te ayudo?",
-                        isDarkMode: config.isDarkMode,
-                      ),
+              ),
+            ),
+          ),
+        ),
+
+        // 3. CAPA DEL BOTÓN FLOTANTE (BURBUJA)
+        // Vive independiente del chat.
+        Positioned(
+          bottom: ghostPadding, 
+          right: ghostPadding,
+          child: IgnorePointer(
+            ignoring: isOpen, // Si el chat está abierto, el botón no debe molestar
+            child: AnimatedScale(
+              // Si abierto -> 0.0 (Desaparece chiquito). Si cerrado -> 1.0 (Aparece)
+              scale: isOpen ? 0.0 : 1.0, 
+              duration: const Duration(milliseconds: 400),
+              // Curva asimétrica:
+              // Al cerrar chat: Aparece con rebote elástico (easeOutBack).
+              // Al abrir chat: Se encoge rápido para dar paso a la interfaz (easeInBack).
+              curve: isOpen ? Curves.easeInBack : Curves.easeOutBack, 
+              alignment: Alignment.center,
+              child: GestureDetector(
+                onTap: () => ref.read(chatOpenProvider.notifier).set(true),
+                child: MouseRegion(
+                  cursor: SystemMouseCursors.click,
+                  onEnter: (_) => ref.read(isHoveredExternalProvider.notifier).state = true,
+                  onExit: (_) => ref.read(isHoveredExternalProvider.notifier).state = false,
+                  child: botConfigAsync.when(
+                    loading: () => _buildFloatingButton(isHovered: false, name: "...", color: Colors.grey, subtext: "Cargando...", isDarkMode: true),
+                    error: (err, stack) => _buildFloatingButton(isHovered: false, name: "OFFLINE", color: Colors.red, subtext: "Error", isDarkMode: true),
+                    data: (config) => _buildFloatingButton(
+                      isHovered: isHovered, 
+                      name: config.name.toUpperCase(), 
+                      color: config.themeColor,
+                      subtext: "¿En qué te ayudo?",
+                      isDarkMode: config.isDarkMode,
                     ),
                   ),
                 ),
               ),
+            ),
+          ),
         ),
       ],
     );
@@ -130,6 +133,7 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     const double closedSize = 72.0; 
     const double headSize = 58.0;   
     
+    // Cálculo de ancho dinámico
     int maxChars = math.max(name.length, subtext.length);
     double calculatedWidth = 120.0 + (maxChars * 9.0);
     double openWidth = calculatedWidth.clamp(220.0, 380.0);
