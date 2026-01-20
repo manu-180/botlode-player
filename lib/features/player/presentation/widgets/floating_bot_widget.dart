@@ -1,13 +1,12 @@
 // Archivo: lib/features/player/presentation/widgets/floating_bot_widget.dart
-import 'dart:math' as math;
 import 'dart:html' as html;
+import 'dart:math' as math;
 import 'package:botlode_player/features/player/domain/models/bot_config.dart';
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
 import 'package:botlode_player/features/player/presentation/views/chat_panel_view.dart';
-import 'package:botlode_player/features/player/presentation/widgets/floating_head_widget.dart';
+import 'package:botlode_player/features/player/presentation/widgets/rive_avatar.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class FloatingBotWidget extends ConsumerStatefulWidget {
@@ -41,6 +40,7 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
       fit: StackFit.loose, 
       alignment: Alignment.bottomRight,
       children: [
+        // CAPA DE CLICKS
         if (isOpen)
           Positioned.fill(
             child: GestureDetector(
@@ -50,6 +50,7 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
             ),
           ),
 
+        // PANEL DE CHAT
         Positioned(
           bottom: 0, 
           right: 0,
@@ -76,6 +77,7 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
           ),
         ),
 
+        // BOTÓN FLOTANTE (BURBUJA)
         Positioned(
           bottom: ghostPadding, 
           right: ghostPadding,
@@ -87,7 +89,10 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
               curve: isOpen ? Curves.easeInBack : Curves.easeOutBack, 
               alignment: Alignment.center,
               child: GestureDetector(
-                onTap: () => ref.read(chatOpenProvider.notifier).set(true),
+                onTap: () {
+                  ref.read(chatOpenProvider.notifier).set(true);
+                  html.window.parent?.postMessage('CMD_OPEN', '*');
+                },
                 child: MouseRegion(
                   cursor: SystemMouseCursors.click,
                   onEnter: (_) => ref.read(isHoveredExternalProvider.notifier).state = true,
@@ -120,7 +125,7 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     required bool isDarkMode,
   }) {
     const double closedSize = 72.0; 
-    const double headSize = 58.0;   
+    const double headSize = 58.0;    
     
     int maxChars = math.max(name.length, subtext.length);
     double calculatedWidth = 120.0 + (maxChars * 9.0);
@@ -129,15 +134,6 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     final Color textColor = _getContrastingTextColor(color);
     final Color subTextColor = textColor.withOpacity(0.85);
 
-    final List<BoxShadow> shadowList = isDarkMode
-        ? [
-            BoxShadow(color: Colors.black.withOpacity(0.25), blurRadius: 10, offset: const Offset(0, 4)),
-            BoxShadow(color: color.withOpacity(0.1), blurRadius: 0, spreadRadius: 1)
-          ]
-        : [
-             BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 8, offset: const Offset(0, 4)),
-          ];
-
     return AnimatedContainer(
       duration: const Duration(milliseconds: 400),
       curve: Curves.easeOutCubic, 
@@ -145,17 +141,17 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
       height: closedSize, 
       clipBehavior: Clip.antiAlias, 
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft, end: Alignment.bottomRight,
-          colors: [color, Color.lerp(color, Colors.black, 0.1)!],
-        ),
+        color: color, // Color sólido base
         borderRadius: BorderRadius.circular(closedSize / 2),
         border: Border.all(color: Colors.white.withOpacity(0.15), width: 1.0),
-        boxShadow: shadowList, 
+        boxShadow: [
+           BoxShadow(color: Colors.black.withOpacity(0.25), blurRadius: 10, offset: const Offset(0, 4)),
+        ], 
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
+          // TEXTO EXPANSIBLE
           Flexible(
             fit: FlexFit.loose,
             child: AnimatedOpacity(
@@ -171,9 +167,8 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
                         mainAxisAlignment: MainAxisAlignment.center,
                         crossAxisAlignment: CrossAxisAlignment.end, 
                         children: [
-                          Text(name, textAlign: TextAlign.right, style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 13, letterSpacing: 0.5, height: 1.1)),
-                          const SizedBox(height: 2),
-                          Text(subtext, textAlign: TextAlign.right, overflow: TextOverflow.ellipsis, style: TextStyle(color: subTextColor, fontWeight: FontWeight.w500, fontSize: 10)),
+                          Text(name, textAlign: TextAlign.right, style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 13)),
+                          Text(subtext, textAlign: TextAlign.right, style: TextStyle(color: subTextColor, fontSize: 10)),
                         ],
                       ),
                     )
@@ -181,11 +176,29 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
               ), 
             ),
           ),
+          
+          // CABEZA DEL ROBOT (Con Fallback Icon)
           Container(
             width: headSize, height: headSize,
             margin: const EdgeInsets.all(7), 
             decoration: const BoxDecoration(shape: BoxShape.circle),
-            child: const ClipOval(child: FloatingHeadWidget()), 
+            child: ClipOval(
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // 1. CAPA INFERIOR: ICONO DE RESPALDO (Por si falla Rive)
+                  Center(
+                    child: Icon(
+                      Icons.smart_toy_rounded, 
+                      color: textColor.withOpacity(0.5), 
+                      size: 30
+                    )
+                  ),
+                  // 2. CAPA SUPERIOR: ANIMACIÓN RIVE (Si carga, tapa el icono)
+                  const BotAvatarWidget(), 
+                ],
+              ),
+            ), 
           ),
         ],
       ),
