@@ -1,123 +1,200 @@
-// Archivo: lib/features/player/presentation/widgets/floating_head_widget.dart
+// Archivo: lib/features/player/presentation/widgets/floating_bot_widget.dart
+import 'dart:html' as html;
 import 'dart:math' as math;
-import 'dart:ui'; 
-import 'package:botlode_player/features/player/presentation/providers/loader_provider.dart';
+import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
+import 'package:botlode_player/features/player/presentation/views/chat_panel_view.dart';
+import 'package:botlode_player/features/player/presentation/widgets/floating_head_widget.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart'; 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:rive/rive.dart';
 
-class FloatingHeadWidget extends ConsumerStatefulWidget {
-  const FloatingHeadWidget({super.key});
+class FloatingBotWidget extends ConsumerStatefulWidget {
+  const FloatingBotWidget({super.key});
 
   @override
-  ConsumerState<FloatingHeadWidget> createState() => _FloatingHeadWidgetState();
+  ConsumerState<FloatingBotWidget> createState() => _FloatingBotWidgetState();
 }
 
-class _FloatingHeadWidgetState extends ConsumerState<FloatingHeadWidget> with SingleTickerProviderStateMixin {
-  StateMachineController? _controller;
-  SMINumber? _lookXInput;
-  SMINumber? _lookYInput;
-
-  late Ticker _ticker;
+class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
   
-  double _targetX = 50.0;
-  double _targetY = 50.0;
-  double _currentX = 50.0;
-  double _currentY = 50.0;
-  
-  bool _isTracking = false; 
-
-  @override
-  void initState() {
-    super.initState();
-    _ticker = createTicker(_onTick)..start();
-  }
-
-  @override
-  void dispose() {
-    _ticker.dispose();
-    super.dispose();
-  }
-
-  void _onTick(Duration elapsed) {
-    if (_lookXInput == null || _lookYInput == null) return;
-
-    // Movimiento más rápido para que se sienta reactivo
-    final double smoothFactor = _isTracking ? 0.2 : 0.05;
-
-    _currentX = lerpDouble(_currentX, _targetX, smoothFactor) ?? 50;
-    _currentY = lerpDouble(_currentY, _targetY, smoothFactor) ?? 50;
-
-    _lookXInput!.value = _currentX;
-    _lookYInput!.value = _currentY;
-  }
-
-  void _onRiveInit(Artboard artboard) {
-    // Tus capturas confirman que es "State Machine 1"
-    var controller = StateMachineController.fromArtboard(artboard, 'State Machine 1');
-    
-    if (controller != null) {
-      artboard.addController(controller);
-      _controller = controller;
-      
-      _lookXInput = controller.getNumberInput('LookX');
-      _lookYInput = controller.getNumberInput('LookY');
-      
-      print("👁️ [RIVE EYES] Conectado. LookX: ${_lookXInput?.value}, LookY: ${_lookYInput?.value}");
-    } else {
-      print("🔴 [RIVE ERROR] No se encontró State Machine 1");
-    }
+  Color _getContrastingTextColor(Color background) {
+    return ThemeData.estimateBrightnessForColor(background) == Brightness.dark
+        ? Colors.white
+        : Colors.black;
   }
 
   @override
   Widget build(BuildContext context) {
-    final riveHeadAsync = ref.watch(riveHeadFileLoaderProvider);
-    // Ajuste visual fino por si la cabeza no está centrada en el artboard
-    const double verticalOffset = 0.0; 
+    final isOpen = ref.watch(chatOpenProvider);
+    final botConfigAsync = ref.watch(botConfigProvider);
+    final isHovered = ref.watch(isHoveredExternalProvider);
 
-    ref.listen(pointerPositionProvider, (prev, deltaPos) {
-      if (deltaPos == null) return;
-      
-      final double dx = deltaPos.dx;
-      final double dy = deltaPos.dy;
+    final screenSize = MediaQuery.of(context).size;
+    final isMobile = screenSize.width < 600;
+    final double safeHeight = (screenSize.height - 120.0).clamp(400.0, 800.0);
 
-      final double distance = math.sqrt(dx * dx + dy * dy);
-      const double maxInterestDistance = 1000.0; 
+    const double ghostPadding = 40.0;
 
-      if (distance < maxInterestDistance) {
-        _isTracking = true; 
-        
-        // SENSIBILIDAD ALTA (200.0)
-        // Esto hace que mire al nombre (que está cerca) con intensidad.
-        const double sensitivity = 200.0; 
-        
-        // CÁLCULO DE VECTORES
-        // 0 = Izquierda/Arriba, 100 = Derecha/Abajo, 50 = Centro
-        _targetX = (50 + (dx / sensitivity * 50)).clamp(0.0, 100.0);
-        _targetY = (50 + (dy / sensitivity * 50)).clamp(0.0, 100.0);
-      } else {
-        _isTracking = false; 
-        _targetX = 50.0;
-        _targetY = 50.0;
-      }
-    });
-
-    return SizedBox(
-      width: 70, height: 70,
-      child: riveHeadAsync.when(
-        data: (riveFile) {
-          return Transform.translate(
-            offset: const Offset(0, verticalOffset), 
-            child: Transform.scale(
-              scale: 1.35, // Un poco más grande para llenar mejor el círculo
-              child: RiveAnimation.direct(riveFile, fit: BoxFit.cover, onInit: _onRiveInit),
+    return Stack(
+      fit: StackFit.loose, 
+      alignment: Alignment.bottomRight,
+      children: [
+        // CAPA DE CIERRE (Click outside interno)
+        if (isOpen)
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent, 
+              onTap: () => ref.read(chatOpenProvider.notifier).set(false),
+              child: const SizedBox.expand(), 
             ),
-          );
-        },
-        loading: () => const SizedBox(), 
-        error: (_, __) => const Icon(Icons.smart_toy, color: Colors.white),
+          ),
+
+        // PANEL DE CHAT
+        Positioned(
+          bottom: 0, right: 0,
+          child: IgnorePointer(
+            ignoring: !isOpen, 
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 250),
+              opacity: isOpen ? 1.0 : 0.0,
+              curve: Curves.easeOut,
+              child: AnimatedScale(
+                scale: isOpen ? 1.0 : 0.9, 
+                alignment: Alignment.bottomRight,
+                duration: const Duration(milliseconds: 350),
+                curve: isOpen ? Curves.easeOutBack : Curves.easeInCubic, 
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: safeHeight, 
+                    maxWidth: isMobile ? double.infinity : 380
+                  ),
+                  child: const ChatPanelView(),
+                ),
+              ),
+            ),
+          ),
+        ),
+
+        // BURBUJA FLOTANTE (FIX CURSOR)
+        Positioned(
+          bottom: ghostPadding, right: ghostPadding,
+          child: IgnorePointer(
+            ignoring: isOpen, 
+            child: MouseRegion(
+              // Aseguramos que el hover se mantenga
+              onEnter: (_) => ref.read(isHoveredExternalProvider.notifier).state = true,
+              onExit: (_) => ref.read(isHoveredExternalProvider.notifier).state = false,
+              child: AnimatedScale(
+                scale: isOpen ? 0.0 : 1.0, 
+                duration: const Duration(milliseconds: 300),
+                curve: isOpen ? Curves.easeInBack : Curves.easeOutBack, 
+                alignment: Alignment.center,
+                child: botConfigAsync.when(
+                  loading: () => _buildFloatingButton(isHovered: false, name: "...", color: Colors.grey, subtext: "...", isDarkMode: true),
+                  error: (err, stack) => _buildFloatingButton(isHovered: false, name: "ERROR", color: Colors.red, subtext: "Offline", isDarkMode: true),
+                  data: (config) => _buildFloatingButton(
+                    isHovered: isHovered, 
+                    name: config.name.toUpperCase(), 
+                    color: config.themeColor,
+                    subtext: "¿En qué te ayudo?",
+                    isDarkMode: config.isDarkMode,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildFloatingButton({
+    required bool isHovered,
+    required String name, 
+    required Color color, 
+    required String subtext,
+    required bool isDarkMode,
+  }) {
+    const double closedSize = 72.0; 
+    const double headSize = 58.0;    
+    
+    int maxChars = math.max(name.length, subtext.length);
+    double calculatedWidth = 120.0 + (maxChars * 9.0);
+    double targetWidth = isHovered ? calculatedWidth.clamp(220.0, 380.0) : closedSize;
+
+    final Color textColor = _getContrastingTextColor(color);
+    final Color subTextColor = textColor.withOpacity(0.85);
+
+    // SOLUCIÓN CLICK: Usamos Material + InkWell
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 400),
+      curve: Curves.easeOutCubic, 
+      width: targetWidth, 
+      height: closedSize, 
+      decoration: BoxDecoration(
+        color: color, 
+        borderRadius: BorderRadius.circular(closedSize / 2),
+        border: Border.all(color: Colors.white.withOpacity(0.15), width: 1.0),
+        boxShadow: [
+           BoxShadow(color: Colors.black.withOpacity(0.25), blurRadius: 10, offset: const Offset(0, 4)),
+        ], 
+      ),
+      // Clip necesario para el efecto InkWell
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(closedSize / 2),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(closedSize / 2),
+          onTap: () {
+            ref.read(chatOpenProvider.notifier).set(true);
+            html.window.parent?.postMessage('CMD_OPEN', '*');
+          },
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              // TEXTO
+              Flexible(
+                fit: FlexFit.loose,
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 200),
+                  opacity: isHovered ? 1.0 : 0.0, 
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    physics: const NeverScrollableScrollPhysics(),
+                    child: isHovered 
+                      ? Padding(
+                          padding: const EdgeInsets.only(left: 25, right: 12),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.end, 
+                            children: [
+                              Text(name, textAlign: TextAlign.right, style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 13)),
+                              Text(subtext, textAlign: TextAlign.right, style: TextStyle(color: subTextColor, fontSize: 10)),
+                            ],
+                          ),
+                        )
+                      : const SizedBox(), 
+                  ), 
+                ),
+              ),
+              
+              // CABEZA
+              Container(
+                width: headSize, height: headSize,
+                margin: const EdgeInsets.all(7), 
+                child: ClipOval(
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      Center(child: Icon(Icons.smart_toy_rounded, color: textColor.withOpacity(0.5), size: 30)),
+                      const FloatingHeadWidget(), 
+                    ],
+                  ),
+                ), 
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

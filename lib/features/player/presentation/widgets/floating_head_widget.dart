@@ -22,7 +22,6 @@ class _FloatingHeadWidgetState extends ConsumerState<FloatingHeadWidget> with Si
 
   late Ticker _ticker;
   
-  // Variables de animación
   double _targetX = 50.0;
   double _targetY = 50.0;
   double _currentX = 50.0;
@@ -42,11 +41,11 @@ class _FloatingHeadWidgetState extends ConsumerState<FloatingHeadWidget> with Si
     super.dispose();
   }
 
-  // TICKER DE ANIMACIÓN (60 FPS)
   void _onTick(Duration elapsed) {
     if (_lookXInput == null || _lookYInput == null) return;
 
-    final double smoothFactor = _isTracking ? 0.3 : 0.05; // Más rápido si sigue al mouse
+    // Movimiento más rápido para que se sienta reactivo
+    final double smoothFactor = _isTracking ? 0.2 : 0.05;
 
     _currentX = lerpDouble(_currentX, _targetX, smoothFactor) ?? 50;
     _currentY = lerpDouble(_currentY, _targetY, smoothFactor) ?? 50;
@@ -55,59 +54,47 @@ class _FloatingHeadWidgetState extends ConsumerState<FloatingHeadWidget> with Si
     _lookYInput!.value = _currentY;
   }
 
-  // INICIALIZACIÓN DE RIVE (DEBUG MODE)
   void _onRiveInit(Artboard artboard) {
-    // 1. INSPECCIÓN (Para que me digas qué sale en consola)
-    print("🤖 [RIVE INSPECTOR] State Machines encontradas: ${artboard.stateMachines.map((e) => e.name).toList()}");
-    
-    // 2. BUSQUEDA DE CONTROLADOR
+    // Tus capturas confirman que es "State Machine 1"
     var controller = StateMachineController.fromArtboard(artboard, 'State Machine 1');
-    controller ??= StateMachineController.fromArtboard(artboard, 'State Machine');
-    controller ??= StateMachineController.fromArtboard(artboard, 'Main'); // Intento extra
-
+    
     if (controller != null) {
       artboard.addController(controller);
       _controller = controller;
       
-      // 3. INSPECCIÓN DE INPUTS
-      print("🤖 [RIVE INSPECTOR] Inputs disponibles: ${controller.inputs.map((e) => e.name).toList()}");
-
       _lookXInput = controller.getNumberInput('LookX');
       _lookYInput = controller.getNumberInput('LookY');
       
-      // Fallbacks comunes por si se llaman diferente
-      if (_lookXInput == null) _lookXInput = controller.getNumberInput('xAxis');
-      if (_lookYInput == null) _lookYInput = controller.getNumberInput('yAxis');
-
-      if (_lookXInput == null) print("⚠️ ALERTA: No se encontró input para Eje X");
+      print("👁️ [RIVE EYES] Conectado. LookX: ${_lookXInput?.value}, LookY: ${_lookYInput?.value}");
     } else {
-      print("🔴 ERROR CRÍTICO: No se encontró ninguna State Machine válida.");
+      print("🔴 [RIVE ERROR] No se encontró State Machine 1");
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final riveHeadAsync = ref.watch(riveHeadFileLoaderProvider);
+    // Ajuste visual fino por si la cabeza no está centrada en el artboard
     const double verticalOffset = 0.0; 
 
-    // LISTENER DE POSICIÓN (Relativa al Bot)
     ref.listen(pointerPositionProvider, (prev, deltaPos) {
       if (deltaPos == null) return;
       
-      // deltaPos ahora contiene la distancia (dx, dy) desde el centro del bot
       final double dx = deltaPos.dx;
       final double dy = deltaPos.dy;
 
       final double distance = math.sqrt(dx * dx + dy * dy);
-      const double maxInterestDistance = 800.0; 
+      const double maxInterestDistance = 1000.0; 
 
       if (distance < maxInterestDistance) {
         _isTracking = true; 
-        // Sensibilidad: Qué tan lejos tengo que mover el mouse para que el ojo llegue al tope (0 o 100)
-        // 500px parece razonable para una pantalla de escritorio
-        const double sensitivity = 500.0; 
         
-        // Fórmula: Centro (50) + (Distancia / Sensibilidad * Rango 50)
+        // SENSIBILIDAD ALTA (200.0)
+        // Esto hace que mire al nombre (que está cerca) con intensidad.
+        const double sensitivity = 200.0; 
+        
+        // CÁLCULO DE VECTORES
+        // 0 = Izquierda/Arriba, 100 = Derecha/Abajo, 50 = Centro
         _targetX = (50 + (dx / sensitivity * 50)).clamp(0.0, 100.0);
         _targetY = (50 + (dy / sensitivity * 50)).clamp(0.0, 100.0);
       } else {
@@ -124,7 +111,7 @@ class _FloatingHeadWidgetState extends ConsumerState<FloatingHeadWidget> with Si
           return Transform.translate(
             offset: const Offset(0, verticalOffset), 
             child: Transform.scale(
-              scale: 1.3, 
+              scale: 1.35, // Un poco más grande para llenar mejor el círculo
               child: RiveAnimation.direct(riveFile, fit: BoxFit.cover, onInit: _onRiveInit),
             ),
           );
