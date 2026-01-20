@@ -75,20 +75,39 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
     final botConfig = ref.watch(botConfigProvider).asData?.value;
     final themeColor = botConfig?.themeColor ?? const Color(0xFFFFC000);
     final isDarkMode = botConfig?.isDarkMode ?? true; 
+    final showOfflineAlert = botConfig?.showOfflineAlert ?? true;
     final isOnline = ref.watch(connectivityProvider).asData?.value ?? true;
 
-    // --- COLORES OPACOS Y DE ALTO CONTRASTE ---
-    // Usamos 0xFF222222 en lugar de 181818 para que se diferencie del fondo de tu web (#1a1a1a)
+    // --- COLORES OPACOS Y DE ALTO CONTRASTE (SOLID MATERIAL FIX) ---
+    // Usamos 0xFF222222 para diferenciar del fondo web #1a1a1a
     final Color solidBgColor = isDarkMode 
         ? const Color(0xFF222222) 
         : const Color(0xFFFFFFFF); 
 
     final Color inputFill = isDarkMode ? const Color(0xFF333333) : const Color(0xFFF2F2F2);
-    // Borde blanco sutil para delimitar el chat del fondo negro de la web
+    // Borde sutil para delimitar el chat del fondo
     final Color borderColor = isDarkMode ? Colors.white.withOpacity(0.15) : Colors.black12;
     final Color sendButtonColor = isDarkMode ? themeColor : Colors.black;
 
     final reversedMessages = chatState.messages.reversed.toList();
+
+    // --- LOGICA DE RED ---
+    ref.listen(connectivityProvider, (prev, next) {
+      next.whenData((online) {
+        if (showOfflineAlert) {
+          if (!online) {
+            if (!_wasOffline) { _wasOffline = true; html.window.parent?.postMessage('NETWORK_OFFLINE', '*'); }
+          } else {
+            if (_wasOffline) { _wasOffline = false; html.window.parent?.postMessage('NETWORK_ONLINE', '*'); }
+          }
+        }
+      });
+    });
+
+    ref.listen(chatControllerProvider, (prev, next) {
+      if (next.messages.length > (prev?.messages.length ?? 0) && _scrollController.hasClients) _scrollController.jumpTo(0.0);
+      if (prev?.currentMood != next.currentMood) ref.read(botMoodProvider.notifier).state = _getMoodIndex(next.currentMood);
+    });
 
     return Theme(
       data: ThemeData(
@@ -100,20 +119,21 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
         hitTestBehavior: HitTestBehavior.translucent, 
         onHover: (event) {
           final width = MediaQuery.of(context).size.width.clamp(0.0, 380.0);
-          ref.read(pointerPositionProvider.notifier).state = Offset(event.localPosition.dx - (width/2), event.localPosition.dy - 100);
+          final double dx = event.localPosition.dx - (width / 2);
+          final double dy = event.localPosition.dy - 100.0;
+          ref.read(pointerPositionProvider.notifier).state = Offset(dx, dy);
         },
         child: FadeTransition(
           opacity: _opacityAnimation,
           child: LayoutBuilder(
             builder: (context, constraints) {
-              // --- CAMBIO CLAVE: MATERIAL WIDGET ---
-              // El Material fuerza al motor a pintar una "hoja" sólida.
+              // --- FIX CRÍTICO: MATERIAL OPACO ---
               return Material(
-                color: solidBgColor, // Color base del material (Sólido)
-                elevation: 10, // Sombra real
+                color: solidBgColor, // Color base sólido
+                elevation: 10, // Sombra real proyectada
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(28),
-                  side: BorderSide(color: borderColor, width: 1.5), // Borde visible
+                  side: BorderSide(color: borderColor, width: 1.5),
                 ),
                 clipBehavior: Clip.antiAlias,
                 child: Stack(
@@ -141,12 +161,14 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
                                     IconButton(
                                       icon: const Icon(Icons.refresh), 
                                       onPressed: () => ref.read(chatResetProvider)(),
-                                      color: isDarkMode ? Colors.white70 : Colors.black54
+                                      color: isDarkMode ? Colors.white70 : Colors.black54,
+                                      tooltip: "Reiniciar",
                                     ),
                                     IconButton(
                                       icon: const Icon(Icons.close), 
                                       onPressed: () => ref.read(chatOpenProvider.notifier).set(false),
-                                      color: isDarkMode ? Colors.white70 : Colors.black54
+                                      color: isDarkMode ? Colors.white70 : Colors.black54,
+                                      tooltip: "Cerrar",
                                     ),
                                   ],
                                 ),
@@ -169,19 +191,21 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
                               controller: _scrollController,
                               reverse: true,
                               padding: const EdgeInsets.all(20),
+                              physics: const BouncingScrollPhysics(),
                               itemCount: reversedMessages.length + (chatState.isLoading ? 1 : 0),
                               itemBuilder: (context, index) {
-                                if (chatState.isLoading && index == 0) {
-                                  return const Padding(padding: EdgeInsets.all(10), child: Text("Escribiendo...", style: TextStyle(fontSize: 12, color: Colors.grey)));
-                                }
-                                final msg = reversedMessages[chatState.isLoading ? index - 1 : index];
-                                return ChatBubble(message: msg, botThemeColor: themeColor, isDarkMode: isDarkMode);
+                                if (chatState.isLoading) {
+                                  if (index == 0) return Padding(padding: const EdgeInsets.only(left: 16, top: 8, bottom: 20), child: Row(children: [SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2, color: isDarkMode ? Colors.white60 : Colors.black54)), const SizedBox(width: 8), Text("Escribiendo...", style: TextStyle(color: isDarkMode ? Colors.white38 : Colors.black38, fontSize: 11))]));
+                                  final msg = reversedMessages[index - 1];
+                                  return ChatBubble(message: msg, botThemeColor: themeColor, isDarkMode: isDarkMode);
+                                } 
+                                return ChatBubble(message: reversedMessages[index], botThemeColor: themeColor, isDarkMode: isDarkMode);
                               },
                             ),
                           ),
                         ),
                         
-                        // INPUT
+                        // INPUT AREA
                         Container(
                           padding: EdgeInsets.fromLTRB(16, 10, 16, 16 + (isMobile ? MediaQuery.of(context).padding.bottom : 0)),
                           color: solidBgColor, 
@@ -199,18 +223,26 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
                                     controller: _textController,
                                     enabled: isOnline,
                                     onSubmitted: (_) => isOnline ? _sendMessage() : null,
-                                    style: TextStyle(color: isDarkMode ? Colors.white : Colors.black),
+                                    style: TextStyle(color: isDarkMode ? Colors.white : Colors.black, fontSize: 14),
+                                    cursorColor: themeColor,
                                     decoration: InputDecoration(
-                                      hintText: isOnline ? "Escribe aquí..." : "Esperando conexión...",
-                                      hintStyle: TextStyle(color: isDarkMode ? Colors.white38 : Colors.black38),
+                                      hintText: isOnline ? "Escribe aquí..." : "Sin conexión",
+                                      hintStyle: TextStyle(color: isDarkMode ? Colors.white38 : Colors.black38, fontSize: 14),
                                       border: InputBorder.none,
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 12),
+                                      isDense: true,
                                     ),
                                   ),
                                 ),
-                                IconButton(
-                                  onPressed: isOnline ? _sendMessage : null, 
-                                  icon: Icon(Icons.send_rounded, color: isOnline ? sendButtonColor : Colors.grey)
+                                AnimatedOpacity(
+                                  duration: const Duration(milliseconds: 200),
+                                  opacity: isOnline ? 1.0 : 0.5,
+                                  child: IconButton(
+                                    onPressed: isOnline ? _sendMessage : null, 
+                                    icon: Icon(Icons.send_rounded, color: isOnline ? sendButtonColor : Colors.grey),
+                                    tooltip: "Enviar",
+                                    splashRadius: 24,
+                                  ),
                                 ),
                               ],
                             ),
