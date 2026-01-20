@@ -13,7 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // --- CONTROL DE VERSIÓN ---
-const String DEPLOY_VERSION = "INTENTO 7 (Fast Eyes)"; 
+const String DEPLOY_VERSION = "INTENTO 8 (Design & Physics)"; 
 
 void main() {
   runZonedGuarded(() async {
@@ -94,7 +94,6 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
             double screenW = double.parse(parts[2]);
             double screenH = double.parse(parts[3]);
 
-            // CENTRO CALIBRADO DEL BOT (Desde abajo a la derecha)
             double botCenterX = screenW - 111.0; 
             double botCenterY = screenH - 111.0;
 
@@ -104,6 +103,7 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
             ref.read(pointerPositionProvider.notifier).state = Offset(deltaX, deltaY);
             
             bool inBotZone = (mouseX > screenW - 130) && (mouseY > screenH - 130);
+            
             final currentHover = ref.read(isHoveredExternalProvider);
             if (inBotZone && !currentHover) {
                ref.read(isHoveredExternalProvider.notifier).state = true;

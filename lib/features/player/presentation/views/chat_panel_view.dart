@@ -77,14 +77,23 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
     final isDarkMode = botConfig?.isDarkMode ?? true; 
     final isOnline = ref.watch(connectivityProvider).asData?.value ?? true;
 
-    // --- COLORES OPACOS (SOLID MODE) ---
-    // Usamos colores sólidos (Alpha 255) para evitar transparencia en el Iframe
-    final Color solidBgColor = isDarkMode 
-        ? const Color(0xFF181818) // Gris muy oscuro sólido
-        : const Color(0xFFFFFFFF); // Blanco sólido
+    // --- DISEÑO PREMIUM SÓLIDO ---
+    // Usamos gradientes opacos para simular el "vidrio" sin usar transparencia real.
+    final Gradient bgGradient = isDarkMode 
+        ? const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            // Gris azulado oscuro -> Negro Profundo (Da sensación tech)
+            colors: [Color(0xFF252730), Color(0xFF101012)], 
+          )
+        : const LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFFFFFFFF), Color(0xFFF0F2F5)], 
+          );
 
-    final Color inputFill = isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFF2F2F2);
-    final Color borderColor = isDarkMode ? Colors.white24 : Colors.black12;
+    final Color inputFill = isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFFFFFFF);
+    final Color borderColor = isDarkMode ? Colors.white12 : Colors.black12;
     final Color sendButtonColor = isDarkMode ? themeColor : Colors.black;
 
     final reversedMessages = chatState.messages.reversed.toList();
@@ -110,11 +119,11 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
                 height: double.infinity,
                 clipBehavior: Clip.hardEdge, 
                 decoration: BoxDecoration(
-                  color: solidBgColor, // <--- FONDO OPACO
+                  gradient: bgGradient, // <--- GRADIENTE PREMIUN AQUÍ
                   borderRadius: BorderRadius.circular(28),
                   border: Border.all(color: borderColor, width: 1.0),
                   boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 10))
+                    BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 40, offset: const Offset(0, 15))
                   ],
                 ),
                 child: Stack(
@@ -125,7 +134,9 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
                         Container(
                           height: 180,
                           width: double.infinity,
-                          color: solidBgColor, 
+                          decoration: BoxDecoration(
+                            gradient: bgGradient, // Continuidad visual
+                          ),
                           child: Stack(
                             children: [
                               const Positioned.fill(
@@ -165,7 +176,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
                         // BODY
                         Expanded(
                           child: Container(
-                            color: solidBgColor, 
+                            decoration: BoxDecoration(gradient: bgGradient), // Fondo sólido en lista
                             child: ListView.builder(
                               controller: _scrollController,
                               reverse: true,
@@ -185,7 +196,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
                         // INPUT
                         Container(
                           padding: EdgeInsets.fromLTRB(16, 10, 16, 16 + (isMobile ? MediaQuery.of(context).padding.bottom : 0)),
-                          color: solidBgColor, 
+                          decoration: BoxDecoration(gradient: bgGradient), // Fondo sólido en input
                           child: Container(
                             decoration: BoxDecoration(
                               color: inputFill, 
@@ -201,103 +212,3 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
                                     enabled: isOnline,
                                     onSubmitted: (_) => isOnline ? _sendMessage() : null,
                                     style: TextStyle(color: isDarkMode ? Colors.white : Colors.black),
-                                    decoration: InputDecoration(
-                                      hintText: isOnline ? "Escribe aquí..." : "Esperando conexión...",
-                                      hintStyle: TextStyle(color: isDarkMode ? Colors.white38 : Colors.black38),
-                                      border: InputBorder.none,
-                                      contentPadding: const EdgeInsets.symmetric(horizontal: 10),
-                                    ),
-                                  ),
-                                ),
-                                IconButton(
-                                    onPressed: isOnline ? _sendMessage : null, 
-                                    icon: Icon(Icons.send_rounded, color: isOnline ? sendButtonColor : Colors.grey)
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    // BANNER DE CONECTIVIDAD
-                    _ConnectivityBanner(isOnline: isOnline),
-                  ],
-                ),
-              );
-            },
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _ConnectivityBanner extends StatefulWidget {
-  final bool isOnline;
-  const _ConnectivityBanner({required this.isOnline});
-
-  @override
-  State<_ConnectivityBanner> createState() => _ConnectivityBannerState();
-}
-
-class _ConnectivityBannerState extends State<_ConnectivityBanner> {
-  bool _showSuccess = false;
-
-  @override
-  void didUpdateWidget(covariant _ConnectivityBanner oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!oldWidget.isOnline && widget.isOnline) {
-      setState(() => _showSuccess = true);
-      Future.delayed(const Duration(seconds: 3), () {
-        if (mounted) setState(() => _showSuccess = false);
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final bool isVisible = !widget.isOnline || _showSuccess;
-    final Color bgColor = !widget.isOnline ? Theme.of(context).colorScheme.error : Colors.green;
-    final String text = !widget.isOnline ? "Sin conexión a internet" : "Conexión restablecida";
-    final IconData icon = !widget.isOnline ? Icons.wifi_off_rounded : Icons.wifi_rounded;
-
-    return AnimatedPositioned(
-      duration: const Duration(milliseconds: 600),
-      curve: Curves.elasticOut, 
-      top: isVisible ? 20 : -100, 
-      left: 20,
-      right: 20,
-      child: Material(
-        elevation: 8,
-        borderRadius: BorderRadius.circular(16),
-        color: Colors.transparent,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-          decoration: BoxDecoration(
-            color: bgColor,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(icon, color: Colors.white, size: 18),
-              const SizedBox(width: 10),
-              Text(
-                text, 
-                style: const TextStyle(
-                  color: Colors.white, 
-                  fontWeight: FontWeight.bold, 
-                  fontSize: 13,
-                  decoration: TextDecoration.none
-                )
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
