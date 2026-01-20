@@ -44,8 +44,10 @@ class _FloatingHeadWidgetState extends ConsumerState<FloatingHeadWidget> with Si
   void _onTick(Duration elapsed) {
     if (_lookXInput == null || _lookYInput == null) return;
 
-    // Movimiento más rápido para que se sienta reactivo
-    final double smoothFactor = _isTracking ? 0.2 : 0.05;
+    // --- FÍSICA DE MOVIMIENTO ---
+    // 1.0 = Movimiento instantáneo (Sin delay) -> Para seguir al mouse
+    // 0.03 = Movimiento muy lento (Cinemático) -> Para volver al centro
+    final double smoothFactor = _isTracking ? 1.0 : 0.03;
 
     _currentX = lerpDouble(_currentX, _targetX, smoothFactor) ?? 50;
     _currentY = lerpDouble(_currentY, _targetY, smoothFactor) ?? 50;
@@ -55,26 +57,19 @@ class _FloatingHeadWidgetState extends ConsumerState<FloatingHeadWidget> with Si
   }
 
   void _onRiveInit(Artboard artboard) {
-    // Tus capturas confirman que es "State Machine 1"
     var controller = StateMachineController.fromArtboard(artboard, 'State Machine 1');
     
     if (controller != null) {
       artboard.addController(controller);
       _controller = controller;
-      
       _lookXInput = controller.getNumberInput('LookX');
       _lookYInput = controller.getNumberInput('LookY');
-      
-      print("👁️ [RIVE EYES] Conectado. LookX: ${_lookXInput?.value}, LookY: ${_lookYInput?.value}");
-    } else {
-      print("🔴 [RIVE ERROR] No se encontró State Machine 1");
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final riveHeadAsync = ref.watch(riveHeadFileLoaderProvider);
-    // Ajuste visual fino por si la cabeza no está centrada en el artboard
     const double verticalOffset = 0.0; 
 
     ref.listen(pointerPositionProvider, (prev, deltaPos) {
@@ -88,13 +83,8 @@ class _FloatingHeadWidgetState extends ConsumerState<FloatingHeadWidget> with Si
 
       if (distance < maxInterestDistance) {
         _isTracking = true; 
-        
-        // SENSIBILIDAD ALTA (200.0)
-        // Esto hace que mire al nombre (que está cerca) con intensidad.
+        // Sensibilidad alta para reacciones rápidas
         const double sensitivity = 200.0; 
-        
-        // CÁLCULO DE VECTORES
-        // 0 = Izquierda/Arriba, 100 = Derecha/Abajo, 50 = Centro
         _targetX = (50 + (dx / sensitivity * 50)).clamp(0.0, 100.0);
         _targetY = (50 + (dy / sensitivity * 50)).clamp(0.0, 100.0);
       } else {
@@ -111,7 +101,7 @@ class _FloatingHeadWidgetState extends ConsumerState<FloatingHeadWidget> with Si
           return Transform.translate(
             offset: const Offset(0, verticalOffset), 
             child: Transform.scale(
-              scale: 1.35, // Un poco más grande para llenar mejor el círculo
+              scale: 1.35, 
               child: RiveAnimation.direct(riveFile, fit: BoxFit.cover, onInit: _onRiveInit),
             ),
           );

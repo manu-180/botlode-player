@@ -77,12 +77,13 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
     final isDarkMode = botConfig?.isDarkMode ?? true; 
     final isOnline = ref.watch(connectivityProvider).asData?.value ?? true;
 
-    // --- MODO SÓLIDO DURO (FIX TRANSPARENCIA) ---
+    // --- COLORES OPACOS (SOLID MODE) ---
+    // Usamos colores sólidos (Alpha 255) para evitar transparencia en el Iframe
     final Color solidBgColor = isDarkMode 
-        ? const Color(0xFF101010) // Casi negro total
-        : const Color(0xFFFFFFFF); // Blanco total
+        ? const Color(0xFF181818) // Gris muy oscuro sólido
+        : const Color(0xFFFFFFFF); // Blanco sólido
 
-    final Color inputFill = isDarkMode ? const Color(0xFF252525) : const Color(0xFFF0F0F0);
+    final Color inputFill = isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFF2F2F2);
     final Color borderColor = isDarkMode ? Colors.white24 : Colors.black12;
     final Color sendButtonColor = isDarkMode ? themeColor : Colors.black;
 
@@ -109,16 +110,15 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
                 height: double.infinity,
                 clipBehavior: Clip.hardEdge, 
                 decoration: BoxDecoration(
-                  color: solidBgColor, // FONDO SÓLIDO
+                  color: solidBgColor, // <--- FONDO OPACO
                   borderRadius: BorderRadius.circular(28),
                   border: Border.all(color: borderColor, width: 1.0),
                   boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 30, offset: const Offset(0, 10))
+                    BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 10))
                   ],
                 ),
                 child: Stack(
                   children: [
-                    // CONTENIDO DEL CHAT
                     Column(
                       children: [
                         // HEADER

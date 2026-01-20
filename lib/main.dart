@@ -12,14 +12,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String DEPLOY_VERSION = "INTENTO 6 (Calibración Ojos)"; 
+// --- CONTROL DE VERSIÓN ---
+const String DEPLOY_VERSION = "INTENTO 7 (Fast Eyes)"; 
 
 void main() {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
 
     print("==========================================");
-    print("🛑 VERSIÓN: $DEPLOY_VERSION");
+    print("🛑 VERSIÓN DE DESPLIEGUE: $DEPLOY_VERSION");
     print("==========================================");
 
     try {
@@ -30,8 +31,9 @@ void main() {
           authFlowType: AuthFlowType.implicit,
         ),
       );
+      print("🚀 [EXITO] Supabase conectado.");
     } catch (e) {
-      print("🔥 Supabase Error: $e");
+      print("🔥 [ERROR] Falló Supabase: $e");
     }
 
     final uri = Uri.base;
@@ -49,7 +51,7 @@ void main() {
     );
 
   }, (error, stack) {
-    print("🔥 CRASH: $error");
+    print("🔥 CRASH FATAL ($DEPLOY_VERSION): $error");
   });
 }
 
@@ -92,24 +94,16 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
             double screenW = double.parse(parts[2]);
             double screenH = double.parse(parts[3]);
 
-            // --- CALIBRACIÓN DE CENTRO ---
-            // CSS bottom/right: 35px
-            // Flutter Padding: 40px
-            // Mitad del botón (72/2): 36px
-            // Total desde el borde: 35 + 40 + 36 = 111px
+            // CENTRO CALIBRADO DEL BOT (Desde abajo a la derecha)
             double botCenterX = screenW - 111.0; 
             double botCenterY = screenH - 111.0;
 
-            // Delta: Distancia del mouse al centro exacto de la cara
             double deltaX = mouseX - botCenterX; 
             double deltaY = mouseY - botCenterY;
 
             ref.read(pointerPositionProvider.notifier).state = Offset(deltaX, deltaY);
             
-            // --- HOVER ---
-            // Zona de activación un poco más amplia para que no parpadee
             bool inBotZone = (mouseX > screenW - 130) && (mouseY > screenH - 130);
-            
             final currentHover = ref.read(isHoveredExternalProvider);
             if (inBotZone && !currentHover) {
                ref.read(isHoveredExternalProvider.notifier).state = true;
@@ -141,7 +135,7 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
     });
 
     return MaterialApp(
-      title: 'BotLode Player',
+      title: 'BotLode Player ($DEPLOY_VERSION)',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme.copyWith(
         canvasColor: Colors.transparent, 
