@@ -13,7 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // --- CONTROL DE VERSIÓN ---
-const String DEPLOY_VERSION = "INTENTO 14 (High Contrast Fix)"; 
+const String DEPLOY_VERSION = "INTENTO 15 (Double Layer Opacity)"; 
 
 void main() {
   runZonedGuarded(() async {
