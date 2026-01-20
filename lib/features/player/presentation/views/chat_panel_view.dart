@@ -64,21 +64,22 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
     final isMobile = MediaQuery.of(context).size.width < 600;
     final botConfig = ref.watch(botConfigProvider).asData?.value;
     final themeColor = botConfig?.themeColor ?? const Color(0xFFFFC000);
-    final isDarkMode = botConfig?.isDarkMode ?? true; 
+    
+    // --- FORZADO DE MODO OSCURO (SCI-FI STYLE) ---
+    // Ignoramos la config de Light Mode para evitar el "Flash Blanco".
+    // La estética debe ser inmersiva siempre.
+    const bool forceDark = true; 
+    
     final showOfflineAlert = botConfig?.showOfflineAlert ?? true;
     final isOnline = ref.watch(connectivityProvider).asData?.value ?? true;
 
-    // --- DISEÑO SÓLIDO: COLOR SLATE ---
-    // Color #1E293B es 100% Opaco. No usar Colors.transparent en ningún lugar dentro del Material.
-    final Color solidBgColor = isDarkMode 
-        ? const Color(0xFF1E293B) 
-        : const Color(0xFFFFFFFF); 
+    // COLOR DEFINITIVO: Slate 800 (Gris Azulado Profundo)
+    // Se diferencia del negro (#000000) y del gris web (#1a1a1a)
+    const Color solidBgColor = Color(0xFF1E293B); 
 
-    final Color inputFill = isDarkMode ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9);
+    const Color inputFill = Color(0xFF0F172A); // Slate 900
     
-    final Color borderColor = isDarkMode 
-        ? themeColor.withOpacity(0.3) 
-        : Colors.black.withOpacity(0.1);
+    final Color borderColor = themeColor.withOpacity(0.4); // Borde de energía
 
     final Color sendButtonColor = themeColor;
     final reversedMessages = chatState.messages.reversed.toList();
@@ -102,9 +103,14 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
 
     return Theme(
       data: ThemeData(
-        brightness: isDarkMode ? Brightness.dark : Brightness.light,
+        brightness: Brightness.dark, // Forzamos Dark Theme
         primaryColor: themeColor,
         scaffoldBackgroundColor: Colors.transparent, 
+        // Aseguramos que los textos sean legibles sobre fondo oscuro
+        textTheme: const TextTheme(
+          bodyMedium: TextStyle(color: Colors.white),
+          bodyLarge: TextStyle(color: Colors.white),
+        )
       ),
       child: MouseRegion(
         hitTestBehavior: HitTestBehavior.translucent, 
@@ -117,25 +123,23 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             return Material(
-              color: solidBgColor, // CAPA DE OPACIDAD 1
+              color: solidBgColor, 
               elevation: 20, 
-              shadowColor: const Color(0xFF000000).withOpacity(0.6),
-              surfaceTintColor: Colors.transparent, // Desactivar tintes de Material 3
+              shadowColor: const Color(0xFF000000).withOpacity(0.8),
+              surfaceTintColor: Colors.transparent, 
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(24),
                 side: BorderSide(color: borderColor, width: 1.5),
               ),
               clipBehavior: Clip.antiAlias,
-              // ESTRUCTURA INTERNA
               child: Stack(
                 children: [
-                  // FONDO SÓLIDO REDUNDANTE (CAPA DE OPACIDAD 2)
-                  // Esto garantiza que si el Material falla, este container tape el fondo.
+                  // FONDO SÓLIDO DE SEGURIDAD
                   Positioned.fill(
                     child: Container(color: solidBgColor),
                   ),
 
-                  // CONTENIDO PRINCIPAL
+                  // CONTENIDO
                   Column(
                     children: [
                       // HEADER
@@ -162,14 +166,14 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
                                   IconButton(
                                     icon: const Icon(Icons.refresh_rounded), 
                                     onPressed: () => ref.read(chatResetProvider)(),
-                                    color: isDarkMode ? Colors.white70 : Colors.black54,
+                                    color: Colors.white70,
                                     tooltip: "Reiniciar",
                                   ),
                                   const SizedBox(width: 4),
                                   IconButton(
                                     icon: const Icon(Icons.close_rounded), 
                                     onPressed: () => ref.read(chatOpenProvider.notifier).set(false),
-                                    color: isDarkMode ? Colors.white70 : Colors.black54,
+                                    color: Colors.white70,
                                     tooltip: "Cerrar",
                                   ),
                                 ],
@@ -177,7 +181,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
                             ),
                             Positioned(
                               bottom: 12, left: 24,
-                              child: StatusIndicator(isLoading: chatState.isLoading, isOnline: isOnline, mood: chatState.currentMood, isDarkMode: isDarkMode),
+                              child: StatusIndicator(isLoading: chatState.isLoading, isOnline: isOnline, mood: chatState.currentMood, isDarkMode: forceDark),
                             ),
                           ],
                         ),
@@ -186,7 +190,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
                       // BODY (CHAT)
                       Expanded(
                         child: Container(
-                          color: solidBgColor, // CAPA DE OPACIDAD 3 (Extrema precaución)
+                          color: solidBgColor, 
                           child: ListView.builder(
                             controller: _scrollController,
                             reverse: true,
@@ -195,11 +199,11 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
                             itemCount: reversedMessages.length + (chatState.isLoading ? 1 : 0),
                             itemBuilder: (context, index) {
                               if (chatState.isLoading) {
-                                if (index == 0) return Padding(padding: const EdgeInsets.only(left: 16, top: 8, bottom: 20), child: Row(children: [SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2, color: themeColor)), const SizedBox(width: 8), Text("Escribiendo...", style: TextStyle(color: isDarkMode ? Colors.white38 : Colors.black38, fontSize: 11))]));
+                                if (index == 0) return Padding(padding: const EdgeInsets.only(left: 16, top: 8, bottom: 20), child: Row(children: [SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2, color: themeColor)), const SizedBox(width: 8), Text("Escribiendo...", style: const TextStyle(color: Colors.white38, fontSize: 11))]));
                                 final msg = reversedMessages[index - 1];
-                                return ChatBubble(message: msg, botThemeColor: themeColor, isDarkMode: isDarkMode);
+                                return ChatBubble(message: msg, botThemeColor: themeColor, isDarkMode: forceDark);
                               } 
-                              return ChatBubble(message: reversedMessages[index], botThemeColor: themeColor, isDarkMode: isDarkMode);
+                              return ChatBubble(message: reversedMessages[index], botThemeColor: themeColor, isDarkMode: forceDark);
                             },
                           ),
                         ),
@@ -213,7 +217,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
                           decoration: BoxDecoration(
                             color: inputFill, 
                             borderRadius: BorderRadius.circular(40), 
-                            border: Border.all(color: borderColor.withOpacity(isDarkMode ? 0.5 : 0.2)),
+                            border: Border.all(color: borderColor.withOpacity(0.5)),
                           ),
                           child: Row(
                             children: [
@@ -223,11 +227,13 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
                                   controller: _textController,
                                   enabled: isOnline,
                                   onSubmitted: (_) => isOnline ? _sendMessage() : null,
-                                  style: TextStyle(color: isDarkMode ? Colors.white : Colors.black, fontSize: 14),
+                                  // Texto siempre blanco
+                                  style: const TextStyle(color: Colors.white, fontSize: 14),
                                   cursorColor: themeColor,
                                   decoration: InputDecoration(
                                     hintText: isOnline ? "Escribe un mensaje..." : "Sin conexión",
-                                    hintStyle: TextStyle(color: isDarkMode ? Colors.white38 : Colors.black38, fontSize: 14),
+                                    // Hint gris claro
+                                    hintStyle: const TextStyle(color: Colors.white38, fontSize: 14),
                                     border: InputBorder.none,
                                     contentPadding: const EdgeInsets.symmetric(vertical: 14),
                                     isDense: true,
@@ -252,7 +258,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
                     ],
                   ),
 
-                  // BANNER DE CONECTIVIDAD (AHORA SÍ INTEGRADO)
+                  // BANNER DE CONECTIVIDAD
                   _ConnectivityBanner(isOnline: isOnline),
                 ],
               ),

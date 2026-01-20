@@ -19,18 +19,18 @@
   <link rel="manifest" href="manifest.json">
 
   <style>
-    /* CSS CRÍTICO: Transparencia absoluta desde el arranque */
+    /* RESET ABSOLUTO: Elimina márgenes y barras de scroll */
     html, body {
       height: 100%;
+      width: 100%;
       margin: 0;
       padding: 0;
-      background-color: transparent !important;
+      /* Importante: Dejar que CanvasKit maneje el color, no CSS */
+      background: transparent; 
       overflow: hidden;
-    }
-    
-    /* Asegura que el canvas no tenga color base */
-    flt-glass-pane {
-      background-color: transparent !important;
+      /* Mejora la nitidez del texto en WebGL */
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
   </style>
 </head>
@@ -39,13 +39,13 @@
   
   <script>
     window.addEventListener('load', function(ev) {
-      // Configuración de arranque
       _flutter.loader.loadEntrypoint({
         onEntrypointLoaded: async function(engineInitializer) {
           
           let appRunner = await engineInitializer.initializeEngine({
-            // 🚨 FORZAR RENDIMIENTO Y TRANSPARENCIA 🚨
+            // 🚨 CONFIGURACIÓN VITAL PARA SOLID NO-GHOSTING 🚨
             renderer: "canvaskit", 
+            // Esto asegura que el canvas nazca transparente
             background_color: "0x00000000" 
           });
 

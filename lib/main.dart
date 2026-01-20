@@ -13,7 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // --- CONTROL DE VERSIÓN ---
-const String DEPLOY_VERSION = "INTENTO 15 (Double Layer Opacity)"; 
+const String DEPLOY_VERSION = "INTENTO 16 (Forced Sci-Fi Dark)"; 
 
 void main() {
   runZonedGuarded(() async {
