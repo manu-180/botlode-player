@@ -77,22 +77,13 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
     final isDarkMode = botConfig?.isDarkMode ?? true; 
     final isOnline = ref.watch(connectivityProvider).asData?.value ?? true;
 
-    // --- DISEÑO PREMIUM SÓLIDO ---
-    // Usamos gradientes opacos para simular el "vidrio" sin usar transparencia real.
-    final Gradient bgGradient = isDarkMode 
-        ? const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            // Gris azulado oscuro -> Negro Profundo (Da sensación tech)
-            colors: [Color(0xFF252730), Color(0xFF101012)], 
-          )
-        : const LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [Color(0xFFFFFFFF), Color(0xFFF0F2F5)], 
-          );
+    // --- COLOR SÓLIDO (GARANTÍA DE VISIBILIDAD) ---
+    // Usamos el color de tu referencia que funcionaba bien.
+    final Color solidBgColor = isDarkMode 
+        ? const Color(0xFF151515) // Negro Carbón Sólido
+        : const Color(0xFFFFFFFF); // Blanco Sólido
 
-    final Color inputFill = isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFFFFFFF);
+    final Color inputFill = isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFF2F2F2);
     final Color borderColor = isDarkMode ? Colors.white12 : Colors.black12;
     final Color sendButtonColor = isDarkMode ? themeColor : Colors.black;
 
@@ -119,11 +110,11 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
                 height: double.infinity,
                 clipBehavior: Clip.hardEdge, 
                 decoration: BoxDecoration(
-                  gradient: bgGradient, // <--- GRADIENTE PREMIUN AQUÍ
+                  color: solidBgColor, // <--- COLOR SÓLIDO (NO GRADIENTE)
                   borderRadius: BorderRadius.circular(28),
                   border: Border.all(color: borderColor, width: 1.0),
                   boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 40, offset: const Offset(0, 15))
+                    BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 30, offset: const Offset(0, 10))
                   ],
                 ),
                 child: Stack(
@@ -134,9 +125,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
                         Container(
                           height: 180,
                           width: double.infinity,
-                          decoration: BoxDecoration(
-                            gradient: bgGradient, // Continuidad visual
-                          ),
+                          color: solidBgColor, // Fondo de seguridad
                           child: Stack(
                             children: [
                               const Positioned.fill(
@@ -176,7 +165,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
                         // BODY
                         Expanded(
                           child: Container(
-                            decoration: BoxDecoration(gradient: bgGradient), // Fondo sólido en lista
+                            color: solidBgColor, // Fondo de seguridad
                             child: ListView.builder(
                               controller: _scrollController,
                               reverse: true,
@@ -196,7 +185,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
                         // INPUT
                         Container(
                           padding: EdgeInsets.fromLTRB(16, 10, 16, 16 + (isMobile ? MediaQuery.of(context).padding.bottom : 0)),
-                          decoration: BoxDecoration(gradient: bgGradient), // Fondo sólido en input
+                          color: solidBgColor, // Fondo de seguridad
                           child: Container(
                             decoration: BoxDecoration(
                               color: inputFill, 
@@ -231,7 +220,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
                       ],
                     ),
 
-                    // BANNER DE CONECTIVIDAD
+                    // BANNER
                     _ConnectivityBanner(isOnline: isOnline),
                   ],
                 ),

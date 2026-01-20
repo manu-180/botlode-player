@@ -44,15 +44,13 @@ class _FloatingHeadWidgetState extends ConsumerState<FloatingHeadWidget> with Si
   void _onTick(Duration elapsed) {
     if (_lookXInput == null || _lookYInput == null) return;
 
-    // --- FÍSICA DE OJOS PERSONALIZADA ---
-    // Tracking (Mouse cerca): 0.3 -> Rápido pero orgánico.
-    // Idle (Mouse lejos): 0.02 -> Vuelta al centro ultra-lenta (cinemática).
-    final double smoothFactor = _isTracking ? 0.3 : 0.02;
+    // --- FÍSICA OPTIMIZADA ---
+    // Tracking = 1.0 (Instantáneo). Sin delay para seguir el mouse.
+    // Idle = 0.02 (Muy lento). Efecto cinemático al volver al centro.
+    final double smoothFactor = _isTracking ? 1.0 : 0.02;
 
-    // --- CALIBRACIÓN DE ARCHIVO RIVE ---
-    // Como el FaceControl de tu archivo Rive está corrido, aplicamos un offset
-    // para "levantar" la mirada por defecto.
-    // Restamos 15 a Y para que mire más arriba.
+    // --- CALIBRACIÓN DE ARCHIVO ---
+    // Ajuste vertical para compensar el offset de tu archivo Rive
     double calibratedTargetY = _targetY - 15.0; 
     calibratedTargetY = calibratedTargetY.clamp(0.0, 100.0);
 

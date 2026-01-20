@@ -13,7 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // --- CONTROL DE VERSIÓN ---
-const String DEPLOY_VERSION = "INTENTO 8 (Design & Physics)"; 
+const String DEPLOY_VERSION = "INTENTO 9 (Solid Black Fix)"; 
 
 void main() {
   runZonedGuarded(() async {
@@ -103,7 +103,6 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
             ref.read(pointerPositionProvider.notifier).state = Offset(deltaX, deltaY);
             
             bool inBotZone = (mouseX > screenW - 130) && (mouseY > screenH - 130);
-            
             final currentHover = ref.read(isHoveredExternalProvider);
             if (inBotZone && !currentHover) {
                ref.read(isHoveredExternalProvider.notifier).state = true;
