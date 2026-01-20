@@ -13,7 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // --- CONTROL DE VERSIÓN (REBOOT) ---
-const String DEPLOY_VERSION = "INTENTO 1 (nueva version)"; 
+const String DEPLOY_VERSION = "INTENTO 1 (FORZADO MANUAL)";
 
 void main() {
   runZonedGuarded(() async {
