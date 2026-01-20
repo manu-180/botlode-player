@@ -12,21 +12,28 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-// --- CONTROL DE VERSIÓN ---
-const String DEPLOY_VERSION = "INTENTO 18 (Layout Crash Fix)"; 
+// --- CONTROL DE VERSIÓN (REBOOT) ---
+const String DEPLOY_VERSION = "INTENTO 1 (Visibilidad Forzada)"; 
 
 void main() {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
 
+    // 1. LOG DE VERSIÓN (CRÍTICO)
     print("==========================================");
     print("🛑 VERSIÓN DE DESPLIEGUE: $DEPLOY_VERSION");
     print("==========================================");
 
+    // 2. LOG DE CREDENCIALES
+    final url = AppConfig.supabaseUrl;
+    final key = AppConfig.supabaseAnonKey;
+    print("🔍 [DEBUG] URL Length: ${url.length}");
+    print("🔍 [DEBUG] KEY Length: ${key.length}");
+
     try {
       await Supabase.initialize(
-        url: AppConfig.supabaseUrl,
-        anonKey: AppConfig.supabaseAnonKey,
+        url: url,
+        anonKey: key,
         authOptions: const FlutterAuthClientOptions(
           authFlowType: AuthFlowType.implicit,
         ),
@@ -39,6 +46,7 @@ void main() {
     final uri = Uri.base;
     final urlBotId = uri.queryParameters['bot_id'];
     final finalBotId = urlBotId ?? AppConfig.fallbackBotId;
+    print("🤖 [INFO] Bot ID detectado: $finalBotId");
 
     runApp(
       ProviderScope(
@@ -77,6 +85,7 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
     try {
       html.document.body!.style.backgroundColor = 'transparent';
       html.document.documentElement!.style.backgroundColor = 'transparent';
+      print("🎨 [DEBUG] Fondo HTML forzado a transparente.");
     } catch (_) {}
 
     Future.delayed(const Duration(milliseconds: 500), () {
@@ -94,30 +103,26 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
       } 
       else if (data.startsWith('MOUSE_MOVE:')) {
         try {
+          // Lógica de mouse existente...
           final content = data.split(':')[1];
           final parts = content.split(',');
-          
           if (parts.length >= 4) {
-            double mouseX = double.parse(parts[0]);
-            double mouseY = double.parse(parts[1]);
-            double screenW = double.parse(parts[2]);
-            double screenH = double.parse(parts[3]);
-
-            double botCenterX = screenW - 111.0; 
-            double botCenterY = screenH - 111.0;
-
-            double deltaX = mouseX - botCenterX; 
-            double deltaY = mouseY - botCenterY;
-
-            ref.read(pointerPositionProvider.notifier).state = Offset(deltaX, deltaY);
-            
-            bool inBotZone = (mouseX > screenW - 130) && (mouseY > screenH - 130);
-            final currentHover = ref.read(isHoveredExternalProvider);
-            if (inBotZone && !currentHover) {
-               ref.read(isHoveredExternalProvider.notifier).state = true;
-            } else if (!inBotZone && currentHover) {
-               ref.read(isHoveredExternalProvider.notifier).state = false;
-            }
+             double mouseX = double.parse(parts[0]);
+             double mouseY = double.parse(parts[1]);
+             double screenW = double.parse(parts[2]);
+             double screenH = double.parse(parts[3]);
+             // ... cálculo de posición ...
+             double botCenterX = screenW - 111.0; 
+             double botCenterY = screenH - 111.0;
+             double deltaX = mouseX - botCenterX; 
+             double deltaY = mouseY - botCenterY;
+             ref.read(pointerPositionProvider.notifier).state = Offset(deltaX, deltaY);
+             
+             // Hover logic
+             bool inBotZone = (mouseX > screenW - 130) && (mouseY > screenH - 130);
+             final currentHover = ref.read(isHoveredExternalProvider);
+             if (inBotZone && !currentHover) ref.read(isHoveredExternalProvider.notifier).state = true;
+             else if (!inBotZone && currentHover) ref.read(isHoveredExternalProvider.notifier).state = false;
           }
         } catch (_) {}
       }
@@ -127,19 +132,13 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
   @override
   Widget build(BuildContext context) {
     ref.listen(isHoveredExternalProvider, (prev, isHovered) {
-      if (isHovered) {
-        _safePostMessage('HOVER_ENTER');
-      } else {
-        _safePostMessage('HOVER_EXIT');
-      }
+      if (isHovered) _safePostMessage('HOVER_ENTER');
+      else _safePostMessage('HOVER_EXIT');
     });
 
     ref.listen(chatOpenProvider, (prev, isOpen) {
-      if (!isOpen) {
-         _safePostMessage('CMD_CLOSE');
-      } else {
-         _safePostMessage('CMD_OPEN');
-      }
+      if (!isOpen) _safePostMessage('CMD_CLOSE');
+      else _safePostMessage('CMD_OPEN');
     });
 
     return MaterialApp(

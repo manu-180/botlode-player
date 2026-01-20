@@ -35,6 +35,9 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
 
     const double ghostPadding = 40.0;
 
+    // DEBUG (Como en tu ejemplo)
+    print("🎈 [DEBUG BUBBLE] Open: $isOpen | ConfigLoaded: ${botConfigAsync.hasValue}");
+
     return Stack(
       fit: StackFit.loose, 
       alignment: Alignment.bottomRight,
@@ -171,14 +174,13 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
                               mainAxisAlignment: MainAxisAlignment.center,
                               crossAxisAlignment: CrossAxisAlignment.end, 
                               children: [
-                                // NOMBRE MÁS GRANDE Y FUERTE
                                 Text(
                                   name, 
                                   textAlign: TextAlign.right, 
                                   style: TextStyle(
                                     color: textColor, 
-                                    fontWeight: FontWeight.w900, // Extra Bold
-                                    fontSize: 15 // Aumentado de 13 a 15
+                                    fontWeight: FontWeight.w900, 
+                                    fontSize: 15
                                   )
                                 ),
                                 Text(
