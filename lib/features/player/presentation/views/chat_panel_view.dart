@@ -65,21 +65,18 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
     final botConfig = ref.watch(botConfigProvider).asData?.value;
     final themeColor = botConfig?.themeColor ?? const Color(0xFFFFC000);
     
-    // --- FORZADO DE MODO OSCURO (SCI-FI STYLE) ---
-    // Ignoramos la config de Light Mode para evitar el "Flash Blanco".
-    // La estética debe ser inmersiva siempre.
+    // --- ESTÉTICA SCI-FI SÓLIDA ---
     const bool forceDark = true; 
-    
     final showOfflineAlert = botConfig?.showOfflineAlert ?? true;
     final isOnline = ref.watch(connectivityProvider).asData?.value ?? true;
 
-    // COLOR DEFINITIVO: Slate 800 (Gris Azulado Profundo)
-    // Se diferencia del negro (#000000) y del gris web (#1a1a1a)
-    const Color solidBgColor = Color(0xFF1E293B); 
-
-    const Color inputFill = Color(0xFF0F172A); // Slate 900
+    // DEFINICIÓN DE COLORES MANUAL
+    // Slate Oscuro -> Negro (Gradiente Vertical)
+    final Color bgTop = const Color(0xFF1E293B); 
+    final Color bgBottom = const Color(0xFF0F172A);
     
-    final Color borderColor = themeColor.withOpacity(0.4); // Borde de energía
+    const Color inputFill = Color(0xFF1E293B); // Un poco más claro que el fondo inferior
+    final Color borderColor = themeColor.withOpacity(0.4); 
 
     final Color sendButtonColor = themeColor;
     final reversedMessages = chatState.messages.reversed.toList();
@@ -103,10 +100,10 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
 
     return Theme(
       data: ThemeData(
-        brightness: Brightness.dark, // Forzamos Dark Theme
+        brightness: Brightness.dark,
         primaryColor: themeColor,
         scaffoldBackgroundColor: Colors.transparent, 
-        // Aseguramos que los textos sean legibles sobre fondo oscuro
+        // Textos siempre blancos
         textTheme: const TextTheme(
           bodyMedium: TextStyle(color: Colors.white),
           bodyLarge: TextStyle(color: Colors.white),
@@ -122,145 +119,151 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
         },
         child: LayoutBuilder(
           builder: (context, constraints) {
-            return Material(
-              color: solidBgColor, 
-              elevation: 20, 
-              shadowColor: const Color(0xFF000000).withOpacity(0.8),
-              surfaceTintColor: Colors.transparent, 
-              shape: RoundedRectangleBorder(
+            // --- FIX FINAL: CONTAINER EN LUGAR DE MATERIAL ---
+            // Usamos BoxDecoration para forzar el color, ignorando cualquier tema.
+            return Container(
+              decoration: BoxDecoration(
+                // GRADIENTE OPACO (No hay forma de que esto sea blanco)
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [bgTop, bgBottom],
+                ),
                 borderRadius: BorderRadius.circular(24),
-                side: BorderSide(color: borderColor, width: 1.5),
+                border: Border.all(color: borderColor, width: 1.5),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.8),
+                    blurRadius: 30,
+                    offset: const Offset(0, 15),
+                  )
+                ],
               ),
-              clipBehavior: Clip.antiAlias,
-              child: Stack(
-                children: [
-                  // FONDO SÓLIDO DE SEGURIDAD
-                  Positioned.fill(
-                    child: Container(color: solidBgColor),
-                  ),
-
-                  // CONTENIDO
-                  Column(
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(24),
+                // Usamos Material transparente solo para que funcionen los InkWell/Textfields hijos
+                child: Material(
+                  color: Colors.transparent, 
+                  type: MaterialType.transparency,
+                  child: Stack(
                     children: [
-                      // HEADER
-                      Container(
-                        height: 180,
-                        width: double.infinity,
-                        decoration: BoxDecoration(
-                          color: solidBgColor,
-                          border: Border(bottom: BorderSide(color: borderColor, width: 1)),
-                        ),
-                        child: Stack(
-                          children: [
-                            const Positioned.fill(
-                              child: Padding(
-                                padding: EdgeInsets.only(bottom: 20),
-                                child: BotAvatarWidget(), 
-                              ),
+                      Column(
+                        children: [
+                          // HEADER
+                          Container(
+                            height: 180,
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              // Fondo transparente para ver el gradiente del padre
+                              border: Border(bottom: BorderSide(color: borderColor.withOpacity(0.5), width: 1)),
                             ),
-                            Positioned(
-                              top: 16, right: 16,
+                            child: Stack(
+                              children: [
+                                const Positioned.fill(
+                                  child: Padding(
+                                    padding: EdgeInsets.only(bottom: 20),
+                                    child: BotAvatarWidget(), 
+                                  ),
+                                ),
+                                Positioned(
+                                  top: 16, right: 16,
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min, 
+                                    children: [
+                                      IconButton(
+                                        icon: const Icon(Icons.refresh_rounded), 
+                                        onPressed: () => ref.read(chatResetProvider)(),
+                                        color: Colors.white70,
+                                        tooltip: "Reiniciar",
+                                      ),
+                                      const SizedBox(width: 4),
+                                      IconButton(
+                                        icon: const Icon(Icons.close_rounded), 
+                                        onPressed: () => ref.read(chatOpenProvider.notifier).set(false),
+                                        color: Colors.white70,
+                                        tooltip: "Cerrar",
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                Positioned(
+                                  bottom: 12, left: 24,
+                                  child: StatusIndicator(isLoading: chatState.isLoading, isOnline: isOnline, mood: chatState.currentMood, isDarkMode: forceDark),
+                                ),
+                              ],
+                            ),
+                          ),
+                          
+                          // BODY (CHAT)
+                          Expanded(
+                            child: ListView.builder(
+                              controller: _scrollController,
+                              reverse: true,
+                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+                              physics: const BouncingScrollPhysics(),
+                              itemCount: reversedMessages.length + (chatState.isLoading ? 1 : 0),
+                              itemBuilder: (context, index) {
+                                if (chatState.isLoading) {
+                                  if (index == 0) return Padding(padding: const EdgeInsets.only(left: 16, top: 8, bottom: 20), child: Row(children: [SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2, color: themeColor)), const SizedBox(width: 8), Text("Escribiendo...", style: const TextStyle(color: Colors.white38, fontSize: 11))]));
+                                  final msg = reversedMessages[index - 1];
+                                  return ChatBubble(message: msg, botThemeColor: themeColor, isDarkMode: forceDark);
+                                } 
+                                return ChatBubble(message: reversedMessages[index], botThemeColor: themeColor, isDarkMode: forceDark);
+                              },
+                            ),
+                          ),
+                          
+                          // INPUT AREA
+                          Container(
+                            padding: EdgeInsets.fromLTRB(16, 12, 16, 16 + (isMobile ? MediaQuery.of(context).padding.bottom : 0)),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: inputFill, 
+                                borderRadius: BorderRadius.circular(40), 
+                                border: Border.all(color: borderColor.withOpacity(0.5)),
+                              ),
                               child: Row(
-                                mainAxisSize: MainAxisSize.min, 
                                 children: [
-                                  IconButton(
-                                    icon: const Icon(Icons.refresh_rounded), 
-                                    onPressed: () => ref.read(chatResetProvider)(),
-                                    color: Colors.white70,
-                                    tooltip: "Reiniciar",
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: TextField(
+                                      controller: _textController,
+                                      enabled: isOnline,
+                                      onSubmitted: (_) => isOnline ? _sendMessage() : null,
+                                      style: const TextStyle(color: Colors.white, fontSize: 14),
+                                      cursorColor: themeColor,
+                                      decoration: InputDecoration(
+                                        hintText: isOnline ? "Escribe un mensaje..." : "Sin conexión",
+                                        hintStyle: const TextStyle(color: Colors.white38, fontSize: 14),
+                                        border: InputBorder.none,
+                                        contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                                        isDense: true,
+                                      ),
+                                    ),
+                                  ),
+                                  AnimatedOpacity(
+                                    duration: const Duration(milliseconds: 200),
+                                    opacity: isOnline ? 1.0 : 0.5,
+                                    child: IconButton(
+                                      onPressed: isOnline ? _sendMessage : null, 
+                                      icon: Icon(Icons.send_rounded, color: isOnline ? sendButtonColor : Colors.grey),
+                                      tooltip: "Enviar",
+                                      splashRadius: 24,
+                                    ),
                                   ),
                                   const SizedBox(width: 4),
-                                  IconButton(
-                                    icon: const Icon(Icons.close_rounded), 
-                                    onPressed: () => ref.read(chatOpenProvider.notifier).set(false),
-                                    color: Colors.white70,
-                                    tooltip: "Cerrar",
-                                  ),
                                 ],
                               ),
                             ),
-                            Positioned(
-                              bottom: 12, left: 24,
-                              child: StatusIndicator(isLoading: chatState.isLoading, isOnline: isOnline, mood: chatState.currentMood, isDarkMode: forceDark),
-                            ),
-                          ],
-                        ),
-                      ),
-                      
-                      // BODY (CHAT)
-                      Expanded(
-                        child: Container(
-                          color: solidBgColor, 
-                          child: ListView.builder(
-                            controller: _scrollController,
-                            reverse: true,
-                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-                            physics: const BouncingScrollPhysics(),
-                            itemCount: reversedMessages.length + (chatState.isLoading ? 1 : 0),
-                            itemBuilder: (context, index) {
-                              if (chatState.isLoading) {
-                                if (index == 0) return Padding(padding: const EdgeInsets.only(left: 16, top: 8, bottom: 20), child: Row(children: [SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2, color: themeColor)), const SizedBox(width: 8), Text("Escribiendo...", style: const TextStyle(color: Colors.white38, fontSize: 11))]));
-                                final msg = reversedMessages[index - 1];
-                                return ChatBubble(message: msg, botThemeColor: themeColor, isDarkMode: forceDark);
-                              } 
-                              return ChatBubble(message: reversedMessages[index], botThemeColor: themeColor, isDarkMode: forceDark);
-                            },
                           ),
-                        ),
+                        ],
                       ),
-                      
-                      // INPUT AREA
-                      Container(
-                        padding: EdgeInsets.fromLTRB(16, 12, 16, 16 + (isMobile ? MediaQuery.of(context).padding.bottom : 0)),
-                        color: solidBgColor, 
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: inputFill, 
-                            borderRadius: BorderRadius.circular(40), 
-                            border: Border.all(color: borderColor.withOpacity(0.5)),
-                          ),
-                          child: Row(
-                            children: [
-                              const SizedBox(width: 16),
-                              Expanded(
-                                child: TextField(
-                                  controller: _textController,
-                                  enabled: isOnline,
-                                  onSubmitted: (_) => isOnline ? _sendMessage() : null,
-                                  // Texto siempre blanco
-                                  style: const TextStyle(color: Colors.white, fontSize: 14),
-                                  cursorColor: themeColor,
-                                  decoration: InputDecoration(
-                                    hintText: isOnline ? "Escribe un mensaje..." : "Sin conexión",
-                                    // Hint gris claro
-                                    hintStyle: const TextStyle(color: Colors.white38, fontSize: 14),
-                                    border: InputBorder.none,
-                                    contentPadding: const EdgeInsets.symmetric(vertical: 14),
-                                    isDense: true,
-                                  ),
-                                ),
-                              ),
-                              AnimatedOpacity(
-                                duration: const Duration(milliseconds: 200),
-                                opacity: isOnline ? 1.0 : 0.5,
-                                child: IconButton(
-                                  onPressed: isOnline ? _sendMessage : null, 
-                                  icon: Icon(Icons.send_rounded, color: isOnline ? sendButtonColor : Colors.grey),
-                                  tooltip: "Enviar",
-                                  splashRadius: 24,
-                                ),
-                              ),
-                              const SizedBox(width: 4),
-                            ],
-                          ),
-                        ),
-                      ),
+
+                      // BANNER DE CONECTIVIDAD
+                      _ConnectivityBanner(isOnline: isOnline),
                     ],
                   ),
-
-                  // BANNER DE CONECTIVIDAD
-                  _ConnectivityBanner(isOnline: isOnline),
-                ],
+                ),
               ),
             );
           },

@@ -13,7 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // --- CONTROL DE VERSIÓN ---
-const String DEPLOY_VERSION = "INTENTO 16 (Forced Sci-Fi Dark)"; 
+const String DEPLOY_VERSION = "INTENTO 17 (Container Gradient Fix)"; 
 
 void main() {
   runZonedGuarded(() async {
