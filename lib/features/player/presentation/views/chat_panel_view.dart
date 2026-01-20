@@ -78,8 +78,11 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
     final isDarkMode = botConfig?.isDarkMode ?? true; 
     final isOnline = ref.watch(connectivityProvider).asData?.value ?? true;
 
-    // Colores Sólidos
-    final Color solidBgColor = isDarkMode ? const Color(0xFF181818) : const Color(0xFFF9F9F9);
+    // --- MODO SÓLIDO (Corrección de Transparencia) ---
+    final Color solidBgColor = isDarkMode 
+        ? const Color(0xFF181818) // NEGRO OPACO
+        : const Color(0xFFF9F9F9); // BLANCO OPACO
+
     final Color inputFill = isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFFFFFFF);
     final Color borderColor = isDarkMode ? Colors.white24 : Colors.black12;
     final Color sendButtonColor = isDarkMode ? themeColor : Colors.black;
@@ -107,16 +110,16 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
                 height: double.infinity,
                 clipBehavior: Clip.hardEdge, 
                 decoration: BoxDecoration(
-                  color: solidBgColor, 
+                  color: solidBgColor, // FONDO SÓLIDO APLICADO
                   borderRadius: BorderRadius.circular(28),
                   border: Border.all(color: borderColor, width: 1.0),
                   boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 30, offset: const Offset(0, 10))
+                    BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 10))
                   ],
                 ),
                 child: Stack(
                   children: [
-                    // CONTENIDO PRINCIPAL
+                    // CONTENIDO DEL CHAT
                     Column(
                       children: [
                         // HEADER
@@ -129,7 +132,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
                               const Positioned.fill(
                                 child: Padding(
                                   padding: EdgeInsets.only(bottom: 20),
-                                  child: BotAvatarWidget(), 
+                                  child: BotAvatarWidget(), // CUERPO ENTERO
                                 ),
                               ),
                               Positioned(
@@ -218,8 +221,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
                       ],
                     ),
 
-                    // FIX BANNER DE CONECTIVIDAD (Flotante encima de todo)
-                    // Se muestra si está offline o si acaba de reconectar
+                    // BANNER DE CONECTIVIDAD (Capa Superior)
                     _ConnectivityBanner(isOnline: isOnline),
                   ],
                 ),
@@ -232,7 +234,6 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
   }
 }
 
-// WIDGET MEJORADO TIPO "TOAST" FLOTANTE
 class _ConnectivityBanner extends StatefulWidget {
   final bool isOnline;
   const _ConnectivityBanner({required this.isOnline});
@@ -248,7 +249,6 @@ class _ConnectivityBannerState extends State<_ConnectivityBanner> {
   void didUpdateWidget(covariant _ConnectivityBanner oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!oldWidget.isOnline && widget.isOnline) {
-      // Reconexión detectada: Mostrar éxito 3 seg
       setState(() => _showSuccess = true);
       Future.delayed(const Duration(seconds: 3), () {
         if (mounted) setState(() => _showSuccess = false);
@@ -258,26 +258,14 @@ class _ConnectivityBannerState extends State<_ConnectivityBanner> {
 
   @override
   Widget build(BuildContext context) {
-    // Lógica: Mostrar si offline O si estamos mostrando el mensaje de éxito
     final bool isVisible = !widget.isOnline || _showSuccess;
-    
-    // Configuración visual según estado
-    final Color bgColor = !widget.isOnline 
-        ? Theme.of(context).colorScheme.error 
-        : Colors.green;
-        
-    final String text = !widget.isOnline 
-        ? "Sin conexión a internet" 
-        : "Conexión restablecida";
-        
-    final IconData icon = !widget.isOnline 
-        ? Icons.wifi_off_rounded 
-        : Icons.wifi_rounded;
+    final Color bgColor = !widget.isOnline ? Theme.of(context).colorScheme.error : Colors.green;
+    final String text = !widget.isOnline ? "Sin conexión a internet" : "Conexión restablecida";
+    final IconData icon = !widget.isOnline ? Icons.wifi_off_rounded : Icons.wifi_rounded;
 
     return AnimatedPositioned(
       duration: const Duration(milliseconds: 600),
-      curve: Curves.elasticOut, // Efecto rebote suave
-      // Si visible: baja a 20px del top. Si no: sube a -100px (fuera de vista)
+      curve: Curves.elasticOut, 
       top: isVisible ? 20 : -100, 
       left: 20,
       right: 20,

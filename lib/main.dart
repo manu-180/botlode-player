@@ -13,7 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // --- CONTROL DE VERSIÓN ---
-const String DEPLOY_VERSION = "INTENTO 2"; 
+const String DEPLOY_VERSION = "INTENTO 3"; 
 
 void main() {
   runZonedGuarded(() async {
@@ -21,7 +21,6 @@ void main() {
 
     print("==========================================");
     print("🛑 VERSIÓN DE DESPLIEGUE: $DEPLOY_VERSION");
-    print("📂 ASSET RIVE ESPERADO: ${AppConfig.riveFileName}");
     print("==========================================");
 
     try {
@@ -45,7 +44,7 @@ void main() {
       ProviderScope(
         overrides: [
           currentBotIdProvider.overrideWithValue(finalBotId),
-          // FORZAMOS QUE EL HOVER EMPIECE EN FALSO
+          // Empezamos sin hover
           isHoveredExternalProvider.overrideWith((ref) => false),
         ],
         child: const BotPlayerApp(),
@@ -95,24 +94,21 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
             double mouseX = double.parse(parts[0]);
             double mouseY = double.parse(parts[1]);
             
-            // Actualizamos posición de ojos
+            // 1. Ojos siempre siguen al mouse (Global)
             ref.read(pointerPositionProvider.notifier).state = Offset(mouseX, mouseY);
             
-            // LÓGICA DE HOVER EXTERNO:
-            // Si el mouse se mueve cerca de la esquina inferior derecha (donde está el bot), activamos hover.
-            // Si está lejos, desactivamos.
+            // 2. Lógica de Expansión (Solo si está MUY cerca)
             if (parts.length >= 4) {
               double screenW = double.parse(parts[2]);
               double screenH = double.parse(parts[3]);
               
-              // Zona del bot (aprox 200x200 px abajo a la derecha)
-              bool inBotZone = (mouseX > screenW - 250) && (mouseY > screenH - 250);
+              // ZONA AJUSTADA: 130px desde la esquina (Tamaño burbuja + margen pequeño)
+              // Antes era 250px, por eso se abría antes de tiempo.
+              bool inBotZone = (mouseX > screenW - 130) && (mouseY > screenH - 130);
               
-              // Solo actualizamos si cambia, para no spammear builds
               final currentHover = ref.read(isHoveredExternalProvider);
               if (inBotZone != currentHover) {
                  ref.read(isHoveredExternalProvider.notifier).state = inBotZone;
-                 print("🖱️ [DEBUG] Hover Zone: $inBotZone");
               }
             }
           }

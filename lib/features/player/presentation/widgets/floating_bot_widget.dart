@@ -4,7 +4,7 @@ import 'dart:math' as math;
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
 import 'package:botlode_player/features/player/presentation/views/chat_panel_view.dart';
-import 'package:botlode_player/features/player/presentation/widgets/rive_avatar.dart';
+import 'package:botlode_player/features/player/presentation/widgets/floating_head_widget.dart'; // IMPORTANTE: Importar la cabeza
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -29,11 +29,10 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     final botConfigAsync = ref.watch(botConfigProvider);
     final isHovered = ref.watch(isHoveredExternalProvider);
 
-    // FIX ALTURA: Calculamos el espacio disponible real
+    // ALTURA DINÁMICA SEGURA
     final screenSize = MediaQuery.of(context).size;
     final isMobile = screenSize.width < 600;
-    
-    // Le restamos 120px (espacio arriba y burbuja abajo) para que NO toque el borde superior
+    // Restamos 120px para que NO toque el techo
     final double safeHeight = (screenSize.height - 120.0).clamp(400.0, 800.0);
 
     const double ghostPadding = 40.0;
@@ -67,7 +66,7 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
                 curve: isOpen ? Curves.easeOutBack : Curves.easeInCubic, 
                 child: ConstrainedBox(
                   constraints: BoxConstraints(
-                    maxHeight: safeHeight, // <--- ALTURA SEGURA APLICADA
+                    maxHeight: safeHeight, // Altura corregida
                     maxWidth: isMobile ? double.infinity : 380
                   ),
                   child: const ChatPanelView(),
@@ -77,7 +76,7 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
           ),
         ),
 
-        // BOTÓN FLOTANTE (BURBUJA)
+        // BURBUJA
         Positioned(
           bottom: ghostPadding, right: ghostPadding,
           child: IgnorePointer(
@@ -94,14 +93,13 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
                 },
                 child: MouseRegion(
                   cursor: SystemMouseCursors.click,
-                  // El hover local también activa la expansión
                   onEnter: (_) => ref.read(isHoveredExternalProvider.notifier).state = true,
                   onExit: (_) => ref.read(isHoveredExternalProvider.notifier).state = false,
                   child: botConfigAsync.when(
                     loading: () => _buildFloatingButton(isHovered: false, name: "...", color: Colors.grey, subtext: "...", isDarkMode: true),
                     error: (err, stack) => _buildFloatingButton(isHovered: false, name: "OFFLINE", color: Colors.red, subtext: "Error", isDarkMode: true),
                     data: (config) => _buildFloatingButton(
-                      isHovered: isHovered, // ESTADO CONTROLADO
+                      isHovered: isHovered, 
                       name: config.name.toUpperCase(), 
                       color: config.themeColor,
                       subtext: "¿En qué te ayudo?",
@@ -127,8 +125,6 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     const double closedSize = 72.0; 
     const double headSize = 58.0;    
     
-    // Si NO hay hover, el ancho es closedSize (círculo).
-    // Si HAY hover, calculamos el ancho del texto.
     int maxChars = math.max(name.length, subtext.length);
     double calculatedWidth = 120.0 + (maxChars * 9.0);
     double targetWidth = isHovered ? calculatedWidth.clamp(220.0, 380.0) : closedSize;
@@ -139,7 +135,7 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 400),
       curve: Curves.easeOutCubic, 
-      width: targetWidth, // <--- ANCHO DINÁMICO
+      width: targetWidth, 
       height: closedSize, 
       clipBehavior: Clip.antiAlias, 
       decoration: BoxDecoration(
@@ -153,12 +149,12 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          // TEXTO EXPANSIBLE
+          // TEXTO
           Flexible(
             fit: FlexFit.loose,
             child: AnimatedOpacity(
               duration: const Duration(milliseconds: 200),
-              opacity: isHovered ? 1.0 : 0.0, // Solo visible si hover
+              opacity: isHovered ? 1.0 : 0.0, 
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 physics: const NeverScrollableScrollPhysics(),
@@ -179,7 +175,7 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
             ),
           ),
           
-          // CABEZA DEL ROBOT
+          // CABEZA (CORREGIDO)
           Container(
             width: headSize, height: headSize,
             margin: const EdgeInsets.all(7), 
@@ -188,14 +184,9 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  Center(
-                    child: Icon(
-                      Icons.smart_toy_rounded, 
-                      color: textColor.withOpacity(0.5), 
-                      size: 30
-                    )
-                  ),
-                  const BotAvatarWidget(), 
+                  Center(child: Icon(Icons.smart_toy_rounded, color: textColor.withOpacity(0.5), size: 30)),
+                  // AQUI LA CORRECCIÓN: Usamos FloatingHeadWidget
+                  const FloatingHeadWidget(), 
                 ],
               ),
             ), 
