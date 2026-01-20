@@ -49874,7 +49874,7 @@ var $async$$0=A.L(function(a0,a1){if(a0===1){p.push(a1)
 s=q}for(;;)switch(s){case 0:if($.an==null)A.aN9()
 $.an.toString
 A.hC(u.P)
-A.hC("\ud83d\uded1 VERSI\xd3N DE DESPLIEGUE: INTENTO 1 (Visibilidad Forzada)")
+A.hC("\ud83d\uded1 VERSI\xd3N DE DESPLIEGUE: INTENTO 1 (nueva version)")
 A.hC(u.P)
 o="https://gfvslxtqmjrelrugrcfp.supabase.co"
 n="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdmdnNseHRxbWpyZWxydWdyY2ZwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg0MzkwMjUsImV4cCI6MjA4NDAxNTAyNX0.sjGjwMXpdA6ztW4D61NViMnJPiI3fgKtt1vXGwLdZm0"
@@ -49928,7 +49928,7 @@ A.aKd.prototype={
 $1(a){return!1},
 $S:229}
 A.aKh.prototype={
-$2(a,b){A.hC("\ud83d\udd25 CRASH FATAL (INTENTO 1 (Visibilidad Forzada)): "+A.l(a))},
+$2(a,b){A.hC("\ud83d\udd25 CRASH FATAL (INTENTO 1 (nueva version)): "+A.l(a))},
 $S:30}
 A.DR.prototype={
 aF(){return new A.a0N()}}
@@ -49955,7 +49955,7 @@ p=A.rE(B.V,q,q,q,q,q)
 s=A.b5n(A.rE(B.V,q,q,q,q,q).ok.auZ(B.j,B.j))
 r=A.aE(13,B.j.B()>>>16&255,B.j.B()>>>8&255,B.j.B()&255)
 r=A.aRc(new A.j7(4,A.hl(12),B.mP),q,B.GY,q,new A.j7(4,A.hl(12),B.mP),r,!0,new A.j7(4,A.hl(12),B.CK),A.fH(q,q,A.aE(B.d.aD(76.5),B.j.B()>>>16&255,B.j.B()>>>8&255,B.j.B()&255),q,q,q,q,q,q,q,q,q,q,q,q,q,q,!0,q,q,q,q,q,q,q,q))
-return new A.GQ(B.Hl,new A.azF(),"BotLode Player (INTENTO 1 (Visibilidad Forzada))",p.axf(B.Ey,new A.yJ(A.b38(B.bD,0,B.l,B.GZ,new A.en(A.hl(12),B.o),q,B.UH)),B.oK,r,B.bD,B.nL,s).ax_(B.G,B.G),!1,q)}}
+return new A.GQ(B.Hl,new A.azF(),"BotLode Player (INTENTO 1 (nueva version))",p.axf(B.Ey,new A.yJ(A.b38(B.bD,0,B.l,B.GZ,new A.en(A.hl(12),B.o),q,B.UH)),B.oK,r,B.bD,B.nL,s).ax_(B.G,B.G),!1,q)}}
 A.azG.prototype={
 $0(){this.a.xl("CMD_READY")},
 $S:10}
