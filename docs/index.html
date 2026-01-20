@@ -23,7 +23,7 @@
       height: 100%;
       margin: 0;
       padding: 0;
-      background-color: transparent !important; /* <--- IMPORTANTE */
+      background-color: transparent !important;
       overflow: hidden;
     }
     
@@ -45,11 +45,11 @@
           
           // CONFIGURACIÓN MAESTRA DE TRANSPARENCIA
           let appRunner = await engineInitializer.initializeEngine({
-            // Renderer automático (HTML en móviles, CanvasKit en PC)
-            renderer: "auto",
+            // 🚨 CAMBIO CRÍTICO: FORZAR CANVAS KIT 🚨
+            // Esto obliga a usar WebGL. Los colores serán sólidos y perfectos.
+            renderer: "canvaskit", 
             
             // EL SECRETO: ARGB Hexadecimal para Transparencia Total
-            // 0x (Prefijo) + 00 (Alpha 0) + 000000 (Color Negro)
             background_color: "0x00000000" 
           });
 

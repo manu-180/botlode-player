@@ -49842,7 +49842,7 @@ var $async$$0=A.L(function(a,b){if(a===1){p.push(b)
 s=q}for(;;)switch(s){case 0:if($.an==null)A.aN2()
 $.an.toString
 A.nC(u.P)
-A.nC("\ud83d\uded1 VERSI\xd3N DE DESPLIEGUE: INTENTO 10 (Solid + Cursor Fix)")
+A.nC("\ud83d\uded1 VERSI\xd3N DE DESPLIEGUE: INTENTO 12 (Solid + Cursor Fix)")
 A.nC(u.P)
 q=3
 s=6
@@ -49891,7 +49891,7 @@ A.aK6.prototype={
 $1(a){return!1},
 $S:229}
 A.aKa.prototype={
-$2(a,b){A.nC("\ud83d\udd25 CRASH FATAL (INTENTO 10 (Solid + Cursor Fix)): "+A.l(a))},
+$2(a,b){A.nC("\ud83d\udd25 CRASH FATAL (INTENTO 12 (Solid + Cursor Fix)): "+A.l(a))},
 $S:30}
 A.DQ.prototype={
 aF(){return new A.a0P()}}
@@ -49913,7 +49913,7 @@ p=A.rE(B.V,q,q,q,q)
 s=A.b5h(A.rE(B.V,q,q,q,q).ok.av1(B.j,B.j))
 r=A.aE(13,B.j.B()>>>16&255,B.j.B()>>>8&255,B.j.B()&255)
 r=A.aR6(new A.j5(4,A.hi(12),B.mP),q,B.GT,q,new A.j5(4,A.hi(12),B.mP),r,!0,new A.j5(4,A.hi(12),B.CI),A.hS(q,q,A.aE(B.d.aG(76.5),B.j.B()>>>16&255,B.j.B()>>>8&255,B.j.B()&255),q,q,q,q,q,q,q,q,q,q,q,q,q,q,!0,q,q,q,q,q,q,q,q))
-return new A.GP(B.Hg,new A.azC(),"BotLode Player (INTENTO 10 (Solid + Cursor Fix))",p.axi(B.Ev,new A.yI(A.b32(B.bD,0,B.l,B.GU,new A.ed(A.hi(12),B.p),q,B.UC)),B.oM,r,B.bD,B.nL,s).ax2(B.G,B.G),!1,q)}}
+return new A.GP(B.Hg,new A.azC(),"BotLode Player (INTENTO 12 (Solid + Cursor Fix))",p.axi(B.Ev,new A.yI(A.b32(B.bD,0,B.l,B.GU,new A.ed(A.hi(12),B.p),q,B.UC)),B.oM,r,B.bD,B.nL,s).ax2(B.G,B.G),!1,q)}}
 A.azD.prototype={
 $0(){var s=A.Pi(window.parent)
 if(s!=null)J.D9(s,"CMD_READY","*")},
