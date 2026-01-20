@@ -74,18 +74,18 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
     final isMobile = MediaQuery.of(context).size.width < 600;
     final botConfig = ref.watch(botConfigProvider).asData?.value;
     final themeColor = botConfig?.themeColor ?? const Color(0xFFFFC000);
-    
-    // Forzamos modo oscuro por defecto si no hay config
     final isDarkMode = botConfig?.isDarkMode ?? true; 
     final isOnline = ref.watch(connectivityProvider).asData?.value ?? true;
 
-    // --- COLORES SÓLIDOS DEPURADOS (TU LÓGICA) ---
+    // --- COLORES OPACOS Y DE ALTO CONTRASTE ---
+    // Usamos 0xFF222222 en lugar de 181818 para que se diferencie del fondo de tu web (#1a1a1a)
     final Color solidBgColor = isDarkMode 
-        ? const Color(0xFF181818)  // Negro Casi Puro (Sólido)
-        : const Color(0xFFF9F9F9); // Blanco Casi Puro (Sólido)
+        ? const Color(0xFF222222) 
+        : const Color(0xFFFFFFFF); 
 
-    final Color inputFill = isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFFFFFFF);
-    final Color borderColor = isDarkMode ? Colors.white24 : Colors.black12;
+    final Color inputFill = isDarkMode ? const Color(0xFF333333) : const Color(0xFFF2F2F2);
+    // Borde blanco sutil para delimitar el chat del fondo negro de la web
+    final Color borderColor = isDarkMode ? Colors.white.withOpacity(0.15) : Colors.black12;
     final Color sendButtonColor = isDarkMode ? themeColor : Colors.black;
 
     final reversedMessages = chatState.messages.reversed.toList();
@@ -106,20 +106,16 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
           opacity: _opacityAnimation,
           child: LayoutBuilder(
             builder: (context, constraints) {
-              return Container(
-                width: double.infinity,
-                height: double.infinity,
-                clipBehavior: Clip.hardEdge, 
-                // AQUÍ ESTÁ LA CLAVE: Decoration sólida 100%
-                decoration: BoxDecoration(
-                  color: solidBgColor, // <--- ESTO DEBE SER OPACO
+              // --- CAMBIO CLAVE: MATERIAL WIDGET ---
+              // El Material fuerza al motor a pintar una "hoja" sólida.
+              return Material(
+                color: solidBgColor, // Color base del material (Sólido)
+                elevation: 10, // Sombra real
+                shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(28),
-                  border: Border.all(color: borderColor, width: 1.0),
-                  boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 30, offset: const Offset(0, 10))
-                  ],
+                  side: BorderSide(color: borderColor, width: 1.5), // Borde visible
                 ),
-                // Usamos STACK para poder poner el Banner de Wifi encima
+                clipBehavior: Clip.antiAlias,
                 child: Stack(
                   children: [
                     Column(
@@ -128,7 +124,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
                         Container(
                           height: 180,
                           width: double.infinity,
-                          color: solidBgColor, // Fondo extra por seguridad
+                          color: solidBgColor, 
                           child: Stack(
                             children: [
                               const Positioned.fill(
@@ -168,7 +164,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
                         // BODY
                         Expanded(
                           child: Container(
-                            color: solidBgColor, // Fondo extra por seguridad
+                            color: solidBgColor, 
                             child: ListView.builder(
                               controller: _scrollController,
                               reverse: true,
@@ -188,7 +184,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
                         // INPUT
                         Container(
                           padding: EdgeInsets.fromLTRB(16, 10, 16, 16 + (isMobile ? MediaQuery.of(context).padding.bottom : 0)),
-                          color: solidBgColor, // Fondo extra por seguridad
+                          color: solidBgColor, 
                           child: Container(
                             decoration: BoxDecoration(
                               color: inputFill, 
@@ -223,7 +219,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
                       ],
                     ),
 
-                    // BANNER DE CONECTIVIDAD (Flotante encima del sólido)
+                    // BANNER DE CONECTIVIDAD
                     _ConnectivityBanner(isOnline: isOnline),
                   ],
                 ),

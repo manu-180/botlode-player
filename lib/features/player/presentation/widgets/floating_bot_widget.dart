@@ -4,7 +4,7 @@ import 'dart:math' as math;
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
 import 'package:botlode_player/features/player/presentation/views/chat_panel_view.dart';
-import 'package:botlode_player/features/player/presentation/widgets/floating_head_widget.dart'; // IMPORTANTE: CABEZA
+import 'package:botlode_player/features/player/presentation/widgets/floating_head_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -39,7 +39,6 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
       fit: StackFit.loose, 
       alignment: Alignment.bottomRight,
       children: [
-        // CAPA DE CIERRE
         if (isOpen)
           Positioned.fill(
             child: GestureDetector(
@@ -75,13 +74,12 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
           ),
         ),
 
-        // BURBUJA FLOTANTE (Interactiva + Cursor)
+        // BURBUJA FLOTANTE
         Positioned(
           bottom: ghostPadding, right: ghostPadding,
           child: IgnorePointer(
             ignoring: isOpen, 
             child: MouseRegion(
-              // Control externo de Hover
               onEnter: (_) => ref.read(isHoveredExternalProvider.notifier).state = true,
               onExit: (_) => ref.read(isHoveredExternalProvider.notifier).state = false,
               child: AnimatedScale(
@@ -125,9 +123,7 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     final Color textColor = _getContrastingTextColor(color);
     final Color subTextColor = textColor.withOpacity(0.85);
 
-    // --- FIX CURSOR + TRACKING LOCAL ---
     return MouseRegion(
-      // Tracking local de ojos cuando estamos sobre el botón
       onHover: (event) {
         final double headCenterX = targetWidth - 36.0;
         final double headCenterY = 36.0;
@@ -148,7 +144,6 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
              BoxShadow(color: Colors.black.withOpacity(0.25), blurRadius: 10, offset: const Offset(0, 4)),
           ], 
         ),
-        // MATERIAL + INKWELL PARA CURSOR Y CLICKS
         child: Material(
           color: Colors.transparent,
           borderRadius: BorderRadius.circular(closedSize / 2),
@@ -161,7 +156,6 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                // TEXTO
                 Flexible(
                   fit: FlexFit.loose,
                   child: AnimatedOpacity(
@@ -177,8 +171,24 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
                               mainAxisAlignment: MainAxisAlignment.center,
                               crossAxisAlignment: CrossAxisAlignment.end, 
                               children: [
-                                Text(name, textAlign: TextAlign.right, style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 13)),
-                                Text(subtext, textAlign: TextAlign.right, style: TextStyle(color: subTextColor, fontSize: 10)),
+                                // NOMBRE MÁS GRANDE Y FUERTE
+                                Text(
+                                  name, 
+                                  textAlign: TextAlign.right, 
+                                  style: TextStyle(
+                                    color: textColor, 
+                                    fontWeight: FontWeight.w900, // Extra Bold
+                                    fontSize: 15 // Aumentado de 13 a 15
+                                  )
+                                ),
+                                Text(
+                                  subtext, 
+                                  textAlign: TextAlign.right, 
+                                  style: TextStyle(
+                                    color: subTextColor, 
+                                    fontSize: 10
+                                  )
+                                ),
                               ],
                             ),
                           )
@@ -187,7 +197,6 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
                   ),
                 ),
                 
-                // CABEZA (USANDO FLOATING HEAD WIDGET)
                 Container(
                   width: headSize, height: headSize,
                   margin: const EdgeInsets.all(7), 
@@ -196,7 +205,7 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
                       fit: StackFit.expand,
                       children: [
                         Center(child: Icon(Icons.smart_toy_rounded, color: textColor.withOpacity(0.5), size: 30)),
-                        const FloatingHeadWidget(), // <--- CORREGIDO AQUÍ
+                        const FloatingHeadWidget(), 
                       ],
                     ),
                   ), 
