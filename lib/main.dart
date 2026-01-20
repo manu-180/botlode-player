@@ -12,7 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String DEPLOY_VERSION = "INTENTO 5 (Eyes + Cursor)"; 
+const String DEPLOY_VERSION = "INTENTO 6 (Calibración Ojos)"; 
 
 void main() {
   runZonedGuarded(() async {
@@ -92,22 +92,23 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
             double screenW = double.parse(parts[2]);
             double screenH = double.parse(parts[3]);
 
-            // --- CÁLCULO DE OJOS RELATIVO ---
-            // Asumimos que el bot está en la esquina inferior derecha.
-            // Posición aproximada del centro del bot:
-            double botCenterX = screenW - 60.0; 
-            double botCenterY = screenH - 60.0;
+            // --- CALIBRACIÓN DE CENTRO ---
+            // CSS bottom/right: 35px
+            // Flutter Padding: 40px
+            // Mitad del botón (72/2): 36px
+            // Total desde el borde: 35 + 40 + 36 = 111px
+            double botCenterX = screenW - 111.0; 
+            double botCenterY = screenH - 111.0;
 
-            // Calculamos la distancia (Delta) desde el mouse hasta el bot
+            // Delta: Distancia del mouse al centro exacto de la cara
             double deltaX = mouseX - botCenterX; 
             double deltaY = mouseY - botCenterY;
 
-            // Guardamos el Delta en lugar de la posición absoluta
             ref.read(pointerPositionProvider.notifier).state = Offset(deltaX, deltaY);
             
-            // --- DETECCIÓN DE HOVER ---
-            // Zona de activación: 110px desde la esquina
-            bool inBotZone = (mouseX > screenW - 110) && (mouseY > screenH - 110);
+            // --- HOVER ---
+            // Zona de activación un poco más amplia para que no parpadee
+            bool inBotZone = (mouseX > screenW - 130) && (mouseY > screenH - 130);
             
             final currentHover = ref.read(isHoveredExternalProvider);
             if (inBotZone && !currentHover) {
