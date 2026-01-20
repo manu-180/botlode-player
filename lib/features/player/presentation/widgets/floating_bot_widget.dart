@@ -16,14 +16,27 @@ class FloatingBotWidget extends ConsumerStatefulWidget {
 }
 
 class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
+  
+  Color _getContrastingTextColor(Color background) {
+    return ThemeData.estimateBrightnessForColor(background) == Brightness.dark
+        ? Colors.white
+        : Colors.black;
+  }
+
   @override
   Widget build(BuildContext context) {
     final isOpen = ref.watch(chatOpenProvider);
     final botConfigAsync = ref.watch(botConfigProvider);
     final isHovered = ref.watch(isHoveredExternalProvider);
 
-    // DEBUG:
-    print("🎈 [DEBUG BUBBLE] Open: $isOpen | ConfigLoaded: ${botConfigAsync.hasValue}");
+    // FIX ALTURA: Calculamos el espacio disponible real
+    final screenSize = MediaQuery.of(context).size;
+    final isMobile = screenSize.width < 600;
+    
+    // Le restamos 120px (espacio arriba y burbuja abajo) para que NO toque el borde superior
+    final double safeHeight = (screenSize.height - 120.0).clamp(400.0, 800.0);
+
+    const double ghostPadding = 40.0;
 
     return Stack(
       fit: StackFit.loose, 
@@ -38,6 +51,7 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
             ),
           ),
 
+        // PANEL DE CHAT
         Positioned(
           bottom: 0, right: 0,
           child: IgnorePointer(
@@ -45,22 +59,34 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
             child: AnimatedOpacity(
               duration: const Duration(milliseconds: 250),
               opacity: isOpen ? 1.0 : 0.0,
+              curve: Curves.easeOut,
               child: AnimatedScale(
                 scale: isOpen ? 1.0 : 0.9, 
+                alignment: Alignment.bottomRight,
                 duration: const Duration(milliseconds: 350),
-                child: const SizedBox(height: 700, width: 380, child: ChatPanelView()),
+                curve: isOpen ? Curves.easeOutBack : Curves.easeInCubic, 
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxHeight: safeHeight, // <--- ALTURA SEGURA APLICADA
+                    maxWidth: isMobile ? double.infinity : 380
+                  ),
+                  child: const ChatPanelView(),
+                ),
               ),
             ),
           ),
         ),
 
+        // BOTÓN FLOTANTE (BURBUJA)
         Positioned(
-          bottom: 40, right: 40,
+          bottom: ghostPadding, right: ghostPadding,
           child: IgnorePointer(
             ignoring: isOpen, 
             child: AnimatedScale(
               scale: isOpen ? 0.0 : 1.0, 
               duration: const Duration(milliseconds: 300),
+              curve: isOpen ? Curves.easeInBack : Curves.easeOutBack, 
+              alignment: Alignment.center,
               child: GestureDetector(
                 onTap: () {
                   ref.read(chatOpenProvider.notifier).set(true);
@@ -68,12 +94,19 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
                 },
                 child: MouseRegion(
                   cursor: SystemMouseCursors.click,
+                  // El hover local también activa la expansión
                   onEnter: (_) => ref.read(isHoveredExternalProvider.notifier).state = true,
                   onExit: (_) => ref.read(isHoveredExternalProvider.notifier).state = false,
                   child: botConfigAsync.when(
-                    loading: () => _buildCircle(Colors.grey, const Icon(Icons.more_horiz, color: Colors.white)),
-                    error: (err, stack) => _buildCircle(Colors.red, const Icon(Icons.error_outline, color: Colors.white)),
-                    data: (config) => _buildFloatingButton(isHovered, config.name, config.themeColor),
+                    loading: () => _buildFloatingButton(isHovered: false, name: "...", color: Colors.grey, subtext: "...", isDarkMode: true),
+                    error: (err, stack) => _buildFloatingButton(isHovered: false, name: "OFFLINE", color: Colors.red, subtext: "Error", isDarkMode: true),
+                    data: (config) => _buildFloatingButton(
+                      isHovered: isHovered, // ESTADO CONTROLADO
+                      name: config.name.toUpperCase(), 
+                      color: config.themeColor,
+                      subtext: "¿En qué te ayudo?",
+                      isDarkMode: config.isDarkMode,
+                    ),
                   ),
                 ),
               ),
@@ -84,42 +117,88 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     );
   }
 
-  Widget _buildCircle(Color color, Widget icon) {
-    return Container(
-      width: 72, height: 72,
-      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-      child: Center(child: icon),
-    );
-  }
-
-  Widget _buildFloatingButton(bool isHovered, String name, Color color) {
+  Widget _buildFloatingButton({
+    required bool isHovered,
+    required String name, 
+    required Color color, 
+    required String subtext,
+    required bool isDarkMode,
+  }) {
     const double closedSize = 72.0; 
+    const double headSize = 58.0;    
+    
+    // Si NO hay hover, el ancho es closedSize (círculo).
+    // Si HAY hover, calculamos el ancho del texto.
+    int maxChars = math.max(name.length, subtext.length);
+    double calculatedWidth = 120.0 + (maxChars * 9.0);
+    double targetWidth = isHovered ? calculatedWidth.clamp(220.0, 380.0) : closedSize;
+
+    final Color textColor = _getContrastingTextColor(color);
+    final Color subTextColor = textColor.withOpacity(0.85);
+
     return AnimatedContainer(
       duration: const Duration(milliseconds: 400),
-      width: isHovered ? 220.0 : closedSize, 
+      curve: Curves.easeOutCubic, 
+      width: targetWidth, // <--- ANCHO DINÁMICO
       height: closedSize, 
+      clipBehavior: Clip.antiAlias, 
       decoration: BoxDecoration(
         color: color, 
         borderRadius: BorderRadius.circular(closedSize / 2),
-        boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 10, offset: const Offset(0, 4))],
+        border: Border.all(color: Colors.white.withOpacity(0.15), width: 1.0),
+        boxShadow: [
+           BoxShadow(color: Colors.black.withOpacity(0.25), blurRadius: 10, offset: const Offset(0, 4)),
+        ], 
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          if (isHovered) 
-            Expanded(child: Text(name, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold))),
+          // TEXTO EXPANSIBLE
+          Flexible(
+            fit: FlexFit.loose,
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 200),
+              opacity: isHovered ? 1.0 : 0.0, // Solo visible si hover
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                physics: const NeverScrollableScrollPhysics(),
+                child: isHovered 
+                  ? Padding(
+                      padding: const EdgeInsets.only(left: 25, right: 12),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.end, 
+                        children: [
+                          Text(name, textAlign: TextAlign.right, style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 13)),
+                          Text(subtext, textAlign: TextAlign.right, style: TextStyle(color: subTextColor, fontSize: 10)),
+                        ],
+                      ),
+                    )
+                  : const SizedBox(), 
+              ), 
+            ),
+          ),
+          
+          // CABEZA DEL ROBOT
           Container(
-            width: 58, height: 58, margin: const EdgeInsets.all(7),
+            width: headSize, height: headSize,
+            margin: const EdgeInsets.all(7), 
             decoration: const BoxDecoration(shape: BoxShape.circle),
             child: ClipOval(
               child: Stack(
                 fit: StackFit.expand,
                 children: [
-                  Center(child: Icon(Icons.smart_toy_rounded, color: Colors.white.withOpacity(0.5), size: 30)),
+                  Center(
+                    child: Icon(
+                      Icons.smart_toy_rounded, 
+                      color: textColor.withOpacity(0.5), 
+                      size: 30
+                    )
+                  ),
                   const BotAvatarWidget(), 
                 ],
               ),
-            ),
+            ), 
           ),
         ],
       ),

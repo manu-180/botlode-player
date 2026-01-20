@@ -12,11 +12,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+// --- CONTROL DE VERSIÓN ---
+const String DEPLOY_VERSION = "INTENTO 2"; 
+
 void main() {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
 
-    // Inicio de Supabase con configuración segura
+    print("==========================================");
+    print("🛑 VERSIÓN DE DESPLIEGUE: $DEPLOY_VERSION");
+    print("📂 ASSET RIVE ESPERADO: ${AppConfig.riveFileName}");
+    print("==========================================");
+
     try {
       await Supabase.initialize(
         url: AppConfig.supabaseUrl,
@@ -25,9 +32,9 @@ void main() {
           authFlowType: AuthFlowType.implicit,
         ),
       );
+      print("🚀 [EXITO] Supabase conectado.");
     } catch (e) {
-      // Fallo silencioso controlado, la UI mostrará estado offline si es necesario
-      print("Supabase Init Error: $e");
+      print("🔥 [ERROR] Falló Supabase: $e");
     }
 
     final uri = Uri.base;
@@ -38,13 +45,15 @@ void main() {
       ProviderScope(
         overrides: [
           currentBotIdProvider.overrideWithValue(finalBotId),
+          // FORZAMOS QUE EL HOVER EMPIECE EN FALSO
+          isHoveredExternalProvider.overrideWith((ref) => false),
         ],
         child: const BotPlayerApp(),
       ),
     );
 
   }, (error, stack) {
-    print("CRASH: $error");
+    print("🔥 CRASH FATAL ($DEPLOY_VERSION): $error");
   });
 }
 
@@ -59,7 +68,6 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
   void initState() {
     super.initState();
     
-    // Configuración visual web
     try {
       html.document.body!.style.backgroundColor = 'transparent';
       html.document.documentElement!.style.backgroundColor = 'transparent';
@@ -69,7 +77,6 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
         html.window.parent?.postMessage('CMD_READY', '*');
     });
     
-    // Listener de mensajes (Iframe <-> HTML Padre)
     html.window.onMessage.listen((event) {
       if (event.data == null) return;
       final String data = event.data.toString();
@@ -81,29 +88,33 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
       } 
       else if (data.startsWith('MOUSE_MOVE:')) {
         try {
-          // Formato esperado: "MOUSE_MOVE:mouseX,mouseY,screenWidth,screenHeight"
           final content = data.split(':')[1];
           final parts = content.split(',');
           
           if (parts.length >= 2) {
             double mouseX = double.parse(parts[0]);
             double mouseY = double.parse(parts[1]);
-
-            // Si el HTML nos manda el tamaño de pantalla, podemos calcular la posición relativa
-            // Asumimos que el bot está abajo a la derecha.
-            if (parts.length == 4) {
-               // Lógica opcional de normalización si fuera necesaria
-               // Por ahora, pasamos las coordenadas crudas, RiveAvatar se encarga
-            }
-
-            // Actualizamos el provider que mueve los ojos
-            // NOTA: Restamos un offset para centrar la "mirada" en el widget
+            
+            // Actualizamos posición de ojos
             ref.read(pointerPositionProvider.notifier).state = Offset(mouseX, mouseY);
             
-            // Si el mouse se mueve, asumimos que estamos en "hover" activo
-            ref.read(isHoveredExternalProvider.notifier).state = true;
-            
-            // Debounce para quitar el hover si deja de moverse (opcional)
+            // LÓGICA DE HOVER EXTERNO:
+            // Si el mouse se mueve cerca de la esquina inferior derecha (donde está el bot), activamos hover.
+            // Si está lejos, desactivamos.
+            if (parts.length >= 4) {
+              double screenW = double.parse(parts[2]);
+              double screenH = double.parse(parts[3]);
+              
+              // Zona del bot (aprox 200x200 px abajo a la derecha)
+              bool inBotZone = (mouseX > screenW - 250) && (mouseY > screenH - 250);
+              
+              // Solo actualizamos si cambia, para no spammear builds
+              final currentHover = ref.read(isHoveredExternalProvider);
+              if (inBotZone != currentHover) {
+                 ref.read(isHoveredExternalProvider.notifier).state = inBotZone;
+                 print("🖱️ [DEBUG] Hover Zone: $inBotZone");
+              }
+            }
           }
         } catch (_) {}
       }
@@ -121,7 +132,7 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
     });
 
     return MaterialApp(
-      title: 'BotLode Player',
+      title: 'BotLode Player ($DEPLOY_VERSION)',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme.copyWith(
         canvasColor: Colors.transparent, 
