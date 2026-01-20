@@ -74,16 +74,15 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
     final isMobile = MediaQuery.of(context).size.width < 600;
     final botConfig = ref.watch(botConfigProvider).asData?.value;
     final themeColor = botConfig?.themeColor ?? const Color(0xFFFFC000);
-    
     final isDarkMode = botConfig?.isDarkMode ?? true; 
     final isOnline = ref.watch(connectivityProvider).asData?.value ?? true;
 
-    // --- MODO SÓLIDO (Corrección de Transparencia) ---
+    // --- MODO SÓLIDO DURO (FIX TRANSPARENCIA) ---
     final Color solidBgColor = isDarkMode 
-        ? const Color(0xFF181818) // NEGRO OPACO
-        : const Color(0xFFF9F9F9); // BLANCO OPACO
+        ? const Color(0xFF101010) // Casi negro total
+        : const Color(0xFFFFFFFF); // Blanco total
 
-    final Color inputFill = isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFFFFFFF);
+    final Color inputFill = isDarkMode ? const Color(0xFF252525) : const Color(0xFFF0F0F0);
     final Color borderColor = isDarkMode ? Colors.white24 : Colors.black12;
     final Color sendButtonColor = isDarkMode ? themeColor : Colors.black;
 
@@ -110,11 +109,11 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
                 height: double.infinity,
                 clipBehavior: Clip.hardEdge, 
                 decoration: BoxDecoration(
-                  color: solidBgColor, // FONDO SÓLIDO APLICADO
+                  color: solidBgColor, // FONDO SÓLIDO
                   borderRadius: BorderRadius.circular(28),
                   border: Border.all(color: borderColor, width: 1.0),
                   boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 10))
+                    BoxShadow(color: Colors.black.withOpacity(0.4), blurRadius: 30, offset: const Offset(0, 10))
                   ],
                 ),
                 child: Stack(
@@ -132,7 +131,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
                               const Positioned.fill(
                                 child: Padding(
                                   padding: EdgeInsets.only(bottom: 20),
-                                  child: BotAvatarWidget(), // CUERPO ENTERO
+                                  child: BotAvatarWidget(), 
                                 ),
                               ),
                               Positioned(
@@ -221,7 +220,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
                       ],
                     ),
 
-                    // BANNER DE CONECTIVIDAD (Capa Superior)
+                    // BANNER DE CONECTIVIDAD
                     _ConnectivityBanner(isOnline: isOnline),
                   ],
                 ),

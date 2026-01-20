@@ -4,7 +4,7 @@ import 'dart:math' as math;
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
 import 'package:botlode_player/features/player/presentation/views/chat_panel_view.dart';
-import 'package:botlode_player/features/player/presentation/widgets/floating_head_widget.dart'; // IMPORTANTE: Importar la cabeza
+import 'package:botlode_player/features/player/presentation/widgets/floating_head_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -29,10 +29,8 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     final botConfigAsync = ref.watch(botConfigProvider);
     final isHovered = ref.watch(isHoveredExternalProvider);
 
-    // ALTURA DINÁMICA SEGURA
     final screenSize = MediaQuery.of(context).size;
     final isMobile = screenSize.width < 600;
-    // Restamos 120px para que NO toque el techo
     final double safeHeight = (screenSize.height - 120.0).clamp(400.0, 800.0);
 
     const double ghostPadding = 40.0;
@@ -66,7 +64,7 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
                 curve: isOpen ? Curves.easeOutBack : Curves.easeInCubic, 
                 child: ConstrainedBox(
                   constraints: BoxConstraints(
-                    maxHeight: safeHeight, // Altura corregida
+                    maxHeight: safeHeight, 
                     maxWidth: isMobile ? double.infinity : 380
                   ),
                   child: const ChatPanelView(),
@@ -76,7 +74,7 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
           ),
         ),
 
-        // BURBUJA
+        // BOTÓN FLOTANTE (BURBUJA) - REINGENIERÍA UX
         Positioned(
           bottom: ghostPadding, right: ghostPadding,
           child: IgnorePointer(
@@ -86,15 +84,25 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
               duration: const Duration(milliseconds: 300),
               curve: isOpen ? Curves.easeInBack : Curves.easeOutBack, 
               alignment: Alignment.center,
-              child: GestureDetector(
-                onTap: () {
-                  ref.read(chatOpenProvider.notifier).set(true);
-                  html.window.parent?.postMessage('CMD_OPEN', '*');
+              
+              // 1. MOUSE REGION EXTERNA (Envuelve todo)
+              // Esto asegura que si la burbuja crece, el área de hover crece con ella.
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                onEnter: (_) {
+                   ref.read(isHoveredExternalProvider.notifier).state = true;
                 },
-                child: MouseRegion(
-                  cursor: SystemMouseCursors.click,
-                  onEnter: (_) => ref.read(isHoveredExternalProvider.notifier).state = true,
-                  onExit: (_) => ref.read(isHoveredExternalProvider.notifier).state = false,
+                onExit: (_) {
+                   ref.read(isHoveredExternalProvider.notifier).state = false;
+                },
+                
+                // 2. GESTURE DETECTOR INTERNO
+                // Ahora recibe clicks en toda la superficie
+                child: GestureDetector(
+                  onTap: () {
+                    ref.read(chatOpenProvider.notifier).set(true);
+                    html.window.parent?.postMessage('CMD_OPEN', '*');
+                  },
                   child: botConfigAsync.when(
                     loading: () => _buildFloatingButton(isHovered: false, name: "...", color: Colors.grey, subtext: "...", isDarkMode: true),
                     error: (err, stack) => _buildFloatingButton(isHovered: false, name: "OFFLINE", color: Colors.red, subtext: "Error", isDarkMode: true),
@@ -149,7 +157,7 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          // TEXTO
+          // TEXTO EXPANSIBLE
           Flexible(
             fit: FlexFit.loose,
             child: AnimatedOpacity(
@@ -175,7 +183,7 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
             ),
           ),
           
-          // CABEZA (CORREGIDO)
+          // CABEZA DEL ROBOT
           Container(
             width: headSize, height: headSize,
             margin: const EdgeInsets.all(7), 
@@ -185,7 +193,6 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
                 fit: StackFit.expand,
                 children: [
                   Center(child: Icon(Icons.smart_toy_rounded, color: textColor.withOpacity(0.5), size: 30)),
-                  // AQUI LA CORRECCIÓN: Usamos FloatingHeadWidget
                   const FloatingHeadWidget(), 
                 ],
               ),

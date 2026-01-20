@@ -13,7 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // --- CONTROL DE VERSIÓN ---
-const String DEPLOY_VERSION = "INTENTO 3"; 
+const String DEPLOY_VERSION = "INTENTO 4"; 
 
 void main() {
   runZonedGuarded(() async {
@@ -44,7 +44,6 @@ void main() {
       ProviderScope(
         overrides: [
           currentBotIdProvider.overrideWithValue(finalBotId),
-          // Empezamos sin hover
           isHoveredExternalProvider.overrideWith((ref) => false),
         ],
         child: const BotPlayerApp(),
@@ -94,21 +93,22 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
             double mouseX = double.parse(parts[0]);
             double mouseY = double.parse(parts[1]);
             
-            // 1. Ojos siempre siguen al mouse (Global)
+            // 1. Actualizar ojos (Global)
             ref.read(pointerPositionProvider.notifier).state = Offset(mouseX, mouseY);
             
-            // 2. Lógica de Expansión (Solo si está MUY cerca)
+            // 2. Zona de Hover Estricta
             if (parts.length >= 4) {
               double screenW = double.parse(parts[2]);
               double screenH = double.parse(parts[3]);
               
-              // ZONA AJUSTADA: 130px desde la esquina (Tamaño burbuja + margen pequeño)
-              // Antes era 250px, por eso se abría antes de tiempo.
-              bool inBotZone = (mouseX > screenW - 130) && (mouseY > screenH - 130);
+              // ZONA REDUCIDA A 80px (Casi encima del bot)
+              // Esto evita que se abra sola si pasas lejos
+              bool inBotZone = (mouseX > screenW - 80) && (mouseY > screenH - 80);
               
               final currentHover = ref.read(isHoveredExternalProvider);
-              if (inBotZone != currentHover) {
-                 ref.read(isHoveredExternalProvider.notifier).state = inBotZone;
+              // Solo actualizamos desde HTML si entra, para salir confiamos más en Flutter
+              if (inBotZone && !currentHover) {
+                 ref.read(isHoveredExternalProvider.notifier).state = true;
               }
             }
           }
