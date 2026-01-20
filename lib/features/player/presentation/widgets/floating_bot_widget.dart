@@ -75,13 +75,13 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
           ),
         ),
 
-        // BURBUJA FLOTANTE (FIX CURSOR)
+        // BURBUJA FLOTANTE
         Positioned(
           bottom: ghostPadding, right: ghostPadding,
           child: IgnorePointer(
             ignoring: isOpen, 
+            // Control externo de Hover (Entrada/Salida global)
             child: MouseRegion(
-              // Aseguramos que el hover se mantenga
               onEnter: (_) => ref.read(isHoveredExternalProvider.notifier).state = true,
               onExit: (_) => ref.read(isHoveredExternalProvider.notifier).state = false,
               child: AnimatedScale(
@@ -125,74 +125,92 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     final Color textColor = _getContrastingTextColor(color);
     final Color subTextColor = textColor.withOpacity(0.85);
 
-    // SOLUCIÓN CLICK: Usamos Material + InkWell
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 400),
-      curve: Curves.easeOutCubic, 
-      width: targetWidth, 
-      height: closedSize, 
-      decoration: BoxDecoration(
-        color: color, 
-        borderRadius: BorderRadius.circular(closedSize / 2),
-        border: Border.all(color: Colors.white.withOpacity(0.15), width: 1.0),
-        boxShadow: [
-           BoxShadow(color: Colors.black.withOpacity(0.25), blurRadius: 10, offset: const Offset(0, 4)),
-        ], 
-      ),
-      // Clip necesario para el efecto InkWell
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(closedSize / 2),
-        child: InkWell(
+    // --- FIX SEGUIMIENTO DE OJOS INTERNO ---
+    // Usamos un MouseRegion AQUÍ para capturar el movimiento exacto dentro de la burbuja
+    return MouseRegion(
+      onHover: (event) {
+        // Cálculo Geométrico:
+        // La cabeza siempre está pegada a la derecha del botón.
+        // Centro X de la cabeza = AnchoTotal - MitadCabeza(36)
+        // Centro Y de la cabeza = MitadAlto(36)
+        
+        final double headCenterX = targetWidth - 36.0;
+        final double headCenterY = 36.0;
+
+        // Delta: Distancia desde el mouse hasta el centro de la cabeza
+        final double dx = event.localPosition.dx - headCenterX;
+        final double dy = event.localPosition.dy - headCenterY;
+
+        // Actualizamos el provider directamente
+        ref.read(pointerPositionProvider.notifier).state = Offset(dx, dy);
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeOutCubic, 
+        width: targetWidth, 
+        height: closedSize, 
+        decoration: BoxDecoration(
+          color: color, 
           borderRadius: BorderRadius.circular(closedSize / 2),
-          onTap: () {
-            ref.read(chatOpenProvider.notifier).set(true);
-            html.window.parent?.postMessage('CMD_OPEN', '*');
-          },
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              // TEXTO
-              Flexible(
-                fit: FlexFit.loose,
-                child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 200),
-                  opacity: isHovered ? 1.0 : 0.0, 
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    physics: const NeverScrollableScrollPhysics(),
-                    child: isHovered 
-                      ? Padding(
-                          padding: const EdgeInsets.only(left: 25, right: 12),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.end, 
-                            children: [
-                              Text(name, textAlign: TextAlign.right, style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 13)),
-                              Text(subtext, textAlign: TextAlign.right, style: TextStyle(color: subTextColor, fontSize: 10)),
-                            ],
-                          ),
-                        )
-                      : const SizedBox(), 
+          border: Border.all(color: Colors.white.withOpacity(0.15), width: 1.0),
+          boxShadow: [
+             BoxShadow(color: Colors.black.withOpacity(0.25), blurRadius: 10, offset: const Offset(0, 4)),
+          ], 
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(closedSize / 2),
+          child: InkWell(
+            borderRadius: BorderRadius.circular(closedSize / 2),
+            onTap: () {
+              ref.read(chatOpenProvider.notifier).set(true);
+              html.window.parent?.postMessage('CMD_OPEN', '*');
+            },
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                // TEXTO
+                Flexible(
+                  fit: FlexFit.loose,
+                  child: AnimatedOpacity(
+                    duration: const Duration(milliseconds: 200),
+                    opacity: isHovered ? 1.0 : 0.0, 
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      physics: const NeverScrollableScrollPhysics(),
+                      child: isHovered 
+                        ? Padding(
+                            padding: const EdgeInsets.only(left: 25, right: 12),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.end, 
+                              children: [
+                                Text(name, textAlign: TextAlign.right, style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 13)),
+                                Text(subtext, textAlign: TextAlign.right, style: TextStyle(color: subTextColor, fontSize: 10)),
+                              ],
+                            ),
+                          )
+                        : const SizedBox(), 
+                    ), 
+                  ),
+                ),
+                
+                // CABEZA
+                Container(
+                  width: headSize, height: headSize,
+                  margin: const EdgeInsets.all(7), 
+                  child: ClipOval(
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        Center(child: Icon(Icons.smart_toy_rounded, color: textColor.withOpacity(0.5), size: 30)),
+                        const FloatingHeadWidget(), 
+                      ],
+                    ),
                   ), 
                 ),
-              ),
-              
-              // CABEZA
-              Container(
-                width: headSize, height: headSize,
-                margin: const EdgeInsets.all(7), 
-                child: ClipOval(
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      Center(child: Icon(Icons.smart_toy_rounded, color: textColor.withOpacity(0.5), size: 30)),
-                      const FloatingHeadWidget(), 
-                    ],
-                  ),
-                ), 
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
