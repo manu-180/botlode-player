@@ -44,13 +44,20 @@ class _FloatingHeadWidgetState extends ConsumerState<FloatingHeadWidget> with Si
   void _onTick(Duration elapsed) {
     if (_lookXInput == null || _lookYInput == null) return;
 
-    // --- FÍSICA DE MOVIMIENTO ---
-    // 1.0 = Movimiento instantáneo (Sin delay) -> Para seguir al mouse
-    // 0.03 = Movimiento muy lento (Cinemático) -> Para volver al centro
-    final double smoothFactor = _isTracking ? 1.0 : 0.03;
+    // --- FÍSICA DE OJOS PERSONALIZADA ---
+    // Tracking (Mouse cerca): 0.3 -> Rápido pero orgánico.
+    // Idle (Mouse lejos): 0.02 -> Vuelta al centro ultra-lenta (cinemática).
+    final double smoothFactor = _isTracking ? 0.3 : 0.02;
+
+    // --- CALIBRACIÓN DE ARCHIVO RIVE ---
+    // Como el FaceControl de tu archivo Rive está corrido, aplicamos un offset
+    // para "levantar" la mirada por defecto.
+    // Restamos 15 a Y para que mire más arriba.
+    double calibratedTargetY = _targetY - 15.0; 
+    calibratedTargetY = calibratedTargetY.clamp(0.0, 100.0);
 
     _currentX = lerpDouble(_currentX, _targetX, smoothFactor) ?? 50;
-    _currentY = lerpDouble(_currentY, _targetY, smoothFactor) ?? 50;
+    _currentY = lerpDouble(_currentY, calibratedTargetY, smoothFactor) ?? 50;
 
     _lookXInput!.value = _currentX;
     _lookYInput!.value = _currentY;
@@ -58,7 +65,10 @@ class _FloatingHeadWidgetState extends ConsumerState<FloatingHeadWidget> with Si
 
   void _onRiveInit(Artboard artboard) {
     var controller = StateMachineController.fromArtboard(artboard, 'State Machine 1');
-    
+    if (controller == null) {
+       controller = StateMachineController.fromArtboard(artboard, 'State Machine');
+    }
+
     if (controller != null) {
       artboard.addController(controller);
       _controller = controller;
@@ -83,7 +93,6 @@ class _FloatingHeadWidgetState extends ConsumerState<FloatingHeadWidget> with Si
 
       if (distance < maxInterestDistance) {
         _isTracking = true; 
-        // Sensibilidad alta para reacciones rápidas
         const double sensitivity = 200.0; 
         _targetX = (50 + (dx / sensitivity * 50)).clamp(0.0, 100.0);
         _targetY = (50 + (dy / sensitivity * 50)).clamp(0.0, 100.0);

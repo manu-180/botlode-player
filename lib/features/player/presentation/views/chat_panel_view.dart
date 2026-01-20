@@ -212,3 +212,103 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
                                     enabled: isOnline,
                                     onSubmitted: (_) => isOnline ? _sendMessage() : null,
                                     style: TextStyle(color: isDarkMode ? Colors.white : Colors.black),
+                                    decoration: InputDecoration(
+                                      hintText: isOnline ? "Escribe aquí..." : "Esperando conexión...",
+                                      hintStyle: TextStyle(color: isDarkMode ? Colors.white38 : Colors.black38),
+                                      border: InputBorder.none,
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+                                    ),
+                                  ),
+                                ),
+                                IconButton(
+                                    onPressed: isOnline ? _sendMessage : null, 
+                                    icon: Icon(Icons.send_rounded, color: isOnline ? sendButtonColor : Colors.grey)
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    // BANNER DE CONECTIVIDAD
+                    _ConnectivityBanner(isOnline: isOnline),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ConnectivityBanner extends StatefulWidget {
+  final bool isOnline;
+  const _ConnectivityBanner({required this.isOnline});
+
+  @override
+  State<_ConnectivityBanner> createState() => _ConnectivityBannerState();
+}
+
+class _ConnectivityBannerState extends State<_ConnectivityBanner> {
+  bool _showSuccess = false;
+
+  @override
+  void didUpdateWidget(covariant _ConnectivityBanner oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.isOnline && widget.isOnline) {
+      setState(() => _showSuccess = true);
+      Future.delayed(const Duration(seconds: 3), () {
+        if (mounted) setState(() => _showSuccess = false);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isVisible = !widget.isOnline || _showSuccess;
+    final Color bgColor = !widget.isOnline ? Theme.of(context).colorScheme.error : Colors.green;
+    final String text = !widget.isOnline ? "Sin conexión a internet" : "Conexión restablecida";
+    final IconData icon = !widget.isOnline ? Icons.wifi_off_rounded : Icons.wifi_rounded;
+
+    return AnimatedPositioned(
+      duration: const Duration(milliseconds: 600),
+      curve: Curves.elasticOut, 
+      top: isVisible ? 20 : -100, 
+      left: 20,
+      right: 20,
+      child: Material(
+        elevation: 8,
+        borderRadius: BorderRadius.circular(16),
+        color: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+          decoration: BoxDecoration(
+            color: bgColor,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, color: Colors.white, size: 18),
+              const SizedBox(width: 10),
+              Text(
+                text, 
+                style: const TextStyle(
+                  color: Colors.white, 
+                  fontWeight: FontWeight.bold, 
+                  fontSize: 13,
+                  decoration: TextDecoration.none
+                )
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
