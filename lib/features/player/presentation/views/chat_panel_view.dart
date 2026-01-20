@@ -1,4 +1,5 @@
 // Archivo: lib/features/player/presentation/views/chat_panel_view.dart
+import 'dart:async';
 import 'dart:html' as html;
 import 'package:botlode_player/core/network/connectivity_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
@@ -74,20 +75,19 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
     final botConfig = ref.watch(botConfigProvider).asData?.value;
     final themeColor = botConfig?.themeColor ?? const Color(0xFFFFC000);
     
-    // Forzamos modo oscuro por defecto si no hay config
     final isDarkMode = botConfig?.isDarkMode ?? true; 
     final isOnline = ref.watch(connectivityProvider).asData?.value ?? true;
 
-    // --- COLORES SÓLIDOS DEPURADOS ---
+    // --- PALETA DE COLORES ---
     final Color solidBgColor = isDarkMode 
-        ? const Color(0xFF181818)  // Negro Casi Puro (Sólido)
-        : const Color(0xFFF9F9F9); // Blanco Casi Puro (Sólido)
+        ? const Color(0xFF181818) 
+        : const Color(0xFFF9F9F9);
 
     final Color inputFill = isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFFFFFFF);
     final Color borderColor = isDarkMode ? Colors.white24 : Colors.black12;
     
-    // DEBUG: Ver qué color se está aplicando
-    print("🎨 [DEBUG CHAT] Mode: ${isDarkMode ? 'DARK' : 'LIGHT'} | BG Color: $solidBgColor");
+    // PUNTO 4: Botón negro en Light Mode
+    final Color sendButtonColor = isDarkMode ? themeColor : Colors.black;
 
     final reversedMessages = chatState.messages.reversed.toList();
 
@@ -95,7 +95,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
       data: ThemeData(
         brightness: isDarkMode ? Brightness.dark : Brightness.light,
         primaryColor: themeColor,
-        scaffoldBackgroundColor: Colors.transparent, // El scaffold es transparente, el contenedor NO
+        scaffoldBackgroundColor: Colors.transparent, 
       ),
       child: MouseRegion(
         hitTestBehavior: HitTestBehavior.translucent, 
@@ -111,103 +111,182 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
                 width: double.infinity,
                 height: double.infinity,
                 clipBehavior: Clip.hardEdge, 
-                // AQUÍ ESTÁ LA CLAVE: Decoration sólida
                 decoration: BoxDecoration(
-                  color: solidBgColor, // <--- ESTO DEBE SER OPACO
+                  color: solidBgColor, 
                   borderRadius: BorderRadius.circular(28),
                   border: Border.all(color: borderColor, width: 1.0),
                   boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 30, offset: const Offset(0, 10))
+                    BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 30, offset: const Offset(0, 10))
                   ],
                 ),
-                child: Column(
+                child: Stack(
                   children: [
-                    // HEADER
-                    Container(
-                      height: 180,
-                      width: double.infinity,
-                      color: solidBgColor, // Fondo extra por seguridad
-                      child: Stack(
-                        children: [
-                          const Positioned.fill(
-                            child: Padding(
-                              padding: EdgeInsets.only(bottom: 20),
-                              child: BotAvatarWidget(), 
+                    Column(
+                      children: [
+                        // HEADER
+                        Container(
+                          height: 180,
+                          width: double.infinity,
+                          color: solidBgColor, 
+                          child: Stack(
+                            children: [
+                              const Positioned.fill(
+                                child: Padding(
+                                  padding: EdgeInsets.only(bottom: 20),
+                                  child: BotAvatarWidget(), 
+                                ),
+                              ),
+                              Positioned(
+                                top: 16, right: 16,
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min, 
+                                  children: [
+                                    IconButton(
+                                        icon: const Icon(Icons.refresh), 
+                                        onPressed: () => ref.read(chatResetProvider)(),
+                                        color: isDarkMode ? Colors.white70 : Colors.black54
+                                    ),
+                                    IconButton(
+                                        icon: const Icon(Icons.close), 
+                                        onPressed: () => ref.read(chatOpenProvider.notifier).set(false),
+                                        color: isDarkMode ? Colors.white70 : Colors.black54
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Positioned(
+                                bottom: 10, left: 24,
+                                child: StatusIndicator(isLoading: chatState.isLoading, isOnline: isOnline, mood: chatState.currentMood, isDarkMode: isDarkMode),
+                              ),
+                            ],
+                          ),
+                        ),
+                        
+                        Container(height: 1, color: borderColor),
+                        
+                        // BODY
+                        Expanded(
+                          child: Container(
+                            color: solidBgColor, 
+                            child: ListView.builder(
+                              controller: _scrollController,
+                              reverse: true,
+                              padding: const EdgeInsets.all(20),
+                              itemCount: reversedMessages.length + (chatState.isLoading ? 1 : 0),
+                              itemBuilder: (context, index) {
+                                if (chatState.isLoading && index == 0) {
+                                  return const Padding(padding: EdgeInsets.all(10), child: Text("Escribiendo...", style: TextStyle(fontSize: 12, color: Colors.grey)));
+                                }
+                                final msg = reversedMessages[chatState.isLoading ? index - 1 : index];
+                                return ChatBubble(message: msg, botThemeColor: themeColor, isDarkMode: isDarkMode);
+                              },
                             ),
                           ),
-                          Positioned(
-                            top: 16, right: 16,
+                        ),
+                        
+                        // INPUT
+                        Container(
+                          padding: EdgeInsets.fromLTRB(16, 10, 16, 16 + (isMobile ? MediaQuery.of(context).padding.bottom : 0)),
+                          color: solidBgColor, 
+                          child: Container(
+                            decoration: BoxDecoration(
+                              color: inputFill, 
+                              borderRadius: BorderRadius.circular(40), 
+                              border: Border.all(color: borderColor),
+                            ),
                             child: Row(
-                              mainAxisSize: MainAxisSize.min, 
                               children: [
-                                IconButton(icon: const Icon(Icons.refresh), onPressed: () => ref.read(chatResetProvider)()),
-                                IconButton(icon: const Icon(Icons.close), onPressed: () => ref.read(chatOpenProvider.notifier).set(false)),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: TextField(
+                                    controller: _textController,
+                                    enabled: isOnline,
+                                    onSubmitted: (_) => isOnline ? _sendMessage() : null,
+                                    style: TextStyle(color: isDarkMode ? Colors.white : Colors.black),
+                                    decoration: InputDecoration(
+                                      hintText: isOnline ? "Escribe aquí..." : "Esperando conexión...",
+                                      hintStyle: TextStyle(color: isDarkMode ? Colors.white38 : Colors.black38),
+                                      border: InputBorder.none,
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 10),
+                                    ),
+                                  ),
+                                ),
+                                IconButton(
+                                    onPressed: isOnline ? _sendMessage : null, 
+                                    icon: Icon(Icons.send_rounded, color: isOnline ? sendButtonColor : Colors.grey)
+                                ),
                               ],
                             ),
                           ),
-                          Positioned(
-                            bottom: 10, left: 24,
-                            child: StatusIndicator(isLoading: chatState.isLoading, isOnline: isOnline, mood: chatState.currentMood, isDarkMode: isDarkMode),
-                          ),
-                        ],
-                      ),
-                    ),
-                    
-                    Container(height: 1, color: borderColor),
-                    
-                    // BODY
-                    Expanded(
-                      child: Container(
-                        color: solidBgColor, // Fondo extra por seguridad
-                        child: ListView.builder(
-                          controller: _scrollController,
-                          reverse: true,
-                          padding: const EdgeInsets.all(20),
-                          itemCount: reversedMessages.length + (chatState.isLoading ? 1 : 0),
-                          itemBuilder: (context, index) {
-                            if (chatState.isLoading && index == 0) {
-                              return const Padding(padding: EdgeInsets.all(10), child: Text("Escribiendo...", style: TextStyle(fontSize: 12, color: Colors.grey)));
-                            }
-                            final msg = reversedMessages[chatState.isLoading ? index - 1 : index];
-                            return ChatBubble(message: msg, botThemeColor: themeColor, isDarkMode: isDarkMode);
-                          },
                         ),
-                      ),
+                      ],
                     ),
-                    
-                    // INPUT
-                    Container(
-                      padding: EdgeInsets.fromLTRB(16, 10, 16, 16 + (isMobile ? MediaQuery.of(context).padding.bottom : 0)),
-                      color: solidBgColor, // Fondo extra por seguridad
-                      child: Container(
-                        decoration: BoxDecoration(
-                          color: inputFill, 
-                          borderRadius: BorderRadius.circular(40), 
-                        ),
-                        child: Row(
-                          children: [
-                            const SizedBox(width: 10),
-                            Expanded(
-                              child: TextField(
-                                controller: _textController,
-                                onSubmitted: (_) => isOnline ? _sendMessage() : null,
-                                decoration: const InputDecoration(
-                                  hintText: "Escribe aquí...",
-                                  border: InputBorder.none,
-                                  contentPadding: EdgeInsets.symmetric(horizontal: 10),
-                                ),
-                              ),
-                            ),
-                            IconButton(onPressed: isOnline ? _sendMessage : null, icon: Icon(Icons.send_rounded, color: themeColor)),
-                          ],
-                        ),
-                      ),
-                    ),
+
+                    // PUNTO 5: BANNER DE CONECTIVIDAD PRO (Overlay)
+                    _ConnectivityBanner(isOnline: isOnline),
                   ],
                 ),
               );
             },
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// WIDGET PRIVADO PARA EL BANNER DE CONEXIÓN
+class _ConnectivityBanner extends StatefulWidget {
+  final bool isOnline;
+  const _ConnectivityBanner({required this.isOnline});
+
+  @override
+  State<_ConnectivityBanner> createState() => _ConnectivityBannerState();
+}
+
+class _ConnectivityBannerState extends State<_ConnectivityBanner> {
+  bool _showSuccess = false;
+
+  @override
+  void didUpdateWidget(covariant _ConnectivityBanner oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.isOnline && widget.isOnline) {
+      // Si volvimos a estar online, mostrar éxito por 3 segundos
+      setState(() => _showSuccess = true);
+      Future.delayed(const Duration(seconds: 3), () {
+        if (mounted) setState(() => _showSuccess = false);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Si está offline, mostramos ROJO. Si volvió, mostramos VERDE (Success). Si está normal, nada.
+    final bool isVisible = !widget.isOnline || _showSuccess;
+    final Color bgColor = !widget.isOnline ? Colors.redAccent : Colors.green;
+    final String text = !widget.isOnline ? "Sin conexión a internet" : "Conexión restablecida";
+    final IconData icon = !widget.isOnline ? Icons.wifi_off_rounded : Icons.wifi_rounded;
+
+    return AnimatedPositioned(
+      duration: const Duration(milliseconds: 500),
+      curve: Curves.easeOutBack,
+      top: isVisible ? 10 : -60, // Sube o baja
+      left: 20,
+      right: 20,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [BoxShadow(color: bgColor.withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 4))]
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, color: Colors.white, size: 16),
+            const SizedBox(width: 8),
+            Text(text, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+          ],
         ),
       ),
     );

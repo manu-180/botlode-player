@@ -12,41 +12,27 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-// --- CONTROL DE VERSIÓN ---
-const String DEPLOY_VERSION = "INTENTO 1"; 
-
 void main() {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
 
-    // 1. LOG DE VERSIÓN (Para confirmar que se actualizó en Vercel)
-    print("==========================================");
-    print("🛑 VERSIÓN DE DESPLIEGUE: $DEPLOY_VERSION");
-    print("==========================================");
-
-    // 2. LOG DE CREDENCIALES
-    final url = AppConfig.supabaseUrl;
-    final key = AppConfig.supabaseAnonKey;
-    print("🔍 [DEBUG] URL Length: ${url.length}");
-    print("🔍 [DEBUG] KEY Length: ${key.length}");
-
+    // Inicio de Supabase con configuración segura
     try {
       await Supabase.initialize(
-        url: url,
-        anonKey: key,
+        url: AppConfig.supabaseUrl,
+        anonKey: AppConfig.supabaseAnonKey,
         authOptions: const FlutterAuthClientOptions(
           authFlowType: AuthFlowType.implicit,
         ),
       );
-      print("🚀 [EXITO] Supabase conectado.");
     } catch (e) {
-      print("🔥 [ERROR] Falló Supabase: $e");
+      // Fallo silencioso controlado, la UI mostrará estado offline si es necesario
+      print("Supabase Init Error: $e");
     }
 
     final uri = Uri.base;
     final urlBotId = uri.queryParameters['bot_id'];
     final finalBotId = urlBotId ?? AppConfig.fallbackBotId;
-    print("🤖 [INFO] Bot ID detectado: $finalBotId");
 
     runApp(
       ProviderScope(
@@ -58,7 +44,7 @@ void main() {
     );
 
   }, (error, stack) {
-    print("🔥 CRASH FATAL ($DEPLOY_VERSION): $error");
+    print("CRASH: $error");
   });
 }
 
@@ -73,33 +59,69 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
   void initState() {
     super.initState();
     
-    // Forzar transparencia en el HTML (contenedor padre)
+    // Configuración visual web
     try {
       html.document.body!.style.backgroundColor = 'transparent';
       html.document.documentElement!.style.backgroundColor = 'transparent';
-      print("🎨 [DEBUG] Fondo HTML forzado a transparente.");
     } catch (_) {}
 
     Future.delayed(const Duration(milliseconds: 500), () {
         html.window.parent?.postMessage('CMD_READY', '*');
     });
     
+    // Listener de mensajes (Iframe <-> HTML Padre)
     html.window.onMessage.listen((event) {
       if (event.data == null) return;
       final String data = event.data.toString();
-      if (data == 'CMD_OPEN') ref.read(chatOpenProvider.notifier).set(true);
-      if (data == 'CMD_CLOSE') ref.read(chatOpenProvider.notifier).set(false);
+
+      if (data == 'CMD_OPEN') {
+        ref.read(chatOpenProvider.notifier).set(true);
+      } else if (data == 'CMD_CLOSE') {
+        ref.read(chatOpenProvider.notifier).set(false);
+      } 
+      else if (data.startsWith('MOUSE_MOVE:')) {
+        try {
+          // Formato esperado: "MOUSE_MOVE:mouseX,mouseY,screenWidth,screenHeight"
+          final content = data.split(':')[1];
+          final parts = content.split(',');
+          
+          if (parts.length >= 2) {
+            double mouseX = double.parse(parts[0]);
+            double mouseY = double.parse(parts[1]);
+
+            // Si el HTML nos manda el tamaño de pantalla, podemos calcular la posición relativa
+            // Asumimos que el bot está abajo a la derecha.
+            if (parts.length == 4) {
+               // Lógica opcional de normalización si fuera necesaria
+               // Por ahora, pasamos las coordenadas crudas, RiveAvatar se encarga
+            }
+
+            // Actualizamos el provider que mueve los ojos
+            // NOTA: Restamos un offset para centrar la "mirada" en el widget
+            ref.read(pointerPositionProvider.notifier).state = Offset(mouseX, mouseY);
+            
+            // Si el mouse se mueve, asumimos que estamos en "hover" activo
+            ref.read(isHoveredExternalProvider.notifier).state = true;
+            
+            // Debounce para quitar el hover si deja de moverse (opcional)
+          }
+        } catch (_) {}
+      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
     ref.listen(chatOpenProvider, (prev, isOpen) {
-      if (!isOpen) html.window.parent?.postMessage('CMD_CLOSE', '*');
+      if (!isOpen) {
+         html.window.parent?.postMessage('CMD_CLOSE', '*');
+      } else {
+         html.window.parent?.postMessage('CMD_OPEN', '*');
+      }
     });
 
     return MaterialApp(
-      title: 'BotLode Player ($DEPLOY_VERSION)',
+      title: 'BotLode Player',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme.copyWith(
         canvasColor: Colors.transparent, 
