@@ -12,7 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String DEPLOY_VERSION = "BURBUJA FIX v1"; 
+const String DEPLOY_VERSION = "INTENTO 5 (Eyes + Cursor)"; 
 
 void main() {
   runZonedGuarded(() async {
@@ -63,8 +63,6 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
   @override
   void initState() {
     super.initState();
-    
-    // Configuración visual
     try {
       html.document.body!.style.backgroundColor = 'transparent';
       html.document.documentElement!.style.backgroundColor = 'transparent';
@@ -88,30 +86,34 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
           final content = data.split(':')[1];
           final parts = content.split(',');
           
-          if (parts.length >= 2) {
+          if (parts.length >= 4) {
             double mouseX = double.parse(parts[0]);
             double mouseY = double.parse(parts[1]);
+            double screenW = double.parse(parts[2]);
+            double screenH = double.parse(parts[3]);
+
+            // --- CÁLCULO DE OJOS RELATIVO ---
+            // Asumimos que el bot está en la esquina inferior derecha.
+            // Posición aproximada del centro del bot:
+            double botCenterX = screenW - 60.0; 
+            double botCenterY = screenH - 60.0;
+
+            // Calculamos la distancia (Delta) desde el mouse hasta el bot
+            double deltaX = mouseX - botCenterX; 
+            double deltaY = mouseY - botCenterY;
+
+            // Guardamos el Delta en lugar de la posición absoluta
+            ref.read(pointerPositionProvider.notifier).state = Offset(deltaX, deltaY);
             
-            // 1. Ojos del bot (Global)
-            ref.read(pointerPositionProvider.notifier).state = Offset(mouseX, mouseY);
+            // --- DETECCIÓN DE HOVER ---
+            // Zona de activación: 110px desde la esquina
+            bool inBotZone = (mouseX > screenW - 110) && (mouseY > screenH - 110);
             
-            // 2. Detección de Hover (Solo si el mouse está activo fuera del iframe)
-            if (parts.length >= 4) {
-              double screenW = double.parse(parts[2]);
-              double screenH = double.parse(parts[3]);
-              
-              // ZONA ESTRICTA: 110px desde la esquina (Justo encima del botón)
-              bool inBotZone = (mouseX > screenW - 110) && (mouseY > screenH - 110);
-              
-              final currentHover = ref.read(isHoveredExternalProvider);
-              
-              // Lógica de entrada y SALIDA
-              if (inBotZone && !currentHover) {
-                 ref.read(isHoveredExternalProvider.notifier).state = true;
-              } else if (!inBotZone && currentHover) {
-                 // Si salimos de la zona, desactivamos el hover
-                 ref.read(isHoveredExternalProvider.notifier).state = false;
-              }
+            final currentHover = ref.read(isHoveredExternalProvider);
+            if (inBotZone && !currentHover) {
+               ref.read(isHoveredExternalProvider.notifier).state = true;
+            } else if (!inBotZone && currentHover) {
+               ref.read(isHoveredExternalProvider.notifier).state = false;
             }
           }
         } catch (_) {}
@@ -121,14 +123,10 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
 
   @override
   Widget build(BuildContext context) {
-    // SEMÁFORO DE INTERACCIÓN
-    // Le decimos al HTML si debe dejar pasar los clicks o no
     ref.listen(isHoveredExternalProvider, (prev, isHovered) {
       if (isHovered) {
-        // Entró a la burbuja: HTML, activa el iframe para recibir clicks
         html.window.parent?.postMessage('HOVER_ENTER', '*');
       } else {
-        // Salió de la burbuja: HTML, desactiva iframe para que no moleste
         html.window.parent?.postMessage('HOVER_EXIT', '*');
       }
     });
