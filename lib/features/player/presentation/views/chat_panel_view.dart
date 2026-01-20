@@ -79,14 +79,14 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
     final isOnline = ref.watch(connectivityProvider).asData?.value ?? true;
 
     // --- COLORES OPACOS Y DE ALTO CONTRASTE (SOLID MATERIAL FIX) ---
-    // Usamos 0xFF222222 para diferenciar del fondo web #1a1a1a
+    // #2B2E33 es un "Charcoal" (Gris Carbón Azulado) que se destaca bien sobre negro puro.
     final Color solidBgColor = isDarkMode 
-        ? const Color(0xFF222222) 
+        ? const Color(0xFF2B2E33) 
         : const Color(0xFFFFFFFF); 
 
-    final Color inputFill = isDarkMode ? const Color(0xFF333333) : const Color(0xFFF2F2F2);
-    // Borde sutil para delimitar el chat del fondo
-    final Color borderColor = isDarkMode ? Colors.white.withOpacity(0.15) : Colors.black12;
+    final Color inputFill = isDarkMode ? const Color(0xFF383C42) : const Color(0xFFF2F2F2);
+    // Borde más evidente (25% opacidad)
+    final Color borderColor = isDarkMode ? Colors.white.withOpacity(0.25) : Colors.black12;
     final Color sendButtonColor = isDarkMode ? themeColor : Colors.black;
 
     final reversedMessages = chatState.messages.reversed.toList();
@@ -127,10 +127,11 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with SingleTicker
           opacity: _opacityAnimation,
           child: LayoutBuilder(
             builder: (context, constraints) {
-              // --- FIX CRÍTICO: MATERIAL OPACO ---
+              // --- MATERIAL SÓLIDO Y ELEVADO ---
               return Material(
-                color: solidBgColor, // Color base sólido
-                elevation: 10, // Sombra real proyectada
+                color: solidBgColor, 
+                elevation: 15, // Más sombra para separar del fondo
+                shadowColor: Colors.black.withOpacity(0.5), // Sombra dura
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(28),
                   side: BorderSide(color: borderColor, width: 1.5),

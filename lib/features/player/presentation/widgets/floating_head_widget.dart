@@ -87,7 +87,7 @@ class _FloatingHeadWidgetState extends ConsumerState<FloatingHeadWidget> with Si
       final double dy = deltaPos.dy;
 
       final double distance = math.sqrt(dx * dx + dy * dy);
-      const double maxInterestDistance = 1000.0; 
+      const double maxInterestDistance = 400.0; 
 
       if (distance < maxInterestDistance) {
         _isTracking = true; 

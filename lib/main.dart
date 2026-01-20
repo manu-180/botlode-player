@@ -13,7 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // --- CONTROL DE VERSIÓN ---
-const String DEPLOY_VERSION = "INTENTO 13 (Safe Mode + Local Fix)"; 
+const String DEPLOY_VERSION = "INTENTO 14 (High Contrast Fix)"; 
 
 void main() {
   runZonedGuarded(() async {
@@ -63,7 +63,6 @@ class BotPlayerApp extends ConsumerStatefulWidget {
 
 class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
   
-  // Función auxiliar para enviar mensajes de forma segura
   void _safePostMessage(String message) {
     try {
       html.window.parent?.postMessage(message, '*');
@@ -76,7 +75,6 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
   void initState() {
     super.initState();
     try {
-      // Limpieza agresiva del DOM host
       html.document.body!.style.backgroundColor = 'transparent';
       html.document.documentElement!.style.backgroundColor = 'transparent';
     } catch (_) {}
