@@ -4,7 +4,7 @@ import 'dart:math' as math;
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
 import 'package:botlode_player/features/player/presentation/views/chat_panel_view.dart';
-import 'package:botlode_player/features/player/presentation/widgets/floating_head_widget.dart';
+import 'package:botlode_player/features/player/presentation/widgets/floating_head_widget.dart'; // IMPORTANTE: CABEZA
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -39,7 +39,7 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
       fit: StackFit.loose, 
       alignment: Alignment.bottomRight,
       children: [
-        // CAPA DE CIERRE (Click outside interno)
+        // CAPA DE CIERRE
         if (isOpen)
           Positioned.fill(
             child: GestureDetector(
@@ -75,13 +75,13 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
           ),
         ),
 
-        // BURBUJA FLOTANTE
+        // BURBUJA FLOTANTE (Interactiva + Cursor)
         Positioned(
           bottom: ghostPadding, right: ghostPadding,
           child: IgnorePointer(
             ignoring: isOpen, 
-            // Control externo de Hover (Entrada/Salida global)
             child: MouseRegion(
+              // Control externo de Hover
               onEnter: (_) => ref.read(isHoveredExternalProvider.notifier).state = true,
               onExit: (_) => ref.read(isHoveredExternalProvider.notifier).state = false,
               child: AnimatedScale(
@@ -125,23 +125,14 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     final Color textColor = _getContrastingTextColor(color);
     final Color subTextColor = textColor.withOpacity(0.85);
 
-    // --- FIX SEGUIMIENTO DE OJOS INTERNO ---
-    // Usamos un MouseRegion AQUÍ para capturar el movimiento exacto dentro de la burbuja
+    // --- FIX CURSOR + TRACKING LOCAL ---
     return MouseRegion(
+      // Tracking local de ojos cuando estamos sobre el botón
       onHover: (event) {
-        // Cálculo Geométrico:
-        // La cabeza siempre está pegada a la derecha del botón.
-        // Centro X de la cabeza = AnchoTotal - MitadCabeza(36)
-        // Centro Y de la cabeza = MitadAlto(36)
-        
         final double headCenterX = targetWidth - 36.0;
         final double headCenterY = 36.0;
-
-        // Delta: Distancia desde el mouse hasta el centro de la cabeza
         final double dx = event.localPosition.dx - headCenterX;
         final double dy = event.localPosition.dy - headCenterY;
-
-        // Actualizamos el provider directamente
         ref.read(pointerPositionProvider.notifier).state = Offset(dx, dy);
       },
       child: AnimatedContainer(
@@ -157,6 +148,7 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
              BoxShadow(color: Colors.black.withOpacity(0.25), blurRadius: 10, offset: const Offset(0, 4)),
           ], 
         ),
+        // MATERIAL + INKWELL PARA CURSOR Y CLICKS
         child: Material(
           color: Colors.transparent,
           borderRadius: BorderRadius.circular(closedSize / 2),
@@ -195,7 +187,7 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
                   ),
                 ),
                 
-                // CABEZA
+                // CABEZA (USANDO FLOATING HEAD WIDGET)
                 Container(
                   width: headSize, height: headSize,
                   margin: const EdgeInsets.all(7), 
@@ -204,7 +196,7 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
                       fit: StackFit.expand,
                       children: [
                         Center(child: Icon(Icons.smart_toy_rounded, color: textColor.withOpacity(0.5), size: 30)),
-                        const FloatingHeadWidget(), 
+                        const FloatingHeadWidget(), // <--- CORREGIDO AQUÍ
                       ],
                     ),
                   ), 

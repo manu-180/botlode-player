@@ -13,7 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // --- CONTROL DE VERSIÓN ---
-const String DEPLOY_VERSION = "INTENTO 9 (Solid Black Fix)"; 
+const String DEPLOY_VERSION = "INTENTO 10 (Solid + Cursor Fix)"; 
 
 void main() {
   runZonedGuarded(() async {
