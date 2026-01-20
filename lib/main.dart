@@ -9,7 +9,6 @@ import 'package:botlode_player/features/player/presentation/providers/loader_pro
 import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
 import 'package:botlode_player/features/player/presentation/widgets/floating_bot_widget.dart';
 import 'package:flutter/material.dart';
-// Eliminamos la dependencia directa de dotenv aquí, AppConfig se encarga
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -17,34 +16,40 @@ void main() {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
 
-    // [CORRECCIÓN FINAL]
-    // Eliminamos 'await dotenv.load(...)' porque en producción el archivo no existe.
-    // AppConfig ya tiene la lógica para leer las variables del sistema (--dart-define).
+    // --- ZONA DE DEBUGGING (Verificar en Consola F12) ---
+    final url = AppConfig.supabaseUrl;
+    final key = AppConfig.supabaseAnonKey;
+    
+    print("🔍 [DEBUG] Intentando iniciar Supabase...");
+    print("🔍 [DEBUG] URL Length: ${url.length} (Debería ser > 10)");
+    print("🔍 [DEBUG] KEY Length: ${key.length} (Debería ser > 20)");
+    
+    if (url.isEmpty || key.isEmpty) {
+      print("🔥 [FATAL] Las claves siguen vacías. El hardcode falló o es código viejo.");
+    } else {
+      print("✅ [DEBUG] Claves detectadas. Iniciando...");
+    }
+    // ----------------------------------------------------
 
     try {
-      // Usamos las variables desde AppConfig (que ya son seguras)
-      final sbUrl = AppConfig.supabaseUrl;
-      final sbKey = AppConfig.supabaseAnonKey;
-
-      if (sbUrl.isEmpty || sbKey.isEmpty) {
-        throw Exception("Variables de Supabase vacías. Revisa la config de Vercel.");
-      }
-
       await Supabase.initialize(
-        url: sbUrl,
-        anonKey: sbKey,
+        url: url,
+        anonKey: key,
         authOptions: const FlutterAuthClientOptions(
           authFlowType: AuthFlowType.implicit,
         ),
       );
+      print("🚀 [EXITO] Supabase se inició correctamente.");
     } catch (e) {
-      print("🔥 Error crítico iniciando Supabase: $e");
-      // Si falla, permitimos que la app arranque para mostrar error en UI si es necesario
+      print("🔥 [ERROR REAL] Falló Supabase: $e");
     }
 
     final uri = Uri.base;
     final urlBotId = uri.queryParameters['bot_id'];
+    // Usamos el ID por defecto si no viene en la URL
     final finalBotId = urlBotId ?? AppConfig.fallbackBotId;
+
+    print("🤖 [INFO] Bot ID: $finalBotId");
 
     runApp(
       ProviderScope(
@@ -56,9 +61,7 @@ void main() {
     );
 
   }, (error, stack) {
-    print("🔥 CRASH NO CONTROLADO: $error");
-    // Pantalla de error visible
-    runApp(MaterialApp(home: Scaffold(backgroundColor: Colors.red, body: Center(child: Text("ERROR: $error", style: TextStyle(color: Colors.white))))));
+    print("🔥 CRASH FINAL: $error");
   });
 }
 
@@ -73,11 +76,13 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
   void initState() {
     super.initState();
     
+    // Precarga silenciosa
     try {
       ref.read(riveFileLoaderProvider);       
       ref.read(riveHeadFileLoaderProvider);  
     } catch (_) {}
 
+    // Transparencia
     try {
       html.document.body!.style.backgroundColor = 'transparent';
       html.document.documentElement!.style.backgroundColor = 'transparent';
@@ -116,9 +121,7 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
   @override
   Widget build(BuildContext context) {
     ref.listen(chatOpenProvider, (prev, isOpen) {
-      if (!isOpen) { 
-        html.window.parent?.postMessage('CMD_CLOSE', '*');
-      }
+      if (!isOpen) html.window.parent?.postMessage('CMD_CLOSE', '*');
     });
 
     return MaterialApp(

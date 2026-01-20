@@ -37,4 +37,4 @@ mkdir docs
 cp -r build/web/* docs/
 git add .
 git commit -m "vercel" 
-git push origin HEAD:main --force
+git push 
