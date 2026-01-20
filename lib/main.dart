@@ -12,15 +12,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-// --- CONTROL DE VERSIÓN ---
-const String DEPLOY_VERSION = "INTENTO 4"; 
+const String DEPLOY_VERSION = "BURBUJA FIX v1"; 
 
 void main() {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
 
     print("==========================================");
-    print("🛑 VERSIÓN DE DESPLIEGUE: $DEPLOY_VERSION");
+    print("🛑 VERSIÓN: $DEPLOY_VERSION");
     print("==========================================");
 
     try {
@@ -31,9 +30,8 @@ void main() {
           authFlowType: AuthFlowType.implicit,
         ),
       );
-      print("🚀 [EXITO] Supabase conectado.");
     } catch (e) {
-      print("🔥 [ERROR] Falló Supabase: $e");
+      print("🔥 Supabase Error: $e");
     }
 
     final uri = Uri.base;
@@ -51,7 +49,7 @@ void main() {
     );
 
   }, (error, stack) {
-    print("🔥 CRASH FATAL ($DEPLOY_VERSION): $error");
+    print("🔥 CRASH: $error");
   });
 }
 
@@ -66,6 +64,7 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
   void initState() {
     super.initState();
     
+    // Configuración visual
     try {
       html.document.body!.style.backgroundColor = 'transparent';
       html.document.documentElement!.style.backgroundColor = 'transparent';
@@ -93,22 +92,25 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
             double mouseX = double.parse(parts[0]);
             double mouseY = double.parse(parts[1]);
             
-            // 1. Actualizar ojos (Global)
+            // 1. Ojos del bot (Global)
             ref.read(pointerPositionProvider.notifier).state = Offset(mouseX, mouseY);
             
-            // 2. Zona de Hover Estricta
+            // 2. Detección de Hover (Solo si el mouse está activo fuera del iframe)
             if (parts.length >= 4) {
               double screenW = double.parse(parts[2]);
               double screenH = double.parse(parts[3]);
               
-              // ZONA REDUCIDA A 80px (Casi encima del bot)
-              // Esto evita que se abra sola si pasas lejos
-              bool inBotZone = (mouseX > screenW - 80) && (mouseY > screenH - 80);
+              // ZONA ESTRICTA: 110px desde la esquina (Justo encima del botón)
+              bool inBotZone = (mouseX > screenW - 110) && (mouseY > screenH - 110);
               
               final currentHover = ref.read(isHoveredExternalProvider);
-              // Solo actualizamos desde HTML si entra, para salir confiamos más en Flutter
+              
+              // Lógica de entrada y SALIDA
               if (inBotZone && !currentHover) {
                  ref.read(isHoveredExternalProvider.notifier).state = true;
+              } else if (!inBotZone && currentHover) {
+                 // Si salimos de la zona, desactivamos el hover
+                 ref.read(isHoveredExternalProvider.notifier).state = false;
               }
             }
           }
@@ -119,6 +121,18 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
 
   @override
   Widget build(BuildContext context) {
+    // SEMÁFORO DE INTERACCIÓN
+    // Le decimos al HTML si debe dejar pasar los clicks o no
+    ref.listen(isHoveredExternalProvider, (prev, isHovered) {
+      if (isHovered) {
+        // Entró a la burbuja: HTML, activa el iframe para recibir clicks
+        html.window.parent?.postMessage('HOVER_ENTER', '*');
+      } else {
+        // Salió de la burbuja: HTML, desactiva iframe para que no moleste
+        html.window.parent?.postMessage('HOVER_EXIT', '*');
+      }
+    });
+
     ref.listen(chatOpenProvider, (prev, isOpen) {
       if (!isOpen) {
          html.window.parent?.postMessage('CMD_CLOSE', '*');
@@ -128,7 +142,7 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
     });
 
     return MaterialApp(
-      title: 'BotLode Player ($DEPLOY_VERSION)',
+      title: 'BotLode Player',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme.copyWith(
         canvasColor: Colors.transparent, 

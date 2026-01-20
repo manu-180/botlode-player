@@ -4,7 +4,7 @@ import 'dart:math' as math;
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
 import 'package:botlode_player/features/player/presentation/views/chat_panel_view.dart';
-import 'package:botlode_player/features/player/presentation/widgets/floating_head_widget.dart';
+import 'package:botlode_player/features/player/presentation/widgets/floating_head_widget.dart'; // LA CABEZA
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -74,38 +74,29 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
           ),
         ),
 
-        // BOTÓN FLOTANTE (BURBUJA) - REINGENIERÍA UX
+        // BOTÓN FLOTANTE (BURBUJA)
         Positioned(
           bottom: ghostPadding, right: ghostPadding,
           child: IgnorePointer(
             ignoring: isOpen, 
-            child: AnimatedScale(
-              scale: isOpen ? 0.0 : 1.0, 
-              duration: const Duration(milliseconds: 300),
-              curve: isOpen ? Curves.easeInBack : Curves.easeOutBack, 
-              alignment: Alignment.center,
-              
-              // 1. MOUSE REGION EXTERNA (Envuelve todo)
-              // Esto asegura que si la burbuja crece, el área de hover crece con ella.
-              child: MouseRegion(
-                cursor: SystemMouseCursors.click,
-                onEnter: (_) {
-                   ref.read(isHoveredExternalProvider.notifier).state = true;
-                },
-                onExit: (_) {
-                   ref.read(isHoveredExternalProvider.notifier).state = false;
-                },
-                
-                // 2. GESTURE DETECTOR INTERNO
-                // Ahora recibe clicks en toda la superficie
+            // MouseRegion GLOBAL del botón: Mantiene el estado mientras el mouse esté encima
+            child: MouseRegion(
+              onEnter: (_) => ref.read(isHoveredExternalProvider.notifier).state = true,
+              onExit: (_) => ref.read(isHoveredExternalProvider.notifier).state = false,
+              child: AnimatedScale(
+                scale: isOpen ? 0.0 : 1.0, 
+                duration: const Duration(milliseconds: 300),
+                curve: isOpen ? Curves.easeInBack : Curves.easeOutBack, 
+                alignment: Alignment.center,
                 child: GestureDetector(
+                  // El tap ahora funciona porque el HTML activará el iframe al hacer Hover
                   onTap: () {
                     ref.read(chatOpenProvider.notifier).set(true);
                     html.window.parent?.postMessage('CMD_OPEN', '*');
                   },
                   child: botConfigAsync.when(
                     loading: () => _buildFloatingButton(isHovered: false, name: "...", color: Colors.grey, subtext: "...", isDarkMode: true),
-                    error: (err, stack) => _buildFloatingButton(isHovered: false, name: "OFFLINE", color: Colors.red, subtext: "Error", isDarkMode: true),
+                    error: (err, stack) => _buildFloatingButton(isHovered: false, name: "ERROR", color: Colors.red, subtext: "Offline", isDarkMode: true),
                     data: (config) => _buildFloatingButton(
                       isHovered: isHovered, 
                       name: config.name.toUpperCase(), 
@@ -133,6 +124,7 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     const double closedSize = 72.0; 
     const double headSize = 58.0;    
     
+    // Cálculo de ancho
     int maxChars = math.max(name.length, subtext.length);
     double calculatedWidth = 120.0 + (maxChars * 9.0);
     double targetWidth = isHovered ? calculatedWidth.clamp(220.0, 380.0) : closedSize;
@@ -157,7 +149,7 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          // TEXTO EXPANSIBLE
+          // TEXTO (Solo visible si hay Hover)
           Flexible(
             fit: FlexFit.loose,
             child: AnimatedOpacity(
@@ -183,7 +175,7 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
             ),
           ),
           
-          // CABEZA DEL ROBOT
+          // CABEZA DEL BOT (Corregido a FloatingHeadWidget)
           Container(
             width: headSize, height: headSize,
             margin: const EdgeInsets.all(7), 
@@ -193,7 +185,7 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
                 fit: StackFit.expand,
                 children: [
                   Center(child: Icon(Icons.smart_toy_rounded, color: textColor.withOpacity(0.5), size: 30)),
-                  const FloatingHeadWidget(), 
+                  const FloatingHeadWidget(), // <--- AQUÍ ESTÁ LA CABEZA
                 ],
               ),
             ), 
