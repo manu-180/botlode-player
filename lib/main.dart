@@ -12,24 +12,23 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+// --- CONTROL DE VERSIÓN ---
+const String DEPLOY_VERSION = "INTENTO 1"; 
+
 void main() {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
 
-    // --- ZONA DE DEBUGGING (Verificar en Consola F12) ---
+    // 1. LOG DE VERSIÓN (Para confirmar que se actualizó en Vercel)
+    print("==========================================");
+    print("🛑 VERSIÓN DE DESPLIEGUE: $DEPLOY_VERSION");
+    print("==========================================");
+
+    // 2. LOG DE CREDENCIALES
     final url = AppConfig.supabaseUrl;
     final key = AppConfig.supabaseAnonKey;
-    
-    print("🔍 [DEBUG] Intentando iniciar Supabase...");
-    print("🔍 [DEBUG] URL Length: ${url.length} (Debería ser > 10)");
-    print("🔍 [DEBUG] KEY Length: ${key.length} (Debería ser > 20)");
-    
-    if (url.isEmpty || key.isEmpty) {
-      print("🔥 [FATAL] Las claves siguen vacías. El hardcode falló o es código viejo.");
-    } else {
-      print("✅ [DEBUG] Claves detectadas. Iniciando...");
-    }
-    // ----------------------------------------------------
+    print("🔍 [DEBUG] URL Length: ${url.length}");
+    print("🔍 [DEBUG] KEY Length: ${key.length}");
 
     try {
       await Supabase.initialize(
@@ -39,17 +38,15 @@ void main() {
           authFlowType: AuthFlowType.implicit,
         ),
       );
-      print("🚀 [EXITO] Supabase se inició correctamente.");
+      print("🚀 [EXITO] Supabase conectado.");
     } catch (e) {
-      print("🔥 [ERROR REAL] Falló Supabase: $e");
+      print("🔥 [ERROR] Falló Supabase: $e");
     }
 
     final uri = Uri.base;
     final urlBotId = uri.queryParameters['bot_id'];
-    // Usamos el ID por defecto si no viene en la URL
     final finalBotId = urlBotId ?? AppConfig.fallbackBotId;
-
-    print("🤖 [INFO] Bot ID: $finalBotId");
+    print("🤖 [INFO] Bot ID detectado: $finalBotId");
 
     runApp(
       ProviderScope(
@@ -61,7 +58,7 @@ void main() {
     );
 
   }, (error, stack) {
-    print("🔥 CRASH FINAL: $error");
+    print("🔥 CRASH FATAL ($DEPLOY_VERSION): $error");
   });
 }
 
@@ -76,16 +73,11 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
   void initState() {
     super.initState();
     
-    // Precarga silenciosa
-    try {
-      ref.read(riveFileLoaderProvider);       
-      ref.read(riveHeadFileLoaderProvider);  
-    } catch (_) {}
-
-    // Transparencia
+    // Forzar transparencia en el HTML (contenedor padre)
     try {
       html.document.body!.style.backgroundColor = 'transparent';
       html.document.documentElement!.style.backgroundColor = 'transparent';
+      print("🎨 [DEBUG] Fondo HTML forzado a transparente.");
     } catch (_) {}
 
     Future.delayed(const Duration(milliseconds: 500), () {
@@ -95,26 +87,8 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
     html.window.onMessage.listen((event) {
       if (event.data == null) return;
       final String data = event.data.toString();
-
-      if (data == 'CMD_OPEN') {
-        ref.read(chatOpenProvider.notifier).set(true);
-      } else if (data == 'CMD_CLOSE') {
-        ref.read(chatOpenProvider.notifier).set(false);
-      } 
-      else if (data == 'HOVER_ENTER') {
-        ref.read(isHoveredExternalProvider.notifier).state = true;
-      }
-      else if (data == 'HOVER_EXIT') {
-        ref.read(isHoveredExternalProvider.notifier).state = false;
-      }
-      else if (data.startsWith('MOUSE_MOVE:')) {
-        try {
-          final parts = data.split(':')[1].split(',');
-          final double x = double.parse(parts[0]);
-          final double y = double.parse(parts[1]);
-          ref.read(pointerPositionProvider.notifier).state = Offset(x, y);
-        } catch (_) {}
-      }
+      if (data == 'CMD_OPEN') ref.read(chatOpenProvider.notifier).set(true);
+      if (data == 'CMD_CLOSE') ref.read(chatOpenProvider.notifier).set(false);
     });
   }
 
@@ -125,7 +99,7 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
     });
 
     return MaterialApp(
-      title: 'BotLode Player',
+      title: 'BotLode Player ($DEPLOY_VERSION)',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme.copyWith(
         canvasColor: Colors.transparent, 
