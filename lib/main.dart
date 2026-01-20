@@ -13,7 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // --- CONTROL DE VERSIÓN ---
-const String DEPLOY_VERSION = "INTENTO 12 (Solid + Cursor Fix)"; 
+const String DEPLOY_VERSION = "INTENTO 13 (Safe Mode + Local Fix)"; 
 
 void main() {
   runZonedGuarded(() async {
@@ -62,16 +62,27 @@ class BotPlayerApp extends ConsumerStatefulWidget {
 }
 
 class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
+  
+  // Función auxiliar para enviar mensajes de forma segura
+  void _safePostMessage(String message) {
+    try {
+      html.window.parent?.postMessage(message, '*');
+    } catch (e) {
+      print("⚠️ Error enviando postMessage ($message): $e");
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     try {
+      // Limpieza agresiva del DOM host
       html.document.body!.style.backgroundColor = 'transparent';
       html.document.documentElement!.style.backgroundColor = 'transparent';
     } catch (_) {}
 
     Future.delayed(const Duration(milliseconds: 500), () {
-        html.window.parent?.postMessage('CMD_READY', '*');
+        _safePostMessage('CMD_READY');
     });
     
     html.window.onMessage.listen((event) {
@@ -119,17 +130,17 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
   Widget build(BuildContext context) {
     ref.listen(isHoveredExternalProvider, (prev, isHovered) {
       if (isHovered) {
-        html.window.parent?.postMessage('HOVER_ENTER', '*');
+        _safePostMessage('HOVER_ENTER');
       } else {
-        html.window.parent?.postMessage('HOVER_EXIT', '*');
+        _safePostMessage('HOVER_EXIT');
       }
     });
 
     ref.listen(chatOpenProvider, (prev, isOpen) {
       if (!isOpen) {
-         html.window.parent?.postMessage('CMD_CLOSE', '*');
+         _safePostMessage('CMD_CLOSE');
       } else {
-         html.window.parent?.postMessage('CMD_OPEN', '*');
+         _safePostMessage('CMD_OPEN');
       }
     });
 

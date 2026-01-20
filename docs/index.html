@@ -5,6 +5,7 @@
 
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Web player for BotsLode units.">
 
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -18,7 +19,7 @@
   <link rel="manifest" href="manifest.json">
 
   <style>
-    /* CSS CRÍTICO: Asegura que el contenedor HTML/Body sea transparente */
+    /* CSS CRÍTICO: Transparencia absoluta desde el arranque */
     html, body {
       height: 100%;
       margin: 0;
@@ -27,7 +28,7 @@
       overflow: hidden;
     }
     
-    /* Elimina cualquier fondo del Glass Pane de Flutter */
+    /* Asegura que el canvas no tenga color base */
     flt-glass-pane {
       background-color: transparent !important;
     }
@@ -37,19 +38,14 @@
   <script src="flutter_bootstrap.js" async></script>
   
   <script>
-    // Inicialización del Motor Gráfico
     window.addEventListener('load', function(ev) {
-      
+      // Configuración de arranque
       _flutter.loader.loadEntrypoint({
         onEntrypointLoaded: async function(engineInitializer) {
           
-          // CONFIGURACIÓN MAESTRA DE TRANSPARENCIA
           let appRunner = await engineInitializer.initializeEngine({
-            // 🚨 CAMBIO CRÍTICO: FORZAR CANVAS KIT 🚨
-            // Esto obliga a usar WebGL. Los colores serán sólidos y perfectos.
+            // 🚨 FORZAR RENDIMIENTO Y TRANSPARENCIA 🚨
             renderer: "canvaskit", 
-            
-            // EL SECRETO: ARGB Hexadecimal para Transparencia Total
             background_color: "0x00000000" 
           });
 
