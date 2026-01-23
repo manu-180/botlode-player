@@ -1,8 +1,7 @@
 // Archivo: lib/features/player/presentation/providers/chat_provider.dart
-import 'package:botlode_player/core/network/api_client.dart';
 import 'package:botlode_player/features/player/domain/models/chat_message.dart';
-// [CORRECCIÓN] Importamos el provider desde su nueva ubicación
-import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart'; 
+import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
+import 'package:botlode_player/features/player/presentation/providers/chat_repository_provider.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import 'package:uuid/uuid.dart';
 
@@ -57,6 +56,7 @@ class ChatController extends _$ChatController {
 
     // 1. LEER EL ID DINÁMICO
     final botId = ref.read(currentBotIdProvider);
+    final repository = ref.read(chatRepositoryProvider);
 
     // 2. Agregar mensaje del usuario (Optimistic UI)
     final userMsg = ChatMessage(
@@ -72,20 +72,17 @@ class ChatController extends _$ChatController {
       currentMood: 'thinking', 
     );
 
-    // 3. Llamar a la Edge Function
-    final response = await ApiClient().sendMessage(
+    // 3. Llamar al Repositorio (Clean Architecture)
+    final response = await repository.sendMessage(
       message: text,
       sessionId: _sessionId,
       botId: botId, 
     );
 
-    // 4. Procesar respuesta
-    final botText = response['reply'] ?? '...';
-    final botMood = response['mood'] ?? 'idle';
-
+    // 4. Procesar respuesta tipada
     final botMsg = ChatMessage(
       id: _uuid.v4(),
-      text: botText,
+      text: response.reply,
       role: MessageRole.bot,
       timestamp: DateTime.now(),
     );
@@ -94,7 +91,7 @@ class ChatController extends _$ChatController {
     state = state.copyWith(
       messages: [...state.messages, botMsg],
       isLoading: false,
-      currentMood: botMood,
+      currentMood: response.mood,
     );
   }
 }

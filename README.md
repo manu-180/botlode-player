@@ -36,5 +36,5 @@ flutter build web
 mkdir docs    
 cp -r build/web/* docs/
 git add .
-git commit -m "vercel" 
+git commit -m "vercel refactor antes de historial" 
 git push 

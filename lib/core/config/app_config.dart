@@ -12,7 +12,7 @@ class AppConfig {
 
   // -----------------------------------------------------------
 
-  // [NUEVO] Nombre exacto del archivo Rive
+  // Nombre exacto del archivo Rive
   static const String riveFileName = "cabezabot.riv";
 
   static String get supabaseUrl {
@@ -23,14 +23,16 @@ class AppConfig {
     return _hardcodedKey;
   }
 
+  // URL de la Edge Function (EL CEREBRO)
   static String get brainFunctionUrl {
     final baseUrl = supabaseUrl;
     if (baseUrl.isEmpty) return '';
     final cleanUrl = baseUrl.endsWith('/') 
         ? baseUrl.substring(0, baseUrl.length - 1) 
         : baseUrl;
-    return '$cleanUrl/functions/v1/chat-brain'; 
+    // CORRECCIÓN: Cambiamos 'chat-brain' por el nombre real 'botlode-brain'
+    return '$cleanUrl/functions/v1/botlode-brain'; 
   }
 
-  static const String fallbackBotId = "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11"; 
+  static const String fallbackBotId = "0b99e786-fa91-42ba-9578-5784f5049140"; 
 }

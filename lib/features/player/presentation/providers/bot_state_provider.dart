@@ -1,49 +1,22 @@
 // Archivo: lib/features/player/presentation/providers/bot_state_provider.dart
 import 'package:botlode_player/core/config/app_config.dart';
 import 'package:botlode_player/features/player/domain/models/bot_config.dart';
-import 'package:flutter/material.dart';
+import 'package:botlode_player/features/player/presentation/providers/bot_repository_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart'; // Cliente Oficial
 
-// ID del bot
+// ID del bot (Leído de la URL o Configuración)
 final currentBotIdProvider = Provider<String>((ref) {
   return AppConfig.fallbackBotId;
 });
 
-// Estado de ánimo
+// Estado de ánimo (Controlado por la respuesta del Chat)
 final botMoodProvider = StateProvider<int>((ref) => 0);
 
-// --- PROVIDER DE CONFIGURACIÓN EN TIEMPO REAL ---
-// Usamos StreamProvider para que la UI se reconstruya cada vez que la DB cambie
+// --- PROVIDER DE CONFIGURACIÓN (REFACTORIZADO) ---
+// Ahora delega la lógica de datos al Repositorio.
 final botConfigProvider = StreamProvider<BotConfig>((ref) {
   final botId = ref.watch(currentBotIdProvider);
+  final repository = ref.read(botRepositoryProvider);
   
-  // Configuración "Skeleton" por defecto
-  final defaultConfig = BotConfig(
-    name: "Cargando...",
-    themeColor: const Color(0xFFFFC000), 
-    systemPrompt: "",
-    isDarkMode: true,       
-    showOfflineAlert: true, 
-  );
-
-  if (botId.isEmpty) {
-    // Si no hay ID, emitimos el default constante
-    return Stream.value(defaultConfig);
-  }
-
-  // --- MAGIA DE REALTIME ---
-  // Escuchamos cambios en la tabla 'bots' donde el ID coincida.
-  return Supabase.instance.client
-      .from('bots')
-      .stream(primaryKey: ['id']) // Importante: Definir la PK para que el stream funcione
-      .eq('id', botId)
-      .map((List<Map<String, dynamic>> data) {
-        // El stream devuelve una lista de filas.
-        if (data.isEmpty) {
-          return defaultConfig;
-        }
-        // Convertimos la primera fila (nuestro bot) en el objeto BotConfig
-        return BotConfig.fromJson(data.first);
-      });
+  return repository.getBotConfigStream(botId);
 });
