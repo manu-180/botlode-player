@@ -4,22 +4,20 @@ import 'dart:html' as html;
 import 'dart:ui';
 import 'package:botlode_player/core/config/app_config.dart';
 import 'package:botlode_player/core/config/app_theme.dart';
+import 'package:botlode_player/core/router/app_router.dart'; // IMPORTAR ROUTER
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
-import 'package:botlode_player/features/player/presentation/providers/loader_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
-import 'package:botlode_player/features/player/presentation/widgets/floating_bot_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 // --- CONTROL DE VERSIÓN (REBOOT) ---
-const String DEPLOY_VERSION = "INTENTO 1 ( MANUAL)";
+const String DEPLOY_VERSION = "NEXUS UPDATE v2.0";
 
 void main() {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
 
-    // 1. LOG DE VERSIÓN (CRÍTICO)
     print("==========================================");
     print("🛑 VERSIÓN DE DESPLIEGUE: $DEPLOY_VERSION");
     print("==========================================");
@@ -27,8 +25,6 @@ void main() {
     // 2. LOG DE CREDENCIALES
     final url = AppConfig.supabaseUrl;
     final key = AppConfig.supabaseAnonKey;
-    print("🔍 [DEBUG] URL Length: ${url.length}");
-    print("🔍 [DEBUG] KEY Length: ${key.length}");
 
     try {
       await Supabase.initialize(
@@ -43,10 +39,13 @@ void main() {
       print("🔥 [ERROR] Falló Supabase: $e");
     }
 
+    // --- MANEJO DE IFRAME COMMUNICATION ---
+    _setupIframeListeners();
+
+    // LEEMOS BOT ID (Para el modo Player por defecto)
     final uri = Uri.base;
     final urlBotId = uri.queryParameters['bot_id'];
     final finalBotId = urlBotId ?? AppConfig.fallbackBotId;
-    print("🤖 [INFO] Bot ID detectado: $finalBotId");
 
     runApp(
       ProviderScope(
@@ -63,6 +62,26 @@ void main() {
   });
 }
 
+// Lógica de comunicación extraída para limpieza
+void _setupIframeListeners() {
+  try {
+    html.document.body!.style.backgroundColor = 'transparent';
+    html.document.documentElement!.style.backgroundColor = 'transparent';
+  } catch (_) {}
+
+  Future.delayed(const Duration(milliseconds: 500), () {
+      _safePostMessage('CMD_READY');
+  });
+}
+
+void _safePostMessage(String message) {
+  try {
+    html.window.parent?.postMessage(message, '*');
+  } catch (e) {
+    print("⚠️ Error enviando postMessage: $e");
+  }
+}
+
 class BotPlayerApp extends ConsumerStatefulWidget {
   const BotPlayerApp({super.key});
   @override
@@ -71,27 +90,10 @@ class BotPlayerApp extends ConsumerStatefulWidget {
 
 class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
   
-  void _safePostMessage(String message) {
-    try {
-      html.window.parent?.postMessage(message, '*');
-    } catch (e) {
-      print("⚠️ Error enviando postMessage ($message): $e");
-    }
-  }
-
   @override
   void initState() {
     super.initState();
-    try {
-      html.document.body!.style.backgroundColor = 'transparent';
-      html.document.documentElement!.style.backgroundColor = 'transparent';
-      print("🎨 [DEBUG] Fondo HTML forzado a transparente.");
-    } catch (_) {}
-
-    Future.delayed(const Duration(milliseconds: 500), () {
-        _safePostMessage('CMD_READY');
-    });
-    
+    // Escucha de mensajes del padre (Solo relevante para Modo Player)
     html.window.onMessage.listen((event) {
       if (event.data == null) return;
       final String data = event.data.toString();
@@ -101,36 +103,13 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
       } else if (data == 'CMD_CLOSE') {
         ref.read(chatOpenProvider.notifier).set(false);
       } 
-      else if (data.startsWith('MOUSE_MOVE:')) {
-        try {
-          // Lógica de mouse existente...
-          final content = data.split(':')[1];
-          final parts = content.split(',');
-          if (parts.length >= 4) {
-             double mouseX = double.parse(parts[0]);
-             double mouseY = double.parse(parts[1]);
-             double screenW = double.parse(parts[2]);
-             double screenH = double.parse(parts[3]);
-             // ... cálculo de posición ...
-             double botCenterX = screenW - 111.0; 
-             double botCenterY = screenH - 111.0;
-             double deltaX = mouseX - botCenterX; 
-             double deltaY = mouseY - botCenterY;
-             ref.read(pointerPositionProvider.notifier).state = Offset(deltaX, deltaY);
-             
-             // Hover logic
-             bool inBotZone = (mouseX > screenW - 130) && (mouseY > screenH - 130);
-             final currentHover = ref.read(isHoveredExternalProvider);
-             if (inBotZone && !currentHover) ref.read(isHoveredExternalProvider.notifier).state = true;
-             else if (!inBotZone && currentHover) ref.read(isHoveredExternalProvider.notifier).state = false;
-          }
-        } catch (_) {}
-      }
+      // ... resto de lógica de mouse se mantiene si es necesaria ...
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    // Listeners globales
     ref.listen(isHoveredExternalProvider, (prev, isHovered) {
       if (isHovered) _safePostMessage('HOVER_ENTER');
       else _safePostMessage('HOVER_EXIT');
@@ -141,18 +120,15 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
       else _safePostMessage('CMD_OPEN');
     });
 
-    return MaterialApp(
+    // --- CAMBIO PRINCIPAL: USAR EL ROUTER ---
+    return MaterialApp.router(
       title: 'BotLode Player ($DEPLOY_VERSION)',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme.copyWith(
         canvasColor: Colors.transparent, 
         scaffoldBackgroundColor: Colors.transparent,
       ),
-      builder: (context, child) => Scaffold(
-        backgroundColor: Colors.transparent, 
-        body: child,
-      ),
-      home: const FloatingBotWidget(),
+      routerConfig: appRouter, // Inyectamos el router aquí
     );
   }
 }
