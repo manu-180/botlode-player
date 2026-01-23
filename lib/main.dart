@@ -4,32 +4,32 @@ import 'dart:html' as html;
 import 'dart:ui';
 import 'package:botlode_player/core/config/app_config.dart';
 import 'package:botlode_player/core/config/app_theme.dart';
-import 'package:botlode_player/core/router/app_router.dart'; // IMPORTAR ROUTER
+import 'package:botlode_player/core/config/configure_web.dart'; 
+import 'package:botlode_player/core/router/app_router.dart';
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart'; // IMPORTAR
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-// --- CONTROL DE VERSIÓN (REBOOT) ---
-const String DEPLOY_VERSION = "NEXUS UPDATE v2.0";
+const String DEPLOY_VERSION = "NEXUS v2.2 - PERSISTENCE";
 
 void main() {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
+    
+    configureUrlStrategy(); 
 
     print("==========================================");
     print("🛑 VERSIÓN DE DESPLIEGUE: $DEPLOY_VERSION");
     print("==========================================");
 
-    // 2. LOG DE CREDENCIALES
-    final url = AppConfig.supabaseUrl;
-    final key = AppConfig.supabaseAnonKey;
-
+    // 1. SUPABASE
     try {
       await Supabase.initialize(
-        url: url,
-        anonKey: key,
+        url: AppConfig.supabaseUrl,
+        anonKey: AppConfig.supabaseAnonKey,
         authOptions: const FlutterAuthClientOptions(
           authFlowType: AuthFlowType.implicit,
         ),
@@ -39,13 +39,23 @@ void main() {
       print("🔥 [ERROR] Falló Supabase: $e");
     }
 
-    // --- MANEJO DE IFRAME COMMUNICATION ---
     _setupIframeListeners();
 
-    // LEEMOS BOT ID (Para el modo Player por defecto)
+    // 2. LÓGICA DE IDENTIDAD (JERARQUÍA DE PODER)
     final uri = Uri.base;
     final urlBotId = uri.queryParameters['bot_id'];
-    final finalBotId = urlBotId ?? AppConfig.fallbackBotId;
+    
+    // Leemos la memoria del dispositivo
+    final prefs = await SharedPreferences.getInstance();
+    final savedBotId = prefs.getString('saved_bot_id');
+
+    // DECISIÓN FINAL:
+    // 1. URL (Mandatorio para iframes)
+    // 2. Memoria (Para el dueño que vuelve)
+    // 3. Fallback (Demo por defecto)
+    final finalBotId = urlBotId ?? savedBotId ?? AppConfig.fallbackBotId;
+
+    print("🤖 [INFO] Bot ID Activo: $finalBotId (Fuente: ${urlBotId != null ? 'URL' : (savedBotId != null ? 'MEMORIA' : 'DEFAULT')})");
 
     runApp(
       ProviderScope(
@@ -62,7 +72,6 @@ void main() {
   });
 }
 
-// Lógica de comunicación extraída para limpieza
 void _setupIframeListeners() {
   try {
     html.document.body!.style.backgroundColor = 'transparent';
@@ -93,7 +102,6 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
   @override
   void initState() {
     super.initState();
-    // Escucha de mensajes del padre (Solo relevante para Modo Player)
     html.window.onMessage.listen((event) {
       if (event.data == null) return;
       final String data = event.data.toString();
@@ -103,13 +111,11 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
       } else if (data == 'CMD_CLOSE') {
         ref.read(chatOpenProvider.notifier).set(false);
       } 
-      // ... resto de lógica de mouse se mantiene si es necesaria ...
     });
   }
 
   @override
   Widget build(BuildContext context) {
-    // Listeners globales
     ref.listen(isHoveredExternalProvider, (prev, isHovered) {
       if (isHovered) _safePostMessage('HOVER_ENTER');
       else _safePostMessage('HOVER_EXIT');
@@ -120,7 +126,6 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
       else _safePostMessage('CMD_OPEN');
     });
 
-    // --- CAMBIO PRINCIPAL: USAR EL ROUTER ---
     return MaterialApp.router(
       title: 'BotLode Player ($DEPLOY_VERSION)',
       debugShowCheckedModeBanner: false,
@@ -128,7 +133,7 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
         canvasColor: Colors.transparent, 
         scaffoldBackgroundColor: Colors.transparent,
       ),
-      routerConfig: appRouter, // Inyectamos el router aquí
+      routerConfig: appRouter, 
     );
   }
 }

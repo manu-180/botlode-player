@@ -7,7 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-// --- MODELOS LOCALES (PARA AUTONOMÍA DEL PLAYER) ---
+// --- MODELOS ---
 class NexusSession {
   final String sessionId;
   final DateTime lastActive;
@@ -55,7 +55,6 @@ class NexusDashboardView extends StatefulWidget {
 class _NexusDashboardViewState extends State<NexusDashboardView> {
   String? _selectedSessionId;
   
-  // Streams directos para reactividad total (Supabase Realtime)
   Stream<List<NexusSession>> get _sessionsStream {
     return Supabase.instance.client
         .from('session_summaries')
@@ -80,7 +79,7 @@ class _NexusDashboardViewState extends State<NexusDashboardView> {
       backgroundColor: const Color(0xFF050505),
       body: Row(
         children: [
-          // PANEL IZQUIERDO (LISTA)
+          // LISTA
           Container(
             width: 350,
             decoration: BoxDecoration(
@@ -94,11 +93,11 @@ class _NexusDashboardViewState extends State<NexusDashboardView> {
                   child: StreamBuilder<List<NexusSession>>(
                     stream: _sessionsStream,
                     builder: (context, snapshot) {
-                      if (snapshot.hasError) return Center(child: Text("Error de enlace: ${snapshot.error}", style: const TextStyle(color: AppTheme.error)));
+                      if (snapshot.hasError) return Center(child: Text("Error: ${snapshot.error}", style: const TextStyle(color: AppTheme.error)));
                       if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: AppTheme.primary));
                       
                       final sessions = snapshot.data!;
-                      if (sessions.isEmpty) return const Center(child: Text("ESPERANDO TRÁFICO...", style: TextStyle(color: Colors.white38, fontFamily: 'Oxanium')));
+                      if (sessions.isEmpty) return const Center(child: Text("SIN ACTIVIDAD RECIENTE", style: TextStyle(color: Colors.white38, fontFamily: 'Oxanium')));
 
                       return ListView.builder(
                         itemCount: sessions.length,
@@ -119,7 +118,7 @@ class _NexusDashboardViewState extends State<NexusDashboardView> {
             ),
           ),
 
-          // PANEL DERECHO (DETALLE)
+          // DETALLE
           Expanded(
             child: Container(
               decoration: const BoxDecoration(
@@ -151,13 +150,13 @@ class _NexusDashboardViewState extends State<NexusDashboardView> {
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(color: AppTheme.primary.withOpacity(0.1), shape: BoxShape.circle),
-            child: const Icon(Icons.hub_rounded, color: AppTheme.primary, size: 20),
+            child: const Icon(Icons.history_rounded, color: AppTheme.primary, size: 20),
           ),
           const SizedBox(width: 12),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text("NEXUS CRM", style: GoogleFonts.oxanium(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 1.5)),
+              Text("HISTORIAL DE ENLACE", style: GoogleFonts.oxanium(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16, letterSpacing: 1.5)),
               Text("ID: ${widget.botId.substring(0, 8)}...", style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10, fontFamily: 'Courier')),
             ],
           )
@@ -171,12 +170,12 @@ class _NexusDashboardViewState extends State<NexusDashboardView> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.radar_rounded, size: 80, color: AppTheme.primary.withOpacity(0.2))
+          Icon(Icons.touch_app_rounded, size: 80, color: AppTheme.primary.withOpacity(0.2))
               .animate(onPlay: (c) => c.repeat(reverse: true)).scale(duration: 2.seconds, begin: const Offset(1, 1), end: const Offset(1.1, 1.1)),
           const SizedBox(height: 24),
-          Text("INTERCEPTOR DE SEÑALES", style: GoogleFonts.oxanium(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 2.0)),
+          Text("SELECCIONA UN CHAT", style: GoogleFonts.oxanium(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 2.0)),
           const SizedBox(height: 8),
-          const Text("Selecciona una frecuencia para decodificar.", style: TextStyle(color: Colors.white38)),
+          const Text("Visualiza las conversaciones y detecta oportunidades.", style: TextStyle(color: Colors.white38)),
         ],
       ),
     );
@@ -185,13 +184,12 @@ class _NexusDashboardViewState extends State<NexusDashboardView> {
   Widget _buildChatDetail(String sessionId) {
     return Column(
       children: [
-        // CHAT HEADER
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 20),
           color: Colors.black.withOpacity(0.8),
           child: Row(
             children: [
-              const Text("REGISTRO NEURAL", style: TextStyle(color: Colors.white, fontFamily: 'Oxanium', fontWeight: FontWeight.bold)),
+              const Text("REGISTRO DE CONVERSACIÓN", style: TextStyle(color: Colors.white, fontFamily: 'Oxanium', fontWeight: FontWeight.bold)),
               const Spacer(),
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -201,7 +199,6 @@ class _NexusDashboardViewState extends State<NexusDashboardView> {
             ],
           ),
         ),
-        // MENSAJES
         Expanded(
           child: StreamBuilder<List<NexusMessage>>(
             stream: _messagesStream(sessionId),
@@ -222,8 +219,6 @@ class _NexusDashboardViewState extends State<NexusDashboardView> {
   }
 }
 
-// --- WIDGETS AUXILIARES ---
-
 class _NexusSessionCard extends StatelessWidget {
   final NexusSession session;
   final bool isSelected;
@@ -233,11 +228,10 @@ class _NexusSessionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Lead Scoring Visual
     Color scoreColor = Colors.grey;
-    String scoreLabel = "COLD";
-    if (session.intentScore > 70) { scoreColor = AppTheme.success; scoreLabel = "HOT LEAD"; }
-    else if (session.intentScore > 30) { scoreColor = AppTheme.primary; scoreLabel = "WARM"; }
+    String scoreLabel = "CONSULTA";
+    if (session.intentScore > 70) { scoreColor = AppTheme.success; scoreLabel = "VENTA PROBABLE"; }
+    else if (session.intentScore > 30) { scoreColor = AppTheme.primary; scoreLabel = "INTERESADO"; }
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
@@ -289,7 +283,7 @@ class _NexusBubble extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(isUser ? "CLIENTE" : "SISTEMA", style: TextStyle(color: isUser ? Colors.black54 : Colors.white38, fontSize: 9, fontWeight: FontWeight.bold)),
+            Text(isUser ? "CLIENTE" : "BOT", style: TextStyle(color: isUser ? Colors.black54 : Colors.white38, fontSize: 9, fontWeight: FontWeight.bold)),
             const SizedBox(height: 4),
             Text(message.content, style: TextStyle(color: isUser ? Colors.black : Colors.white, fontSize: 14)),
           ],

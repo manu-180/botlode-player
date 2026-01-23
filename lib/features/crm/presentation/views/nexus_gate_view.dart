@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class NexusGateView extends StatefulWidget {
@@ -34,32 +35,37 @@ class _NexusGateViewState extends State<NexusGateView> {
     });
 
     try {
-      final botId = _idController.text.trim();
+      final inputId = _idController.text.trim();
       final pin = _pinController.text.trim();
 
-      if (botId.isEmpty || pin.isEmpty) {
+      if (inputId.isEmpty || pin.isEmpty) {
         throw "Credenciales incompletas.";
       }
 
-      // VERIFICACIÓN DE SEGURIDAD (Simulada por ahora, idealmente RPC)
-      // Buscamos si existe un bot con ese ID y verificamos el PIN (asumiendo campo 'access_pin')
-      // NOTA: Para producción, usar una Edge Function 'verify_bot_access' es lo más seguro.
-      // Aquí hacemos una consulta directa asumiendo que tienes RLS o es un MVP.
+      // --- VERIFICACIÓN ---
       final response = await Supabase.instance.client
           .from('bots')
           .select('id')
-          .eq('id', botId)
-          //.eq('access_pin', pin) // DESCOMENTAR CUANDO TENGAS LA COLUMNA EN DB
+          .or('id.eq.$inputId,alias.eq.$inputId') 
+          .eq('access_pin', pin) 
           .maybeSingle();
 
       if (response == null) {
-        throw "ACCESO DENEGADO: ID o PIN inválido.";
+        await Future.delayed(const Duration(seconds: 1));
+        throw "ACCESO DENEGADO: ID o PIN incorrecto.";
       }
 
-      // Si pasa, entramos al Dashboard
+      final realBotId = response['id'] as String;
+
+      // --- PERSISTENCIA ---
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('saved_bot_id', realBotId);
+
+      // --- NAVEGACIÓN A RUTA NUEVA ---
       if (mounted) {
-        context.go('/nexus/dashboard', extra: botId);
+        context.go('/historial/panel', extra: realBotId);
       }
+
     } catch (e) {
       setState(() => _error = e.toString().replaceAll('Exception:', ''));
     } finally {
@@ -73,7 +79,6 @@ class _NexusGateViewState extends State<NexusGateView> {
       backgroundColor: Colors.black,
       body: Stack(
         children: [
-          // FONDO ANIMADO (GRID TÁCTICO)
           Positioned.fill(
             child: Opacity(
               opacity: 0.1,
@@ -103,15 +108,14 @@ class _NexusGateViewState extends State<NexusGateView> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // ICONO DE CANDADO ANIMADO
-                  const Icon(Icons.lock_person_rounded, size: 48, color: AppTheme.primary)
+                  const Icon(Icons.history_edu_rounded, size: 48, color: AppTheme.primary)
                       .animate(onPlay: (c) => c.repeat(reverse: true))
                       .fade(begin: 0.5, end: 1.0, duration: 1.5.seconds),
                   
                   const SizedBox(height: 24),
                   
                   Text(
-                    "NEXUS GATEWAY",
+                    "ACCESO A HISTORIAL",
                     style: GoogleFonts.oxanium(
                       color: Colors.white,
                       fontSize: 22,
@@ -121,30 +125,30 @@ class _NexusGateViewState extends State<NexusGateView> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    "Acceso restringido a personal autorizado",
+                    "Registro de conversaciones y ventas",
                     style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 11),
                   ),
 
                   const SizedBox(height: 40),
 
-                  // INPUTS
                   _GateInput(
                     controller: _idController,
-                    label: "UNIT ID",
+                    label: "ID DE UNIDAD / ALIAS", 
                     icon: Icons.fingerprint,
-                    isReadOnly: widget.initialBotId.isNotEmpty, // Si viene por URL, es readonly
+                    isReadOnly: false, 
+                    hint: "Ej: tito-pizzas",
                   ),
                   const SizedBox(height: 20),
                   _GateInput(
                     controller: _pinController,
-                    label: "ACCESS PIN",
+                    label: "PIN DE SEGURIDAD",
                     icon: Icons.password,
                     isObscure: true,
+                    hint: "****",
                   ),
 
                   const SizedBox(height: 30),
 
-                  // FEEDBACK DE ERROR
                   if (_error != null)
                     Padding(
                       padding: const EdgeInsets.only(bottom: 20),
@@ -155,7 +159,6 @@ class _NexusGateViewState extends State<NexusGateView> {
                       ),
                     ).animate().shake(),
 
-                  // BOTÓN DE ACCESO
                   SizedBox(
                     width: double.infinity,
                     height: 50,
@@ -168,7 +171,7 @@ class _NexusGateViewState extends State<NexusGateView> {
                       ),
                       child: _isLoading
                           ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2))
-                          : const Text("INICIAR ENLACE", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.5)),
+                          : const Text("INGRESAR", style: TextStyle(fontWeight: FontWeight.bold, letterSpacing: 1.5)),
                     ),
                   ),
                 ],
@@ -187,6 +190,7 @@ class _GateInput extends StatelessWidget {
   final IconData icon;
   final bool isObscure;
   final bool isReadOnly;
+  final String? hint;
 
   const _GateInput({
     required this.controller,
@@ -194,6 +198,7 @@ class _GateInput extends StatelessWidget {
     required this.icon,
     this.isObscure = false,
     this.isReadOnly = false,
+    this.hint,
   });
 
   @override
@@ -210,6 +215,7 @@ class _GateInput extends StatelessWidget {
           style: const TextStyle(color: Colors.white, fontFamily: 'Courier', fontWeight: FontWeight.bold),
           cursorColor: AppTheme.primary,
           decoration: InputDecoration(
+            hintText: hint,
             prefixIcon: Icon(icon, color: isReadOnly ? Colors.white24 : AppTheme.primary),
             filled: true,
             fillColor: Colors.white.withOpacity(0.05),

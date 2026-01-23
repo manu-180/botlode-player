@@ -8,29 +8,26 @@ import 'package:go_router/go_router.dart';
 final appRouter = GoRouter(
   initialLocation: '/',
   routes: [
-    // RUTA 1: EL BOT (PÚBLICA)
-    // Es lo que se ve en el iframe.
+    // RUTA 1: EL BOT (PÚBLICA - IFRAME)
     GoRoute(
       path: '/',
       builder: (context, state) => const FloatingBotWidget(),
     ),
 
-    // RUTA 2: NEXUS GATE (LOGIN)
-    // Acceso: tudominio.com/nexus?bot_id=...
+    // RUTA 2: GATEWAY DE ACCESO
+    // Nueva URL: tudominio.com/historial?bot_id=...
     GoRoute(
-      path: '/nexus',
+      path: '/historial',
       builder: (context, state) {
-        // Capturamos el ID de la URL para autocompletar
         final botId = state.uri.queryParameters['bot_id'] ?? '';
         return NexusGateView(initialBotId: botId);
       },
     ),
 
-    // RUTA 3: NEXUS DASHBOARD (PRIVADA)
+    // RUTA 3: PANEL DE CONTROL
     GoRoute(
-      path: '/nexus/dashboard',
+      path: '/historial/panel',
       builder: (context, state) {
-        // Pasamos el ID del bot autenticado
         final botId = state.extra as String?;
         if (botId == null) return const NexusGateView(initialBotId: '');
         return NexusDashboardView(botId: botId);
