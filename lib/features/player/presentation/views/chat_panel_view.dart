@@ -2,6 +2,7 @@
 import 'dart:async';
 import 'dart:html' as html;
 import 'package:botlode_player/core/network/connectivity_provider.dart';
+import 'package:botlode_player/core/services/presence_manager.dart';
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/chat_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
@@ -10,6 +11,7 @@ import 'package:botlode_player/features/player/presentation/widgets/rive_avatar.
 import 'package:botlode_player/features/player/presentation/widgets/status_indicator.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ChatPanelView extends ConsumerStatefulWidget {
   const ChatPanelView({super.key});
@@ -18,25 +20,64 @@ class ChatPanelView extends ConsumerStatefulWidget {
   ConsumerState<ChatPanelView> createState() => _ChatPanelViewState();
 }
 
-class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
+class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindingObserver {
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   bool _wasOffline = false;
+  
+  // GESTOR DE PRESENCIA (Puede ser nulo al inicio)
+  PresenceManager? _presenceManager;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    
+    // Configuración inicial de UI solamente
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final String moodString = ref.read(chatControllerProvider).currentMood;
       ref.read(botMoodProvider.notifier).state = _getMoodIndex(moodString);
+      
+      // Si el chat arranca abierto (por deep link o recarga), activamos online
+      if (ref.read(chatOpenProvider)) {
+        _getOrInitManager().setOnline();
+      }
     });
+  }
+
+  /// HELPER: Obtiene el manager existente o crea uno nuevo con datos frescos
+  PresenceManager _getOrInitManager() {
+    if (_presenceManager != null) return _presenceManager!;
+
+    final String botId = ref.read(currentBotIdProvider);
+    final chatState = ref.read(chatControllerProvider);
+
+    _presenceManager = PresenceManager(
+      Supabase.instance.client,
+      sessionId: chatState.sessionId,
+      botId: botId,
+    );
+    return _presenceManager!;
   }
 
   @override
   void dispose() {
+    _presenceManager?.setOffline();
+    WidgetsBinding.instance.removeObserver(this);
     _textController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.detached || state == AppLifecycleState.paused) {
+      _presenceManager?.setOffline();
+    } else if (state == AppLifecycleState.resumed) {
+      if (ref.read(chatOpenProvider)) {
+        _getOrInitManager().setOnline();
+      }
+    }
   }
 
   int _getMoodIndex(String mood) {
@@ -64,23 +105,30 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
     final isMobile = MediaQuery.of(context).size.width < 600;
     final botConfig = ref.watch(botConfigProvider).asData?.value;
     final themeColor = botConfig?.themeColor ?? const Color(0xFFFFC000);
-    
-    // 1. FORZADO DE TEMA
-    final bool isDarkMode = botConfig?.isDarkMode ?? true; 
-    
+    final isDarkMode = botConfig?.isDarkMode ?? true; 
     final showOfflineAlert = botConfig?.showOfflineAlert ?? true;
     final isOnline = ref.watch(connectivityProvider).asData?.value ?? true;
 
-    // 2. COLORES SÓLIDOS DEPURADOS
-    final Color solidBgColor = isDarkMode 
-        ? const Color(0xFF181818)  
-        : const Color(0xFFF9F9F9); 
-
+    // COLORES
+    final Color solidBgColor = isDarkMode ? const Color(0xFF181818) : const Color(0xFFF9F9F9); 
     final Color inputFill = isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFFFFFFF);
     final Color borderColor = isDarkMode ? Colors.white24 : Colors.black12;
     final Color sendButtonColor = themeColor;
 
     final reversedMessages = chatState.messages.reversed.toList();
+
+    // --- ESCUCHA DE APERTURA/CIERRE (CORREGIDA) ---
+    ref.listen(chatOpenProvider, (previous, isOpen) {
+      final manager = _getOrInitManager(); // Aseguramos que exista
+      if (isOpen) {
+        print("🟢 Chat Abierto -> Enviando ONLINE");
+        manager.setOnline();
+      } else {
+        print("🔴 Chat Cerrado -> Enviando OFFLINE");
+        manager.setOffline();
+      }
+    });
+    // -----------------------------------------------
 
     ref.listen(connectivityProvider, (prev, next) {
       next.whenData((online) {
@@ -119,9 +167,8 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
         },
         child: LayoutBuilder(
           builder: (context, constraints) {
-            // CORRECCIÓN: Envolvemos todo en Material transparente
             return Material(
-              type: MaterialType.transparency, // <--- ESTO ELIMINA LAS LÍNEAS AMARILLAS
+              type: MaterialType.transparency,
               child: Container(
                 width: double.infinity,
                 height: double.infinity,
@@ -136,10 +183,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
                 ),
                 child: Stack(
                   children: [
-                    // FONDO EXTRA POR SEGURIDAD
                     Positioned.fill(child: Container(color: solidBgColor)),
-
-                    // CONTENIDO PRINCIPAL
                     Column(
                       children: [
                         // HEADER
@@ -172,7 +216,11 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
                                     const SizedBox(width: 4),
                                     IconButton(
                                       icon: const Icon(Icons.close_rounded), 
-                                      onPressed: () => ref.read(chatOpenProvider.notifier).set(false),
+                                      onPressed: () {
+                                        // Cierre manual explícito
+                                        _getOrInitManager().setOffline();
+                                        ref.read(chatOpenProvider.notifier).set(false);
+                                      },
                                       color: isDarkMode ? Colors.white70 : Colors.black54,
                                       tooltip: "Cerrar",
                                     ),
@@ -255,8 +303,6 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> {
                         ),
                       ],
                     ),
-
-                    // BANNER DE CONECTIVIDAD
                     _ConnectivityBanner(isOnline: isOnline),
                   ],
                 ),
