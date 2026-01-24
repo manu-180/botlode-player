@@ -61,7 +61,7 @@ serve(async (req) => {
 
     // 2. Obtener Historial de Chat (Contexto)
     const { data: history } = await supabaseAdmin
-      .from('chat_history')
+      .from('chat_logs')
       .select('role, content')
       .eq('session_id', sessionId)
       .order('created_at', { ascending: false })
@@ -128,7 +128,7 @@ serve(async (req) => {
     }
 
     // 5. Persistencia (Guardamos lo que dijo + el mood en metadata)
-    await supabaseAdmin.from('chat_history').insert([
+    await supabaseAdmin.from('chat_logs').insert([
       { session_id: sessionId, role: 'user', content: message, bot_id: botId },
       { 
         session_id: sessionId, 

@@ -4,26 +4,20 @@ import 'dart:html' as html;
 import 'dart:ui';
 import 'package:botlode_player/core/config/app_config.dart';
 import 'package:botlode_player/core/config/app_theme.dart';
-import 'package:botlode_player/core/config/configure_web.dart'; 
+import 'package:botlode_player/core/config/configure_web.dart';
 import 'package:botlode_player/core/router/app_router.dart';
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:shared_preferences/shared_preferences.dart'; // IMPORTAR
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String DEPLOY_VERSION = "NEXUS v2.2 - PERSISTENCE";
+const String DEPLOY_VERSION = "PLAYER PURE v1.0";
 
 void main() {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
-    
-    configureUrlStrategy(); 
-
-    print("==========================================");
-    print("🛑 VERSIÓN DE DESPLIEGUE: $DEPLOY_VERSION");
-    print("==========================================");
+    configureUrlStrategy();
 
     // 1. SUPABASE
     try {
@@ -34,28 +28,16 @@ void main() {
           authFlowType: AuthFlowType.implicit,
         ),
       );
-      print("🚀 [EXITO] Supabase conectado.");
     } catch (e) {
-      print("🔥 [ERROR] Falló Supabase: $e");
+      print("🔥 Supabase Init Error: $e");
     }
 
     _setupIframeListeners();
 
-    // 2. LÓGICA DE IDENTIDAD (JERARQUÍA DE PODER)
+    // LEEMOS BOT ID (Solo URL, sin memoria local compleja)
     final uri = Uri.base;
     final urlBotId = uri.queryParameters['bot_id'];
-    
-    // Leemos la memoria del dispositivo
-    final prefs = await SharedPreferences.getInstance();
-    final savedBotId = prefs.getString('saved_bot_id');
-
-    // DECISIÓN FINAL:
-    // 1. URL (Mandatorio para iframes)
-    // 2. Memoria (Para el dueño que vuelve)
-    // 3. Fallback (Demo por defecto)
-    final finalBotId = urlBotId ?? savedBotId ?? AppConfig.fallbackBotId;
-
-    print("🤖 [INFO] Bot ID Activo: $finalBotId (Fuente: ${urlBotId != null ? 'URL' : (savedBotId != null ? 'MEMORIA' : 'DEFAULT')})");
+    final finalBotId = urlBotId ?? AppConfig.fallbackBotId;
 
     runApp(
       ProviderScope(
@@ -68,7 +50,7 @@ void main() {
     );
 
   }, (error, stack) {
-    print("🔥 CRASH FATAL ($DEPLOY_VERSION): $error");
+    print("🔥 CRASH: $error");
   });
 }
 
@@ -87,7 +69,7 @@ void _safePostMessage(String message) {
   try {
     html.window.parent?.postMessage(message, '*');
   } catch (e) {
-    print("⚠️ Error enviando postMessage: $e");
+    print("⚠️ PostMessage Error: $e");
   }
 }
 
@@ -98,19 +80,14 @@ class BotPlayerApp extends ConsumerStatefulWidget {
 }
 
 class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
-  
   @override
   void initState() {
     super.initState();
     html.window.onMessage.listen((event) {
       if (event.data == null) return;
       final String data = event.data.toString();
-
-      if (data == 'CMD_OPEN') {
-        ref.read(chatOpenProvider.notifier).set(true);
-      } else if (data == 'CMD_CLOSE') {
-        ref.read(chatOpenProvider.notifier).set(false);
-      } 
+      if (data == 'CMD_OPEN') ref.read(chatOpenProvider.notifier).set(true);
+      else if (data == 'CMD_CLOSE') ref.read(chatOpenProvider.notifier).set(false);
     });
   }
 
@@ -127,7 +104,7 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
     });
 
     return MaterialApp.router(
-      title: 'BotLode Player ($DEPLOY_VERSION)',
+      title: 'BotLode Player',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme.copyWith(
         canvasColor: Colors.transparent, 
