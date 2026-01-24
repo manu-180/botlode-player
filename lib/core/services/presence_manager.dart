@@ -1,6 +1,6 @@
 // Archivo: lib/core/services/presence_manager.dart
 import 'dart:async';
-import 'dart:html' as html; // Necesario para detectar el cierre de pestaña
+import 'dart:html' as html;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class PresenceManager {
@@ -10,45 +10,66 @@ class PresenceManager {
   
   Timer? _heartbeatTimer;
   StreamSubscription? _tabCloseSubscription;
+  
+  // GUARDIA DE SEGURIDAD:
+  // Esta variable es la "Verdad Absoluta". Si es false, no sale ni un byte.
+  bool _shouldBeOnline = false;
 
   PresenceManager(this._supabase, {required this.sessionId, required this.botId});
 
-  /// 🟢 ENTRA EN LÍNEA + ACTIVA MONITOR
+  /// 🟢 ENTRA EN LÍNEA
   Future<void> setOnline() async {
-    // 1. Enviar señal inicial INMEDIATA
+    // 1. Establecemos la intención oficial
+    _shouldBeOnline = true;
+    
+    // 2. Limpiamos cualquier timer anterior para evitar duplicados
+    _stopHeartbeat();
+
+    // 3. Enviamos señal inicial YA
     await _sendSignal(true);
 
-    // 2. Iniciar "Latido" (Heartbeat)
-    // Actualizamos el estado cada 20 segundos para decir "Sigo aquí"
-    // Esto asegura que si el navegador crashea, el dashboard notará la ausencia de latido.
-    _heartbeatTimer?.cancel();
-    _heartbeatTimer = Timer.periodic(const Duration(seconds: 20), (_) {
+    // 4. Iniciamos el Latido Seguro
+    _heartbeatTimer = Timer.periodic(const Duration(seconds: 20), (timer) {
+      // VERIFICACIÓN CRÍTICA:
+      // Si por alguna razón el jefe dijo "Offline" y este timer sigue vivo...
+      if (!_shouldBeOnline) {
+        timer.cancel(); // Se suicida
+        return;         // No envía nada
+      }
       _sendSignal(true);
     });
 
-    // 3. Escuchar cierre de pestaña (La "X" del navegador)
-    // Esto intenta enviar la señal de apagado justo antes de morir.
+    // 5. Escuchar cierre de pestaña
     _tabCloseSubscription?.cancel();
     _tabCloseSubscription = html.window.onBeforeUnload.listen((event) {
-      // Intentamos una despedida rápida
       _sendSignal(false);
-      // Nota: En algunos navegadores modernos esto puede no completarse si es muy lento,
-      // por eso el _heartbeatTimer es nuestro respaldo de seguridad.
     });
-    
-    // print("🟢 Presencia: ONLINE (Latido activado)");
   }
 
-  /// 🔴 SALE DE LÍNEA + LIMPIEZA
+  /// 🔴 SALE DE LÍNEA
   Future<void> setOffline() async {
-    _heartbeatTimer?.cancel();
+    // 1. Cambiamos la intención oficial INMEDIATAMENTE
+    _shouldBeOnline = false;
+    
+    // 2. Matamos los procesos
+    _stopHeartbeat();
     _tabCloseSubscription?.cancel();
+    
+    // 3. Enviamos la señal final de adiós
     await _sendSignal(false);
-    // print("🔴 Presencia: OFFLINE (Latido detenido)");
   }
 
-  /// Método interno para hablar con Supabase
+  void _stopHeartbeat() {
+    _heartbeatTimer?.cancel();
+    _heartbeatTimer = null;
+  }
+
   Future<void> _sendSignal(bool isOnline) async {
+    // CAPA DE SEGURIDAD FINAL:
+    // Si intentamos enviar "Online" (true), pero la bandera dice que deberíamos estar "Offline"...
+    // BLOQUEAMOS EL ENVÍO. Esto evita que un request viejo llegue tarde y prenda la luz.
+    if (isOnline && !_shouldBeOnline) return;
+
     try {
       await _supabase.from('session_heartbeats').upsert({
         'session_id': sessionId,
@@ -57,8 +78,7 @@ class PresenceManager {
         'last_seen': DateTime.now().toIso8601String(),
       }, onConflict: 'session_id');
     } catch (e) {
-      // Silencioso para no ensuciar logs en cierre de app
-      // print("⚠️ Error de señal: $e");
+      // Silencio en errores de red al cerrar
     }
   }
 }
