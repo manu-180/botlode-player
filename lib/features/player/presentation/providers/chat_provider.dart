@@ -11,23 +11,27 @@ part 'chat_provider.g.dart';
 class ChatState {
   final List<ChatMessage> messages;
   final bool isLoading;
-  final String currentMood; 
+  final String currentMood;
+  final String sessionId; // <--- ESTO ES CRUCIAL
 
   ChatState({
     this.messages = const [],
     this.isLoading = false,
     this.currentMood = 'idle',
+    required this.sessionId,
   });
 
   ChatState copyWith({
     List<ChatMessage>? messages,
     bool? isLoading,
     String? currentMood,
+    String? sessionId,
   }) {
     return ChatState(
       messages: messages ?? this.messages,
       isLoading: isLoading ?? this.isLoading,
       currentMood: currentMood ?? this.currentMood,
+      sessionId: sessionId ?? this.sessionId,
     );
   }
 }
@@ -41,24 +45,25 @@ class ChatController extends _$ChatController {
 
   @override
   ChatState build() {
-    return ChatState(messages: [
-      ChatMessage(
-        id: 'init',
-        text: 'Sistema en línea. ¿En qué puedo ayudarte hoy?',
-        role: MessageRole.bot,
-        timestamp: DateTime.now(),
-      )
-    ]);
+    return ChatState(
+      sessionId: _sessionId, // <--- Aquí se inicializa
+      messages: [
+        ChatMessage(
+          id: 'init',
+          text: 'Sistema en línea. ¿En qué puedo ayudarte hoy?',
+          role: MessageRole.bot,
+          timestamp: DateTime.now(),
+        )
+      ]
+    );
   }
 
   Future<void> sendMessage(String text) async {
     if (text.trim().isEmpty) return;
 
-    // 1. LEER EL ID DINÁMICO
     final botId = ref.read(currentBotIdProvider);
     final repository = ref.read(chatRepositoryProvider);
 
-    // 2. Agregar mensaje del usuario (Optimistic UI)
     final userMsg = ChatMessage(
       id: _uuid.v4(),
       text: text,
@@ -72,14 +77,12 @@ class ChatController extends _$ChatController {
       currentMood: 'thinking', 
     );
 
-    // 3. Llamar al Repositorio (Clean Architecture)
     final response = await repository.sendMessage(
       message: text,
       sessionId: _sessionId,
       botId: botId, 
     );
 
-    // 4. Procesar respuesta tipada
     final botMsg = ChatMessage(
       id: _uuid.v4(),
       text: response.reply,
@@ -87,7 +90,6 @@ class ChatController extends _$ChatController {
       timestamp: DateTime.now(),
     );
 
-    // 5. Actualizar estado
     state = state.copyWith(
       messages: [...state.messages, botMsg],
       isLoading: false,

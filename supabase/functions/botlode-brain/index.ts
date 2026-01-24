@@ -5,7 +5,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 const MODEL_NAME = 'gemini-2.0-flash'; 
 const API_VERSION = 'v1beta';
 
-// CORS: Permitimos acceso desde cualquier lado (Crucial para el Player Web)
+// CORS: Permitimos acceso desde cualquier lado
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-client-session-id',
@@ -38,7 +38,7 @@ serve(async (req) => {
     const apiKey = Deno.env.get('GEMINI_API_KEY');
     if (!apiKey) throw new Error('Falta GEMINI_API_KEY');
 
-    // DATOS ENTRANTES: Pedimos sessionId, botId y el mensaje
+    // DATOS ENTRANTES
     const { sessionId, botId, message } = await req.json();
     
     if (!message) throw new Error("Mensaje vacío");
@@ -49,8 +49,7 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // 1. CARGAR CEREBRO DEL BOT (Dinámico)
-    // Buscamos en la DB la configuración de ESTE bot específico
+    // 1. CARGAR CEREBRO DEL BOT
     const { data: botConfig, error: botError } = await supabaseAdmin
       .from('bots') 
       .select('name, description, system_prompt') 
@@ -67,35 +66,45 @@ serve(async (req) => {
       .order('created_at', { ascending: false })
       .limit(8);
 
-    // 3. INYECTAR PERSONALIDAD (System Prompt Dinámico)
-    // AQUÍ ES DONDE DEFINIMOS LOS NUEVOS MOODS PARA RIVE
+    // 3. INYECTAR PERSONALIDAD + LEAD SCORING
     const systemInstructionText = `
       ERES: "${botConfig.name}".
       TU OBJETIVO PRINCIPAL: ${botConfig.description}.
       
-      DIRECTIVAS ESPECÍFICAS (Cumplir a rajatabla):
+      DIRECTIVAS ESPECÍFICAS:
       ${botConfig.system_prompt || "Actúa como un asistente útil."}
 
       ---------------------------------------------------------
       REGLAS DE COMPORTAMIENTO (SISTEMA CAMALEÓN):
       Debes responder SIEMPRE en formato JSON estricto.
-      NO uses bloques de código markdown (\`\`\`json). Solo el JSON crudo.
-      
-      MOODS DISPONIBLES (Elige uno según el contexto para cambiar tu avatar):
-      - "neutral": Conversación normal, informativa.
-      - "happy": El usuario es amable, agradece, te felicita o hay buenas noticias.
-      - "angry": El usuario insulta, es grosero o muy negativo (Defiéndete con elegancia).
-      - "sales": Oportunidad de venta, ofrecer upgrade, persuadir o cerrar un trato (Modo Vendedor).
-      - "confused": Input incoherente, error del usuario o no entiendes la solicitud.
-      - "tech": Explicaciones técnicas, código, logs o datos complejos (Modo Ingeniero).
-      - "waiting": Haces una pregunta directa al usuario y esperas su input ("En línea").
+      NO uses bloques de código markdown.
+
+      MOODS DISPONIBLES:
+      - "neutral": Conversación normal.
+      - "happy": Usuario amable o buenas noticias.
+      - "angry": Usuario agresivo (Defiéndete con elegancia).
+      - "sales": Oportunidad de venta (Modo Vendedor).
+      - "confused": Input incoherente.
+      - "tech": Explicaciones técnicas.
+      - "waiting": Esperando input.
+
+      LEAD SCORING (INTENCIÓN DE COMPRA):
+      Evalúa el interés del usuario del 0 al 100 en el campo "intent_score".
+      - 0-30: Curiosidad general, saludos.
+      - 31-70: Preguntas sobre precios, características específicas.
+      - 71-100: Intención clara de compra, "quiero contratar", "¿cómo pago?".
 
       FORMATO DE RESPUESTA JSON OBLIGATORIO:
-      { "reply": "Tu respuesta en texto plano aquí", "mood": "happy" }
+      { 
+        "reply": "Tu respuesta en texto plano aquí", 
+        "mood": "happy",
+        "intent_score": 50
+      }
     `;
 
+    // Mapeo robusto: Acepta 'bot' (nuevo) y 'assistant' (viejo) como 'model' para Gemini
     const historyParts = (history?.reverse() || []).map((msg: any) => ({
-      role: msg.role === 'assistant' ? 'model' : 'user',
+      role: (msg.role === 'assistant' || msg.role === 'bot') ? 'model' : 'user',
       parts: [{ text: msg.content }]
     }));
 
@@ -113,31 +122,45 @@ serve(async (req) => {
 
     const data = await fetchGeminiWithRetry(url, payload);
     
-    // Extracción segura de la respuesta
-    let rawReply = data.candidates?.[0]?.content?.parts?.[0]?.text || '{"reply":"Error de conexión neuronal.","mood":"confused"}';
-    
-    // Limpieza de seguridad por si la IA manda markdown accidentalmente
+    // Extracción segura
+    let rawReply = data.candidates?.[0]?.content?.parts?.[0]?.text || '{"reply":"Error de conexión neuronal.","mood":"confused","intent_score":0}';
     rawReply = rawReply.replace(/```json|```/g, "").trim();
     
     let parsedResponse;
     try {
         parsedResponse = JSON.parse(rawReply);
     } catch (e) {
-        // Fallback robusto si el JSON falla
-        parsedResponse = { reply: rawReply, mood: "neutral" };
+        parsedResponse = { reply: rawReply, mood: "neutral", intent_score: 0 };
     }
 
-    // 5. Persistencia (Guardamos lo que dijo + el mood en metadata)
+    // 5. Persistencia CORREGIDA + HEARTBEAT (Actualización de Presencia)
+    
+    // A) Guardamos la conversación
     await supabaseAdmin.from('chat_logs').insert([
-      { session_id: sessionId, role: 'user', content: message, bot_id: botId },
       { 
         session_id: sessionId, 
-        role: 'assistant', 
+        role: 'user', 
+        content: message, 
+        bot_id: botId,
+        intent_score: 0 
+      },
+      { 
+        session_id: sessionId, 
+        role: 'bot', 
         content: parsedResponse.reply, 
         bot_id: botId, 
-        metadata: { mood: parsedResponse.mood } 
+        intent_score: parsedResponse.intent_score || 0 
       }
     ]);
+
+    // B) ¡NUEVO! Forzamos el estado ONLINE (Heartbeat)
+    // Si la IA responde, significa que la sesión está 100% viva.
+    await supabaseAdmin.from('session_heartbeats').upsert({
+        session_id: sessionId,
+        bot_id: botId,
+        is_online: true,
+        last_seen: new Date().toISOString()
+    }, { onConflict: 'session_id' }); // Si ya existe, actualiza
 
     return new Response(JSON.stringify(parsedResponse), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -148,7 +171,8 @@ serve(async (req) => {
     console.error("Critical Error:", error.message);
     return new Response(JSON.stringify({ 
       reply: "Error crítico en el núcleo. Reintentar.", 
-      mood: "confused" 
+      mood: "confused",
+      intent_score: 0
     }), { 
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 500 
