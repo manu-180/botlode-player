@@ -8,77 +8,90 @@ class PresenceManager {
   final String sessionId;
   final String botId;
   
-  Timer? _heartbeatTimer;
+  // CONTROLADORES DE TIEMPO
+  Timer? _heartbeatTimer;      // El pulso constante (cada 30s)
+  Timer? _debounceTimer;       // El filtro de "clicks rápidos"
+  Timer? _retryTimer;          // El reintento rápido si falla
   StreamSubscription? _tabCloseSubscription;
   
-  // GUARDIA DE SEGURIDAD:
-  // Esta variable es la "Verdad Absoluta". Si es false, no sale ni un byte.
+  // ESTADO OBJETIVO (La verdad absoluta)
   bool _shouldBeOnline = false;
 
   PresenceManager(this._supabase, {required this.sessionId, required this.botId});
 
-  /// 🟢 ENTRA EN LÍNEA
-  Future<void> setOnline() async {
-    // 1. Establecemos la intención oficial
+  /// 🟢 ENTRA EN LÍNEA (Con Debounce y Retry)
+  void setOnline() {
     _shouldBeOnline = true;
-    
-    // 2. Limpiamos cualquier timer anterior para evitar duplicados
-    _stopHeartbeat();
-
-    // 3. Enviamos señal inicial YA
-    await _sendSignal(true);
-
-    // 4. Iniciamos el Latido Seguro
-    _heartbeatTimer = Timer.periodic(const Duration(seconds: 20), (timer) {
-      // VERIFICACIÓN CRÍTICA:
-      // Si por alguna razón el jefe dijo "Offline" y este timer sigue vivo...
-      if (!_shouldBeOnline) {
-        timer.cancel(); // Se suicida
-        return;         // No envía nada
-      }
-      _sendSignal(true);
-    });
-
-    // 5. Escuchar cierre de pestaña
-    _tabCloseSubscription?.cancel();
-    _tabCloseSubscription = html.window.onBeforeUnload.listen((event) {
-      _sendSignal(false);
-    });
+    _scheduleUpdate(true);
   }
 
-  /// 🔴 SALE DE LÍNEA
-  Future<void> setOffline() async {
-    // 1. Cambiamos la intención oficial INMEDIATAMENTE
+  /// 🔴 SALE DE LÍNEA (Con Debounce)
+  void setOffline() {
     _shouldBeOnline = false;
-    
-    // 2. Matamos los procesos
-    _stopHeartbeat();
-    _tabCloseSubscription?.cancel();
-    
-    // 3. Enviamos la señal final de adiós
-    await _sendSignal(false);
+    _scheduleUpdate(false);
   }
 
-  void _stopHeartbeat() {
+  /// Lógica de "Embudo" para evitar spam de peticiones
+  void _scheduleUpdate(bool targetStatus) {
+    // 1. Cancelamos cualquier envío pendiente anterior
+    _debounceTimer?.cancel();
+    _retryTimer?.cancel();
+
+    // 2. Esperamos 500ms antes de disparar. 
+    // Si el usuario abre y cierra rápido, solo se ejecuta el último.
+    _debounceTimer = Timer(const Duration(milliseconds: 500), () {
+      _executeSignal(targetStatus);
+    });
+  }
+
+  Future<void> _executeSignal(bool isOnline) async {
+    // Verificación de seguridad final
+    if (isOnline != _shouldBeOnline) return; 
+
+    // GESTIÓN DEL HEARTBEAT (LATIDO)
     _heartbeatTimer?.cancel();
-    _heartbeatTimer = null;
+    if (isOnline) {
+      // Si estamos online, iniciamos el latido cada 15 segundos (más rápido para asegurar)
+      _heartbeatTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+        if (_shouldBeOnline) _sendToSupabase(true);
+      });
+    }
+
+    // GESTIÓN DE CIERRE DE PESTAÑA
+    _tabCloseSubscription?.cancel();
+    if (isOnline) {
+      _tabCloseSubscription = html.window.onBeforeUnload.listen((event) {
+        // Intento desesperado de decir adiós al cerrar tab
+        _supabase.from('session_heartbeats').upsert({
+          'session_id': sessionId,
+          'bot_id': botId,
+          'is_online': false,
+          'last_seen': DateTime.now().toIso8601String(),
+        });
+      });
+    }
+
+    // ENVÍO REAL
+    await _sendToSupabase(isOnline);
   }
 
-  Future<void> _sendSignal(bool isOnline) async {
-    // CAPA DE SEGURIDAD FINAL:
-    // Si intentamos enviar "Online" (true), pero la bandera dice que deberíamos estar "Offline"...
-    // BLOQUEAMOS EL ENVÍO. Esto evita que un request viejo llegue tarde y prenda la luz.
-    if (isOnline && !_shouldBeOnline) return;
-
+  Future<void> _sendToSupabase(bool status) async {
     try {
+      print("📡 Enviando señal a Supabase: ${status ? 'ONLINE' : 'OFFLINE'}");
       await _supabase.from('session_heartbeats').upsert({
         'session_id': sessionId,
         'bot_id': botId,
-        'is_online': isOnline,
+        'is_online': status,
         'last_seen': DateTime.now().toIso8601String(),
       }, onConflict: 'session_id');
     } catch (e) {
-      // Silencio en errores de red al cerrar
+      print("⚠️ Error de red ($e). Reintentando en 2s...");
+      // REINTENTO RÁPIDO (Quick Retry Strategy)
+      if (_shouldBeOnline == status) {
+        _retryTimer = Timer(const Duration(seconds: 2), () {
+           if (_shouldBeOnline == status) _sendToSupabase(status);
+        });
+      }
     }
   }
 }
