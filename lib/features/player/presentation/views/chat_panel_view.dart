@@ -30,19 +30,23 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
     
     // Configuración inicial de UI solamente
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final String moodString = ref.read(chatControllerProvider).currentMood;
-      ref.read(botMoodProvider.notifier).state = _getMoodIndex(moodString);
-      
-      // Si el chat arranca abierto (por deep link o recarga), activamos online
-      if (ref.read(chatOpenProvider)) {
-        ref.read(presenceManagerProvider).setOnline();
+      try {
+        final String moodString = ref.read(chatControllerProvider).currentMood;
+        ref.read(botMoodProvider.notifier).state = _getMoodIndex(moodString);
+        
+        // Si el chat arranca abierto (por deep link o recarga), activamos online
+        if (ref.read(chatOpenProvider)) {
+          ref.read(presenceManagerProvider).setOnline();
+        }
+      } catch (e) {
+        print("⚠️ Error en initState postFrameCallback: $e");
       }
     });
   }
 
   @override
   void dispose() {
-    ref.read(presenceManagerProvider).setOffline();
+    // El PresenceManager se limpia automáticamente via su provider.onDispose
     WidgetsBinding.instance.removeObserver(this);
     _textController.dispose();
     _scrollController.dispose();
@@ -51,12 +55,16 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.detached || state == AppLifecycleState.paused) {
-      ref.read(presenceManagerProvider).setOffline();
-    } else if (state == AppLifecycleState.resumed) {
-      if (ref.read(chatOpenProvider)) {
-        ref.read(presenceManagerProvider).setOnline();
+    try {
+      if (state == AppLifecycleState.detached || state == AppLifecycleState.paused) {
+        ref.read(presenceManagerProvider).setOffline();
+      } else if (state == AppLifecycleState.resumed) {
+        if (ref.read(chatOpenProvider)) {
+          ref.read(presenceManagerProvider).setOnline();
+        }
       }
+    } catch (e) {
+      print("⚠️ Error en lifecycle state change: $e");
     }
   }
 
@@ -99,13 +107,17 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
 
     // --- ESCUCHA DE APERTURA/CIERRE ---
     ref.listen(chatOpenProvider, (previous, isOpen) {
-      final manager = ref.read(presenceManagerProvider);
-      if (isOpen) {
-        print("🟢 Chat Abierto -> Enviando ONLINE");
-        manager.setOnline();
-      } else {
-        print("🔴 Chat Cerrado -> Enviando OFFLINE");
-        manager.setOffline();
+      try {
+        final manager = ref.read(presenceManagerProvider);
+        if (isOpen) {
+          print("🟢 Chat Abierto -> Enviando ONLINE");
+          manager.setOnline();
+        } else {
+          print("🔴 Chat Cerrado -> Enviando OFFLINE");
+          manager.setOffline();
+        }
+      } catch (e) {
+        print("⚠️ Error al acceder a PresenceManager (widget disposed): $e");
       }
     });
     // ----------------------------------
@@ -198,7 +210,11 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                                       icon: const Icon(Icons.close_rounded), 
                                       onPressed: () {
                                         // Cierre manual explícito
-                                        ref.read(presenceManagerProvider).setOffline();
+                                        try {
+                                          ref.read(presenceManagerProvider).setOffline();
+                                        } catch (e) {
+                                          print("⚠️ Error al setOffline en close button: $e");
+                                        }
                                         ref.read(chatOpenProvider.notifier).set(false);
                                       },
                                       color: isDarkMode ? Colors.white70 : Colors.black54,

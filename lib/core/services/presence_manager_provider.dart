@@ -12,11 +12,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 final presenceManagerProvider = Provider.autoDispose<PresenceManager>((ref) {
   final client = ref.watch(supabaseClientProvider);
   final botId = ref.watch(currentBotIdProvider);
-  final chatState = ref.watch(chatControllerProvider);
+  final chatState = ref.read(chatControllerProvider);
 
-  return PresenceManager(
+  final manager = PresenceManager(
     client,
     sessionId: chatState.sessionId,
     botId: botId,
   );
+  
+  // Cleanup cuando el provider se dispose
+  ref.onDispose(() {
+    print("🧹 PresenceManager disposed, enviando OFFLINE");
+    manager.setOffline();
+  });
+
+  return manager;
 });

@@ -11,7 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String DEPLOY_VERSION = "PLAYER PURE v1.0";
+const String DEPLOY_VERSION = "PLAYER PURE v1.1 - NO TRANSPARENCIA";
 
 void main() {
   runZonedGuarded(() async {
@@ -39,11 +39,12 @@ void main() {
     final urlBotId = uri.queryParameters['botId'] ?? uri.queryParameters['bot_id'];
     final finalBotId = urlBotId ?? AppConfig.fallbackBotId;
 
+    print("🤖 BOT ID CARGADO: $finalBotId");
+    
     runApp(
       ProviderScope(
         overrides: [
           currentBotIdProvider.overrideWithValue(finalBotId),
-          isHoveredExternalProvider.overrideWith((ref) => false),
         ],
         child: const BotPlayerApp(),
       ),
@@ -56,6 +57,7 @@ void main() {
 
 void _setupIframeListeners() {
   // Removida configuración de transparencia para que el chat tenga fondo sólido
+  print("🚀 DEPLOY VERSION: $DEPLOY_VERSION");
   
   Future.delayed(const Duration(milliseconds: 500), () {
       _safePostMessage('CMD_READY');
