@@ -1,8 +1,7 @@
 // Archivo: lib/features/player/presentation/views/chat_panel_view.dart
-import 'dart:async';
 import 'dart:html' as html;
 import 'package:botlode_player/core/network/connectivity_provider.dart';
-import 'package:botlode_player/core/services/presence_manager.dart';
+import 'package:botlode_player/core/services/presence_manager_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/chat_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
@@ -11,7 +10,6 @@ import 'package:botlode_player/features/player/presentation/widgets/rive_avatar.
 import 'package:botlode_player/features/player/presentation/widgets/status_indicator.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ChatPanelView extends ConsumerStatefulWidget {
   const ChatPanelView({super.key});
@@ -24,9 +22,6 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   bool _wasOffline = false;
-  
-  // GESTOR DE PRESENCIA (Puede ser nulo al inicio)
-  PresenceManager? _presenceManager;
 
   @override
   void initState() {
@@ -40,29 +35,14 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
       
       // Si el chat arranca abierto (por deep link o recarga), activamos online
       if (ref.read(chatOpenProvider)) {
-        _getOrInitManager().setOnline();
+        ref.read(presenceManagerProvider).setOnline();
       }
     });
   }
 
-  /// HELPER: Obtiene el manager existente o crea uno nuevo con datos frescos
-  PresenceManager _getOrInitManager() {
-    if (_presenceManager != null) return _presenceManager!;
-
-    final String botId = ref.read(currentBotIdProvider);
-    final chatState = ref.read(chatControllerProvider);
-
-    _presenceManager = PresenceManager(
-      Supabase.instance.client,
-      sessionId: chatState.sessionId,
-      botId: botId,
-    );
-    return _presenceManager!;
-  }
-
   @override
   void dispose() {
-    _presenceManager?.setOffline();
+    ref.read(presenceManagerProvider).setOffline();
     WidgetsBinding.instance.removeObserver(this);
     _textController.dispose();
     _scrollController.dispose();
@@ -72,10 +52,10 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.detached || state == AppLifecycleState.paused) {
-      _presenceManager?.setOffline();
+      ref.read(presenceManagerProvider).setOffline();
     } else if (state == AppLifecycleState.resumed) {
       if (ref.read(chatOpenProvider)) {
-        _getOrInitManager().setOnline();
+        ref.read(presenceManagerProvider).setOnline();
       }
     }
   }
@@ -117,9 +97,9 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
 
     final reversedMessages = chatState.messages.reversed.toList();
 
-    // --- ESCUCHA DE APERTURA/CIERRE (CORREGIDA) ---
+    // --- ESCUCHA DE APERTURA/CIERRE ---
     ref.listen(chatOpenProvider, (previous, isOpen) {
-      final manager = _getOrInitManager(); // Aseguramos que exista
+      final manager = ref.read(presenceManagerProvider);
       if (isOpen) {
         print("🟢 Chat Abierto -> Enviando ONLINE");
         manager.setOnline();
@@ -128,7 +108,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
         manager.setOffline();
       }
     });
-    // -----------------------------------------------
+    // ----------------------------------
 
     ref.listen(connectivityProvider, (prev, next) {
       next.whenData((online) {
@@ -218,7 +198,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                                       icon: const Icon(Icons.close_rounded), 
                                       onPressed: () {
                                         // Cierre manual explícito
-                                        _getOrInitManager().setOffline();
+                                        ref.read(presenceManagerProvider).setOffline();
                                         ref.read(chatOpenProvider.notifier).set(false);
                                       },
                                       color: isDarkMode ? Colors.white70 : Colors.black54,

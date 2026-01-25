@@ -1,9 +1,8 @@
 // Archivo: lib/features/player/presentation/widgets/rive_avatar.dart
-import 'dart:math' as math;
 import 'dart:ui'; 
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
+import 'package:botlode_player/features/player/presentation/providers/head_tracking_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/loader_provider.dart';
-import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -81,30 +80,18 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
   Widget build(BuildContext context) {
     final riveFileAsync = ref.watch(riveFileLoaderProvider);
 
+    // Listener para cambios de mood
     ref.listen(botMoodProvider, (prev, next) {
        if (_moodInput != null) _moodInput!.value = next.toDouble();
     });
 
-    ref.listen(pointerPositionProvider, (prev, deltaPos) {
-      if (deltaPos == null) return;
-
-      final double dx = deltaPos.dx;
-      final double dy = deltaPos.dy;
-
-      final double distance = math.sqrt(dx * dx + dy * dy);
-      const double maxInterestDistance = 600.0; 
-
-      if (distance < maxInterestDistance) {
-        _isTracking = true;
-        const double sensitivity = 400.0; 
-        _targetX = (50 + (dx / sensitivity * 50)).clamp(0.0, 100.0);
-        _targetY = (50 + (dy / sensitivity * 50)).clamp(0.0, 100.0);
-      } else {
-        _isTracking = false;
-        _targetX = 50.0;
-        _targetY = 50.0;
-      }
-    });
+    // Escuchamos el estado de tracking calculado por el provider
+    final trackingState = ref.watch(botAvatarTrackingProvider);
+    
+    // Actualizamos las variables locales con los valores calculados
+    _targetX = trackingState.targetX;
+    _targetY = trackingState.targetY;
+    _isTracking = trackingState.isTracking;
 
     return SizedBox(
       width: 300, height: 300,

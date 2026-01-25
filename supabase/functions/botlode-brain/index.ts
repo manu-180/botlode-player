@@ -54,41 +54,52 @@ serve(async (req) => {
 
     if (botError || !botConfig) throw new Error("Bot no encontrado");
 
-    // 2. OBTENER CONTEXTO (Historial reciente)
+    // 2. OBTENER CONTEXTO
     const { data: history } = await supabaseAdmin
       .from('chat_logs')
       .select('role, content')
       .eq('session_id', sessionId)
       .order('created_at', { ascending: false })
-      .limit(10); // Leemos un poco más para entender la evolución
+      .limit(12); 
 
-    // 3. INGENIERÍA DE PROMPT (MODO ANALISTA DE VENTAS)
+    // 3. INGENIERÍA DE PROMPT (MODO ANALISTA ESTRICTO)
     const systemInstructionText = `
       ROL PRINCIPAL:
       Eres "${botConfig.name}". ${botConfig.description}.
       ${botConfig.system_prompt || "Asiste al usuario de forma profesional."}
 
       ---------------------------------------------------------
-      TU ROL SECUNDARIO (OCULTO): ANALISTA DE VENTAS EXPERTO
-      Además de responder, debes analizar psicológicamente al usuario para calcular su "INTENT_SCORE" (0-100).
+      TU ROL SECUNDARIO (OCULTO): ANALISTA DE VENTAS IMPLACABLE
+      Calcula el "INTENT_SCORE" (0-100) del usuario.
       
-      TABLA DE PUNTUACIÓN (SE RIGUROSO):
-      - 0-20: Saludos, bromas, insultos o incoherencias. (Frio)
-      - 21-40: Preguntas generales sin compromiso. (Curioso)
-      - 41-70: Preguntas sobre precios, características específicas, envíos o garantías. (Considerando)
-      - 71-90: Afirmaciones de interés ("Me gusta", "Lo quiero", "Suena bien"), preguntas sobre métodos de pago. (Caliente)
-      - 91-100: Intención de cierre explícita ("¿Dónde firmo?", "Agendemos", doy mis datos de contacto). (Venta)
+      REGLAS DE PUNTUACIÓN DINÁMICA (ACTUALIZACIÓN EN TIEMPO REAL):
+      
+      🔴 ZONA ROJA (0-20%): RECHAZO / HOSTILIDAD
+      - Si el usuario dice "no me interesa", "muy caro", "adios", "no quiero", insulta o se burla.
+      - DEBES BAJAR EL SCORE INMEDIATAMENTE A ESTE RANGO si detectas negatividad.
+      
+      🔵 ZONA FRÍA (21-40%): CURIOSIDAD PASIVA
+      - Saludos simples ("Hola"), preguntas vagas ("¿Qué hacen?").
+      - Respuestas cortas o secas.
 
-      REGLAS DE RESPUESTA JSON:
-      1. "reply": Tu respuesta al usuario (Amable, persuasiva, corta).
-      2. "mood": Tu estado emocional (happy, neutral, sales, tech, waiting).
-      3. "intent_score": Un número entero del 0 al 100 basado en la TABLA DE PUNTUACIÓN analizando TODA la conversación.
+      🟡 ZONA TIBIA (41-79%): INTERÉS REAL / VALIDACIÓN
+      - Preguntas específicas sobre el producto/servicio.
+      - Preguntas sobre precios, tiempos, garantías.
+      - El usuario invierte tiempo escribiendo.
 
-      FORMATO JSON ESTRICTO:
+      🟢 ZONA CALIENTE (80-100%): CIERRE / COMPRA
+      - "Me interesa", "Quiero contratar", "¿Cómo pago?", "Agendemos".
+      - El usuario da datos de contacto o pide link de pago.
+
+      CRITERIO DE AJUSTE:
+      - Si el usuario pasa de preguntar precios a decir "ah, muy caro", el score debe CAER de 60 a 15.
+      - Si el usuario pasa de saludar a preguntar "¿aceptan tarjeta?", el score debe SUBIR de 20 a 85.
+
+      FORMATO JSON OBLIGATORIO:
       {
-        "reply": "Claro, el precio es...",
+        "reply": "Tu respuesta al usuario...",
         "mood": "sales",
-        "intent_score": 65
+        "intent_score": 15
       }
     `;
 
@@ -103,7 +114,7 @@ serve(async (req) => {
       system_instruction: { parts: [{ text: systemInstructionText }] },
       contents: [...historyParts, { role: "user", parts: [{ text: message }] }],
       generationConfig: {
-        temperature: 0.7,
+        temperature: 0.5, // Menor temperatura para ser más preciso con el número
         maxOutputTokens: 600,
         response_mime_type: "application/json"
       }
@@ -121,26 +132,25 @@ serve(async (req) => {
         parsedResponse = { reply: rawReply, mood: "neutral", intent_score: 10 };
     }
 
-    // 5. GUARDAR DATOS + HEARTBEAT
-    // Guardamos el mensaje del usuario
-    await supabaseAdmin.from('chat_logs').insert({ 
+    // 5. GUARDAR DATOS
+    await supabaseAdmin.from('chat_logs').insert([
+      { 
         session_id: sessionId, 
         role: 'user', 
         content: message, 
         bot_id: botId,
-        intent_score: 0 // El usuario no se puntúa a sí mismo
-    });
-
-    // Guardamos la respuesta del bot CON EL SCORE CALCULADO
-    await supabaseAdmin.from('chat_logs').insert({ 
+        intent_score: 0 
+      },
+      { 
         session_id: sessionId, 
         role: 'bot', 
         content: parsedResponse.reply, 
         bot_id: botId, 
-        intent_score: parsedResponse.intent_score || 0 // <--- AQUÍ SE GUARDA LA MEDICIÓN
-    });
+        intent_score: parsedResponse.intent_score || 0 
+      }
+    ]);
 
-    // Actualizamos presencia
+    // Heartbeat
     await supabaseAdmin.from('session_heartbeats').upsert({
         session_id: sessionId,
         bot_id: botId,
@@ -156,7 +166,7 @@ serve(async (req) => {
   } catch (error: any) {
     console.error("Critical Error:", error.message);
     return new Response(JSON.stringify({ 
-      reply: "Error en el sistema de procesamiento.", 
+      reply: "Error en el sistema.", 
       mood: "confused",
       intent_score: 0
     }), { 

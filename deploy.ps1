@@ -28,3 +28,12 @@ vercel --prod --name botlode-player --yes
 # 5. RETORNO A BASE
 cd ..\..
 Write-Host "✅ Misión Cumplida: BotLode Player actualizado." -ForegroundColor Green
+
+# Metodo viejo
+Remove-Item -Recurse -Force docs
+flutter build web
+mkdir docs    
+cp -r build/web/* docs/
+git add .
+git commit -m "vercel" 
+git push 

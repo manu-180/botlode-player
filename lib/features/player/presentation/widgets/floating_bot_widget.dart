@@ -38,10 +38,45 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     // DEBUG (Como en tu ejemplo)
     print("🎈 [DEBUG BUBBLE] Open: $isOpen | ConfigLoaded: ${botConfigAsync.hasValue}");
 
-    return Stack(
-      fit: StackFit.loose, 
-      alignment: Alignment.bottomRight,
-      children: [
+    // MouseRegion global que captura el mouse en TODA la pantalla
+    // Calcula respecto a diferentes puntos según si el chat está abierto o cerrado
+    return MouseRegion(
+      hitTestBehavior: HitTestBehavior.translucent,
+      onHover: (event) {
+        final double dx;
+        final double dy;
+        
+        if (isOpen) {
+          // Chat ABIERTO: calcular respecto al avatar dentro del chat
+          // El chat está en bottom-right con ancho máximo de 380px (o menos en móvil)
+          final double chatWidth = screenSize.width.clamp(0.0, 380.0);
+          final double chatHeight = safeHeight;
+          
+          // Avatar está centrado horizontalmente en el chat y a ~100px del top
+          final double avatarCenterX = screenSize.width - (chatWidth / 2);
+          final double avatarCenterY = (screenSize.height - chatHeight) + 100.0;
+          
+          dx = event.position.dx - avatarCenterX;
+          dy = event.position.dy - avatarCenterY;
+        } else {
+          // Chat CERRADO: calcular respecto al botón flotante
+          final double headCenterX = screenSize.width - ghostPadding - 36.0;
+          final double headCenterY = screenSize.height - ghostPadding - 36.0;
+          
+          dx = event.position.dx - headCenterX;
+          dy = event.position.dy - headCenterY;
+        }
+        
+        ref.read(pointerPositionProvider.notifier).state = Offset(dx, dy);
+      },
+      onExit: (_) {
+        // Resetear cuando el mouse sale completamente
+        ref.read(pointerPositionProvider.notifier).state = null;
+      },
+      child: Stack(
+        fit: StackFit.loose, 
+        alignment: Alignment.bottomRight,
+        children: [
         if (isOpen)
           Positioned.fill(
             child: GestureDetector(
@@ -106,6 +141,7 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
           ),
         ),
       ],
+      ),
     );
   }
 
@@ -126,15 +162,7 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     final Color textColor = _getContrastingTextColor(color);
     final Color subTextColor = textColor.withOpacity(0.85);
 
-    return MouseRegion(
-      onHover: (event) {
-        final double headCenterX = targetWidth - 36.0;
-        final double headCenterY = 36.0;
-        final double dx = event.localPosition.dx - headCenterX;
-        final double dy = event.localPosition.dy - headCenterY;
-        ref.read(pointerPositionProvider.notifier).state = Offset(dx, dy);
-      },
-      child: AnimatedContainer(
+    return AnimatedContainer(
         duration: const Duration(milliseconds: 400),
         curve: Curves.easeOutCubic, 
         width: targetWidth, 
@@ -216,7 +244,6 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
             ),
           ),
         ),
-      ),
     );
   }
 }
