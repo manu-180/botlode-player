@@ -11,7 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String DEPLOY_VERSION = "PLAYER PURE v1.3 - FIX MATERIAL TRANSPARENCY";
+const String DEPLOY_VERSION = "PLAYER PURE v1.4 - FONDO NEGRO ROOT";
 
 void main() {
   runZonedGuarded(() async {
