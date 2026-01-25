@@ -160,7 +160,8 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
         child: LayoutBuilder(
           builder: (context, constraints) {
             return Material(
-              type: MaterialType.transparency,
+              type: MaterialType.canvas,
+              color: solidBgColor,
               child: Container(
                 width: double.infinity,
                 height: double.infinity,

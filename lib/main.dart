@@ -11,7 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String DEPLOY_VERSION = "PLAYER PURE v1.2 - FONDO SOLIDO CHAT ACTUALIZADO";
+const String DEPLOY_VERSION = "PLAYER PURE v1.3 - FIX MATERIAL TRANSPARENCY";
 
 void main() {
   runZonedGuarded(() async {
