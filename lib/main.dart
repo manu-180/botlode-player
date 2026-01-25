@@ -1,7 +1,6 @@
 // Archivo: lib/main.dart
 import 'dart:async';
 import 'dart:html' as html;
-import 'dart:ui';
 import 'package:botlode_player/core/config/app_config.dart';
 import 'package:botlode_player/core/config/app_theme.dart';
 import 'package:botlode_player/core/config/configure_web.dart';
@@ -36,7 +35,8 @@ void main() {
 
     // LEEMOS BOT ID (Solo URL, sin memoria local compleja)
     final uri = Uri.base;
-    final urlBotId = uri.queryParameters['bot_id'];
+    // Soporta tanto 'botId' como 'bot_id' para compatibilidad
+    final urlBotId = uri.queryParameters['botId'] ?? uri.queryParameters['bot_id'];
     final finalBotId = urlBotId ?? AppConfig.fallbackBotId;
 
     runApp(
@@ -55,11 +55,8 @@ void main() {
 }
 
 void _setupIframeListeners() {
-  try {
-    html.document.body!.style.backgroundColor = 'transparent';
-    html.document.documentElement!.style.backgroundColor = 'transparent';
-  } catch (_) {}
-
+  // Removida configuración de transparencia para que el chat tenga fondo sólido
+  
   Future.delayed(const Duration(milliseconds: 500), () {
       _safePostMessage('CMD_READY');
   });
@@ -106,10 +103,7 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
     return MaterialApp.router(
       title: 'BotLode Player',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.darkTheme.copyWith(
-        canvasColor: Colors.transparent, 
-        scaffoldBackgroundColor: Colors.transparent,
-      ),
+      theme: AppTheme.darkTheme,
       routerConfig: appRouter, 
     );
   }
