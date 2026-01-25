@@ -40,11 +40,9 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
 
     // MouseRegion global que captura el mouse en TODA la pantalla
     // Calcula respecto a diferentes puntos según si el chat está abierto o cerrado
-    return ColoredBox(
-      color: const Color(0xFF000000), // Fondo negro para toda la app
-      child: MouseRegion(
-        hitTestBehavior: HitTestBehavior.translucent,
-        onHover: (event) {
+    return MouseRegion(
+      hitTestBehavior: HitTestBehavior.translucent,
+      onHover: (event) {
         final double dx;
         final double dy;
         
@@ -143,7 +141,6 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
           ),
         ),
       ],
-      ),
       ),
     );
   }
