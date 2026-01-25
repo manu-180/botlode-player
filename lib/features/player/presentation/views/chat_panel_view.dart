@@ -143,7 +143,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
       data: ThemeData(
         brightness: isDarkMode ? Brightness.dark : Brightness.light,
         primaryColor: themeColor,
-        scaffoldBackgroundColor: Colors.transparent,
+        scaffoldBackgroundColor: solidBgColor,
         textTheme: TextTheme(
           bodyMedium: TextStyle(color: isDarkMode ? Colors.white : Colors.black),
           bodyLarge: TextStyle(color: isDarkMode ? Colors.white : Colors.black),
