@@ -11,12 +11,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String DEPLOY_VERSION = "PLAYER PURE v1.5 - SIN TRANSPARENCIA FORZADA";
+const String DEPLOY_VERSION = "PLAYER PURE v1.6 - HOST ELEMENT + COLOR SCHEME FIX";
 
 void main() {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
     configureUrlStrategy();
+
+    // ✅ NUEVO: Configurar esquema de color para evitar fondos opacos forzados
+    _setupColorScheme();
 
     // 1. SUPABASE
     try {
@@ -69,6 +72,26 @@ void _safePostMessage(String message) {
     html.window.parent?.postMessage(message, '*');
   } catch (e) {
     print("⚠️ PostMessage Error: $e");
+  }
+}
+
+// ✅ NUEVO: Función para configurar esquema de color
+void _setupColorScheme() {
+  try {
+    // Verificar si el meta tag de color-scheme existe
+    var metaColorScheme = html.document.querySelector('meta[name="color-scheme"]');
+    if (metaColorScheme == null) {
+      // Crear y agregar el meta tag dinámicamente
+      metaColorScheme = html.MetaElement()
+        ..name = 'color-scheme'
+        ..content = 'light dark';
+      html.document.head?.append(metaColorScheme);
+      print("✅ Meta color-scheme agregado dinámicamente");
+    } else {
+      print("✅ Meta color-scheme ya existe");
+    }
+  } catch (e) {
+    print("⚠️ Error al configurar color-scheme: $e");
   }
 }
 
