@@ -11,7 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String DEPLOY_VERSION = "PLAYER TEST v2.8 - ULTRA SIMPLE (ROUTER FIX)";
+const String DEPLOY_VERSION = "PLAYER FINAL v2.9 - BOT COMPLETO (POST-FIX)";
 
 void main() {
   runZonedGuarded(() async {
