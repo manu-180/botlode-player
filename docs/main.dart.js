@@ -8181,7 +8181,7 @@ Kq:function Kq(a){this.d=a
 this.c=this.a=null},
 ayw:function ayw(a){this.a=a},
 bcA(){A.aVs(new A.aI_(),new A.aI0(),null,t.v7)},
-bap(){A.l_("\ud83d\ude80 DEPLOY VERSION: PLAYER PROGRESIVO v3.3 - PASO 3.2 (RIVE + STATUS INDICATOR)")
+bap(){A.l_("\ud83d\ude80 DEPLOY VERSION: PLAYER PROGRESIVO v3.4 - PASO 3.3 (FIX RIVE LOADING)")
 A.yw(B.dm,new A.aH3(),t.P)},
 a9_(a){var s,r,q
 try{r=A.b8Y(window.parent)

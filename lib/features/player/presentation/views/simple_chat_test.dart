@@ -1,5 +1,6 @@
-// PASO 3.2: Integración de Rive Avatar + StatusIndicator
+// PASO 3.3: Integración de Rive Avatar + StatusIndicator con debugging
 import 'package:botlode_player/core/network/connectivity_provider.dart';
+import 'package:botlode_player/features/player/presentation/providers/loader_provider.dart';
 import 'package:botlode_player/features/player/presentation/widgets/rive_avatar.dart';
 import 'package:botlode_player/features/player/presentation/widgets/status_indicator.dart';
 import 'package:flutter/material.dart';
@@ -10,6 +11,9 @@ class SimpleChatTest extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // DEBUG: Observar el estado del loader
+    final riveLoader = ref.watch(riveFileLoaderProvider);
+    print('🔍 RIVE LOADER STATE: ${riveLoader.runtimeType} - ${riveLoader.hasValue ? "✅ LOADED" : riveLoader.isLoading ? "⏳ LOADING" : "❌ ERROR: ${riveLoader.error}"}');
     // Configuración de colores (hardcoded por ahora)
     const Color bgColor = Color(0xFF181818);
     const Color inputFill = Color(0xFF2C2C2C);
@@ -56,11 +60,52 @@ class SimpleChatTest extends ConsumerWidget {
               ),
               child: Stack(
                 children: [
-                  // ✅ RIVE AVATAR (LO MÁS IMPORTANTE)
-                  const Positioned.fill(
+                  // ✅ RIVE AVATAR (LO MÁS IMPORTANTE) con debug mejorado
+                  Positioned.fill(
                     child: Padding(
-                      padding: EdgeInsets.only(bottom: 20),
-                      child: BotAvatarWidget(),
+                      padding: const EdgeInsets.only(bottom: 20),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: Colors.black12, // Fondo temporal para debugging
+                          border: Border.all(color: Colors.red.withOpacity(0.3), width: 2), // Border para ver el área
+                        ),
+                        child: riveLoader.when(
+                          data: (_) => const BotAvatarWidget(),
+                          loading: () => const Center(
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                CircularProgressIndicator(
+                                  color: Color(0xFFFFC000),
+                                  strokeWidth: 3,
+                                ),
+                                SizedBox(height: 10),
+                                Text(
+                                  'Cargando avatar...',
+                                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                                ),
+                              ],
+                            ),
+                          ),
+                          error: (error, stack) => Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(16),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                                  const SizedBox(height: 10),
+                                  Text(
+                                    'Error cargando Rive:\n$error',
+                                    textAlign: TextAlign.center,
+                                    style: const TextStyle(color: Colors.red, fontSize: 11),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                   
