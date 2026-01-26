@@ -11,7 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String DEPLOY_VERSION = "PLAYER PROGRESIVO v5.6 - PASO 5.6 (GEOMETRÍA CORREGIDA)";
+const String DEPLOY_VERSION = "PLAYER PROGRESIVO v5.6 - PASO 5.6 (GEOMETRÍA)";
 
 void main() {
   runZonedGuarded(() async {

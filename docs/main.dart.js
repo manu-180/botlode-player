@@ -8381,7 +8381,7 @@ aKr:function aKr(){},
 aKt:function aKt(){},
 aKs:function aKs(){},
 bjm(){A.b0J(new A.aNH(),new A.aNI(),null,t.v7)},
-bha(){A.fa("\ud83d\ude80 DEPLOY VERSION: PLAYER PROGRESIVO v5.6 - PASO 5.6 (GEOMETR\xcdA CORREGIDA)")
+bha(){A.fa("\ud83d\ude80 DEPLOY VERSION: PLAYER PROGRESIVO v5.6 - PASO 5.6 (GEOMETR\xcdA)")
 A.rb(B.cP,new A.aMy(),t.P)},
 abO(a){var s,r,q
 try{r=A.aRn(window.parent)
