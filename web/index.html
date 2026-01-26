@@ -20,19 +20,20 @@
   <link rel="manifest" href="manifest.json">
 
   <style>
-    /* RESET ABSOLUTO: Elimina mÃ¡rgenes y barras de scroll */
+    /* RESET con fondo negro sÃ³lido */
     html, body {
       height: 100%;
       width: 100%;
       margin: 0;
       padding: 0;
-      background: transparent !important;
+      /* FONDO NEGRO SÃ“LIDO para que iframe funcione */
+      background: #000000 !important;
       overflow: hidden;
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
     }
     
-    /* Contenedor especÃ­fico para Flutter */
+    /* Contenedor para Flutter */
     #flutter-app-host {
       position: fixed;
       top: 0;
@@ -41,13 +42,6 @@
       height: 100%;
       background: transparent;
       pointer-events: auto;
-    }
-    
-    /* Forzar transparencia en elementos internos de Flutter */
-    flt-glass-pane,
-    .flt-canvas-container,
-    flt-scene-host {
-      background: transparent !important;
     }
   </style>
 </head>
