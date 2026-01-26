@@ -159,22 +159,21 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
         },
         child: LayoutBuilder(
           builder: (context, constraints) {
-            return Material(
-              type: MaterialType.canvas,
-              color: solidBgColor,
-              child: Container(
-                width: double.infinity,
-                height: double.infinity,
-                clipBehavior: Clip.hardEdge, 
-                decoration: BoxDecoration(
-                  color: solidBgColor, 
-                  borderRadius: BorderRadius.circular(28),
-                  border: Border.all(color: borderColor, width: 1.0),
-                  boxShadow: [
-                    BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 30, offset: const Offset(0, 10))
-                  ],
-                ),
-                child: Stack(
+            // CAMBIO CRÍTICO: Remover Material widget, usar solo Container con BoxDecoration
+            // Material causa problemas de transparencia en iframes
+            return Container(
+              width: double.infinity,
+              height: double.infinity,
+              clipBehavior: Clip.hardEdge, 
+              decoration: BoxDecoration(
+                color: solidBgColor, 
+                borderRadius: BorderRadius.circular(28),
+                border: Border.all(color: borderColor, width: 1.0),
+                boxShadow: [
+                  BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 30, offset: const Offset(0, 10))
+                ],
+              ),
+              child: Stack(
                   children: [
                     Positioned.fill(child: Container(color: solidBgColor)),
                     Column(

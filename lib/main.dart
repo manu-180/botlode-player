@@ -11,7 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String DEPLOY_VERSION = "PLAYER PURE v1.9 - BLACK BG FOR IFRAME";
+const String DEPLOY_VERSION = "PLAYER PURE v2.0 - NO MATERIAL WIDGET";
 
 void main() {
   runZonedGuarded(() async {
