@@ -11,7 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String DEPLOY_VERSION = "PLAYER TEST v2.6 - HTML RENDERER (NO CANVASKIT)";
+const String DEPLOY_VERSION = "PLAYER TEST v2.7 - ULTRA SIMPLE TODO (VISIBILITY)";
 
 void main() {
   runZonedGuarded(() async {

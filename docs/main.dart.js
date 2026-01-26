@@ -8217,7 +8217,7 @@ aAP:function aAP(){},
 aAO:function aAO(){},
 O8:function O8(){},
 bd_(){A.aVN(new A.aIk(),new A.aIl(),null,t.v7)},
-baR(){A.k4("\ud83d\ude80 DEPLOY VERSION: PLAYER TEST v2.6 - HTML RENDERER (NO CANVASKIT)")
+baR(){A.k4("\ud83d\ude80 DEPLOY VERSION: PLAYER TEST v2.7 - ULTRA SIMPLE TODO (VISIBILITY)")
 A.yE(B.d6,new A.aHj(),t.P)},
 a8D(a){var s,r,q
 try{r=A.aUc(window.parent)
