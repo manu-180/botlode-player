@@ -11,7 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String DEPLOY_VERSION = "PLAYER PROGRESIVO v3.4 - PASO 3.3 (FIX RIVE LOADING)";
+const String DEPLOY_VERSION = "PLAYER PROGRESIVO v3.5 - PASO 3.4 (FALLBACK AVATAR + DEBUG RIVE WASM)";
 
 void main() {
   runZonedGuarded(() async {

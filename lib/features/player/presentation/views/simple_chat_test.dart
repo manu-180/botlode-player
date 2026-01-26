@@ -11,9 +11,22 @@ class SimpleChatTest extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // DEBUG: Observar el estado del loader
+    // DEBUG EXPLOSIVO: Observar el estado del loader
     final riveLoader = ref.watch(riveFileLoaderProvider);
-    print('🔍 RIVE LOADER STATE: ${riveLoader.runtimeType} - ${riveLoader.hasValue ? "✅ LOADED" : riveLoader.isLoading ? "⏳ LOADING" : "❌ ERROR: ${riveLoader.error}"}');
+    
+    // PRINT CONDICIONAL DETALLADO
+    if (riveLoader.hasValue) {
+      print('🟢 RIVE LOADER: ✅ LOADED SUCCESSFULLY');
+    } else if (riveLoader.isLoading) {
+      print('🟡 RIVE LOADER: ⏳ LOADING... (WASM puede estar bloqueado)');
+    } else if (riveLoader.hasError) {
+      print('🔴 RIVE LOADER: ❌ ERROR: ${riveLoader.error}');
+      print('📍 STACK: ${riveLoader.stackTrace}');
+    }
+    
+    // DEBUG CONSOLA WEB
+    print('🔍 RIVE LOADER STATE TYPE: ${riveLoader.runtimeType}');
+    print('🔍 hasValue: ${riveLoader.hasValue} | isLoading: ${riveLoader.isLoading} | hasError: ${riveLoader.hasError}');
     // Configuración de colores (hardcoded por ahora)
     const Color bgColor = Color(0xFF181818);
     const Color inputFill = Color(0xFF2C2C2C);
@@ -70,40 +83,112 @@ class SimpleChatTest extends ConsumerWidget {
                           border: Border.all(color: Colors.red.withOpacity(0.3), width: 2), // Border para ver el área
                         ),
                         child: riveLoader.when(
-                          data: (_) => const BotAvatarWidget(),
-                          loading: () => const Center(
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                CircularProgressIndicator(
-                                  color: Color(0xFFFFC000),
-                                  strokeWidth: 3,
-                                ),
-                                SizedBox(height: 10),
-                                Text(
-                                  'Cargando avatar...',
-                                  style: TextStyle(color: Colors.white70, fontSize: 12),
-                                ),
-                              ],
-                            ),
-                          ),
-                          error: (error, stack) => Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
+                          data: (_) {
+                            print('✅ DATA CALLBACK: Renderizando BotAvatarWidget');
+                            return const BotAvatarWidget();
+                          },
+                          loading: () {
+                            print('⏳ LOADING CALLBACK: Mostrando spinner');
+                            return Center(
                               child: Column(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  const Icon(Icons.error_outline, color: Colors.red, size: 48),
+                                  const CircularProgressIndicator(
+                                    color: Color(0xFFFFC000),
+                                    strokeWidth: 3,
+                                  ),
                                   const SizedBox(height: 10),
-                                  Text(
-                                    'Error cargando Rive:\n$error',
-                                    textAlign: TextAlign.center,
-                                    style: const TextStyle(color: Colors.red, fontSize: 11),
+                                  const Text(
+                                    'Cargando avatar Rive...',
+                                    style: TextStyle(color: Colors.white70, fontSize: 12),
+                                  ),
+                                  const SizedBox(height: 5),
+                                  Container(
+                                    padding: const EdgeInsets.all(8),
+                                    decoration: BoxDecoration(
+                                      color: Colors.orange.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: Colors.orange.withOpacity(0.3)),
+                                    ),
+                                    child: const Text(
+                                      '⚠️ Si esto no avanza:\nRive WASM bloqueado por navegador',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(color: Colors.orange, fontSize: 10),
+                                    ),
                                   ),
                                 ],
                               ),
-                            ),
-                          ),
+                            );
+                          },
+                          error: (error, stack) {
+                            print('❌ ERROR CALLBACK: $error');
+                            // FALLBACK VISUAL cuando Rive falla
+                            return Center(
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  // Avatar fallback animado
+                                  Container(
+                                    width: 80,
+                                    height: 80,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      gradient: LinearGradient(
+                                        colors: [
+                                          const Color(0xFFFFC000),
+                                          const Color(0xFFFF8000),
+                                        ],
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                      ),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: const Color(0xFFFFC000).withOpacity(0.5),
+                                          blurRadius: 20,
+                                          spreadRadius: 5,
+                                        )
+                                      ],
+                                    ),
+                                    child: const Icon(
+                                      Icons.smart_toy_outlined,
+                                      color: Colors.white,
+                                      size: 40,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: Colors.red.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                      border: Border.all(color: Colors.red.withOpacity(0.3)),
+                                    ),
+                                    child: Column(
+                                      children: [
+                                        const Text(
+                                          '⚠️ Rive WASM Bloqueado',
+                                          style: TextStyle(
+                                            color: Colors.red,
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          error.toString().substring(0, error.toString().length > 50 ? 50 : error.toString().length),
+                                          textAlign: TextAlign.center,
+                                          style: const TextStyle(
+                                            color: Colors.white38,
+                                            fontSize: 8,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
                         ),
                       ),
                     ),
