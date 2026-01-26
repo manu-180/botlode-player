@@ -71,10 +71,19 @@ class _FloatingBubbleWithRive extends ConsumerWidget {
 class _ChatPanel extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final screenHeight = MediaQuery.of(context).size.height;
+    final chatHeight = (screenHeight * 0.85).clamp(500.0, 700.0); // 85% de la pantalla, máx 700px
+    
     return Container(
       width: 380,
-      height: 600,
-      color: const Color(0xFF181818), // Fondo oscuro directo
+      height: chatHeight,
+      decoration: const BoxDecoration(
+        color: Color(0xFF181818), // ⬅️ Usando BoxDecoration para fondo sólido
+        borderRadius: BorderRadius.only(
+          topLeft: Radius.circular(16),
+          topRight: Radius.circular(16),
+        ),
+      ),
       child: Column(
         children: [
           // HEADER
