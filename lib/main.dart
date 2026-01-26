@@ -11,7 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String DEPLOY_VERSION = "PLAYER PROGRESIVO v4.0 - PASO 3.9 (FIX DEFINITIVO MATERIAL TRANSPARENTE)";
+const String DEPLOY_VERSION = "PLAYER PROGRESIVO v4.1 - PASO 4.0 (PANTALLA BASE + OVERLAY FIX)";
 
 void main() {
   runZonedGuarded(() async {
