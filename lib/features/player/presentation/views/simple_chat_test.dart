@@ -1,17 +1,28 @@
-// PASO 1: Estructura básica completa (header, body, input) sin providers
+// PASO 3.2: Integración de Rive Avatar + StatusIndicator
+import 'package:botlode_player/core/network/connectivity_provider.dart';
+import 'package:botlode_player/features/player/presentation/widgets/rive_avatar.dart';
+import 'package:botlode_player/features/player/presentation/widgets/status_indicator.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class SimpleChatTest extends StatelessWidget {
+class SimpleChatTest extends ConsumerWidget {
   const SimpleChatTest({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     // Configuración de colores (hardcoded por ahora)
     const Color bgColor = Color(0xFF181818);
-    const Color headerBgColor = Color(0xFF2C2C2C);
     const Color inputFill = Color(0xFF2C2C2C);
     const Color borderColor = Colors.white24;
     const Color themeColor = Color(0xFFFFC000);
+    const bool isDarkMode = true;
+
+    // Estados temporales hardcoded (lo haremos dinámico en Paso 3)
+    const bool isLoading = false;
+    const String currentMood = 'neutral';
+    
+    // Conectividad real desde provider
+    final isOnline = ref.watch(connectivityProvider).asData?.value ?? true;
 
     return Container(
       width: double.infinity,
@@ -45,21 +56,11 @@ class SimpleChatTest extends StatelessWidget {
               ),
               child: Stack(
                 children: [
-                  // Espacio para avatar (lo agregaremos después)
-                  Center(
-                    child: Container(
-                      width: 100,
-                      height: 100,
-                      decoration: BoxDecoration(
-                        color: Colors.white10,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: themeColor, width: 2),
-                      ),
-                      child: const Icon(
-                        Icons.smart_toy_outlined,
-                        color: themeColor,
-                        size: 48,
-                      ),
+                  // ✅ RIVE AVATAR (LO MÁS IMPORTANTE)
+                  const Positioned.fill(
+                    child: Padding(
+                      padding: EdgeInsets.only(bottom: 20),
+                      child: BotAvatarWidget(),
                     ),
                   ),
                   
@@ -91,23 +92,15 @@ class SimpleChatTest extends StatelessWidget {
                     ),
                   ),
                   
-                  // Status indicator (placeholder)
-                  const Positioned(
+                  // ✅ STATUS INDICATOR REAL
+                  Positioned(
                     bottom: 12,
                     left: 24,
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.circle, color: Colors.green, size: 12),
-                        SizedBox(width: 8),
-                        Text(
-                          'En línea',
-                          style: TextStyle(
-                            color: Colors.white70,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
+                    child: StatusIndicator(
+                      isLoading: isLoading,
+                      isOnline: isOnline,
+                      mood: currentMood,
+                      isDarkMode: isDarkMode,
                     ),
                   ),
                 ],
@@ -121,7 +114,7 @@ class SimpleChatTest extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
                 child: const Center(
                   child: Text(
-                    'Los mensajes aparecerán aquí\n(Paso 2: Integrar chat provider)',
+                    'Los mensajes aparecerán aquí\n(Paso 3: Integrar chat provider)',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: Colors.white38,

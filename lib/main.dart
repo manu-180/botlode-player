@@ -11,7 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String DEPLOY_VERSION = "PLAYER PROGRESIVO v3.2 - PASO 3.1 (FIX FONDO + TAMAÑO CHAT)";
+const String DEPLOY_VERSION = "PLAYER PROGRESIVO v3.3 - PASO 3.2 (RIVE + STATUS INDICATOR)";
 
 void main() {
   runZonedGuarded(() async {
