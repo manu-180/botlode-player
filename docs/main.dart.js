@@ -8381,7 +8381,7 @@ aKr:function aKr(){},
 aKt:function aKt(){},
 aKs:function aKs(){},
 bjm(){A.b0J(new A.aNH(),new A.aNI(),null,t.v7)},
-bha(){A.fa("\ud83d\ude80 DEPLOY VERSION: PLAYER PROGRESIVO v5.5 - PASO 5.5 (HIT TEST FIX)")
+bha(){A.fa("\ud83d\ude80 DEPLOY VERSION: PLAYER PROGRESIVO v5.6 - PASO 5.6 (GEOMETR\xcdA CORREGIDA)")
 A.rb(B.cP,new A.aMy(),t.P)},
 abO(a){var s,r,q
 try{r=A.aRn(window.parent)
@@ -50920,8 +50920,8 @@ s=r.z
 if(s!=null)s.ps(50)}},
 S(a){var s,r,q,p=this,o=p.gfd(),n=o.kp($.b4u(),t.ll),m=o.kp($.aOv(),t.NT),l=A.cc(a,null,t.w).w.a,k=l.a,j=l.b
 if(p.a.d){s=new A.m(k-76,j-76)
-r=350}else{s=new A.m(k-190,j*0.08+90)
-r=800}q=A.b8k(m,r,s)
+r=350}else{s=new A.m(k-28-190,j-28-90)
+r=600}q=A.b8k(m,r,s)
 p.at=q.a
 p.ax=q.b
 p.CW=q.c

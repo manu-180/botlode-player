@@ -98,12 +98,16 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       sensitivity = 350.0; // Rango medio para la burbuja
     } else {
       // --- MODO CHAT PANEL ---
-      // Ancho Panel: 380px (fijo en UltraSimpleBot). Alineado a la derecha.
-      // Centro X Avatar = ScreenWidth - (380 / 2) = ScreenWidth - 190.
-      // Alto Panel: 92% Screen. Top Panel = 8% Screen.
-      // Avatar en Header (180px). Centro Avatar Y = (0.08 * H) + (180 / 2).
-      myCenter = Offset(screenSize.width - 190, (screenSize.height * 0.08) + 90);
-      sensitivity = 800.0; // Rango amplio para cubrir toda la pantalla
+      // Ancho Panel: 380px. Padding right: 28px.
+      // Centro X del panel = ScreenWidth - 28 (padding) - (380 / 2) = ScreenWidth - 218
+      final double chatCenterX = screenSize.width - 28 - 190;
+      
+      // Chat desde bottom: 28px. Header: 180px. Avatar en medio del header.
+      // Centro Y Avatar = ScreenHeight - 28 (padding bottom) - 90 (mitad del header)
+      final double chatAvatarCenterY = screenSize.height - 28 - 90;
+      
+      myCenter = Offset(chatCenterX, chatAvatarCenterY);
+      sensitivity = 600.0; // ⬅️ Sensibilidad ajustada
     }
 
     // 3. DELEGAR CÁLCULO AL CONTROLLER
