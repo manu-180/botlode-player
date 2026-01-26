@@ -11,7 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String DEPLOY_VERSION = "PLAYER PROGRESIVO v3.0 - PASO 2 (CHAT + INPUT FUNCIONAL)";
+const String DEPLOY_VERSION = "PLAYER PROGRESIVO v3.1 - PASO 3 (BURBUJA RIVE + SIN FONDO NEGRO)";
 
 void main() {
   runZonedGuarded(() async {

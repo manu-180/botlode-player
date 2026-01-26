@@ -1,7 +1,8 @@
 // PROGRESSIVE CHAT - Construcción incremental del chat
-// PASO 2: Chat simple + Botón cerrar funcional + Input mejorado
+// PASO 3: Chat con burbuja Rive original + sin fondo negro
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:botlode_player/features/player/presentation/widgets/floating_head_widget.dart';
 
 // Provider para estado del chat
 final progressiveChatOpenProvider = StateProvider<bool>((ref) => false);
@@ -15,58 +16,52 @@ class ProgressiveChatWidget extends ConsumerWidget {
     
     return Stack(
       children: [
-        // CHAT PANEL
-        Positioned(
-          bottom: 0,
-          right: 0,
-          child: Visibility(
-            visible: isOpen,
-            maintainState: true,
+        // CHAT PANEL - SOLO renderiza SI está abierto (elimina fondo negro)
+        if (isOpen)
+          Positioned(
+            bottom: 0,
+            right: 0,
             child: _ChatPanel(),
           ),
-        ),
         
-        // BURBUJA FLOTANTE
-        Positioned(
-          bottom: 40,
-          right: 40,
-          child: Visibility(
-            visible: !isOpen,
-            maintainState: true,
-            child: _FloatingBubble(),
+        // BURBUJA FLOTANTE ORIGINAL (con Rive) - SOLO renderiza SI está cerrado
+        if (!isOpen)
+          Positioned(
+            bottom: 40,
+            right: 40,
+            child: _FloatingBubbleWithRive(),
           ),
-        ),
       ],
     );
   }
 }
 
-// === BURBUJA FLOTANTE ===
-class _FloatingBubble extends ConsumerWidget {
+// === BURBUJA FLOTANTE CON RIVE (Original) ===
+class _FloatingBubbleWithRive extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     return GestureDetector(
       onTap: () => ref.read(progressiveChatOpenProvider.notifier).state = true,
       child: Container(
-        width: 72,
-        height: 72,
+        width: 80,
+        height: 80,
         decoration: BoxDecoration(
-          color: const Color(0xFF0066FF), // Azul
+          gradient: const LinearGradient(
+            colors: [Color(0xFF0066FF), Color(0xFF00CCFF)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
           shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.3),
-              blurRadius: 12,
-              offset: const Offset(0, 4),
+              color: const Color(0xFF0066FF).withOpacity(0.4),
+              blurRadius: 16,
+              offset: const Offset(0, 6),
             ),
           ],
         ),
         alignment: Alignment.center,
-        child: const Icon(
-          Icons.chat_bubble_outline,
-          color: Colors.white,
-          size: 32,
-        ),
+        child: const FloatingHeadWidget(), // ⬅️ WIDGET RIVE ORIGINAL
       ),
     );
   }
@@ -96,7 +91,7 @@ class _ChatPanel extends ConsumerWidget {
                   Icon(Icons.chat_bubble_outline, size: 64, color: Color(0xFF3C3C3C)),
                   SizedBox(height: 16),
                   Text(
-                    'PASO 2: Chat Funcional',
+                    'PASO 3: Burbuja Rive',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 18,
@@ -105,7 +100,8 @@ class _ChatPanel extends ConsumerWidget {
                   ),
                   SizedBox(height: 8),
                   Text(
-                    'Botón cerrar ✅',
+                    '✅ Sin fondo negro\n✅ Burbuja original del bot',
+                    textAlign: TextAlign.center,
                     style: TextStyle(color: Color(0xFF00FF88), fontSize: 14),
                   ),
                 ],
