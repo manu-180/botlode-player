@@ -24,130 +24,121 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
   Widget build(BuildContext context) {
     final isOpen = ref.watch(isOpenSimpleProvider);
     
-    // ⬅️ FIX: Fondo totalmente transparente (sin overlay oscuro)
+    // ⬅️ FIX: Fondo totalmente transparente
     return Scaffold(
-      backgroundColor: Colors.transparent, // ⬅️ SIEMPRE TRANSPARENTE
+      backgroundColor: Colors.transparent, 
       body: Listener(
-        // ⬅️ LISTENER GLOBAL: Captura mouse en TODA LA PANTALLA para tracking del avatar
+        // ⬅️ LISTENER GLOBAL (PASO 1): Captura mouse RAW en toda la pantalla
         behavior: HitTestBehavior.translucent,
         onPointerMove: (event) {
-          // Actualizar posición global del mouse para el tracking del avatar Rive
-          ref.read(pointerPositionProvider.notifier).state = Offset(
-            event.position.dx - (MediaQuery.of(context).size.width / 2),
-            event.position.dy - 100,
-          );
+          ref.read(pointerPositionProvider.notifier).state = event.position;
         },
         onPointerHover: (event) {
-          ref.read(pointerPositionProvider.notifier).state = Offset(
-            event.position.dx - (MediaQuery.of(context).size.width / 2),
-            event.position.dy - 100,
-          );
+          ref.read(pointerPositionProvider.notifier).state = event.position;
         },
         child: Stack(
-          fit: StackFit.expand, // ⬅️ FIX: Llenar todo el espacio
+          fit: StackFit.expand,
           children: [
-        // ⬅️ CAPA INVISIBLE DE CAPTURA: Atrapa el mouse en TODA la pantalla
-        Positioned.fill(
-          child: Container(
-            color: Colors.transparent, // Invisible pero captura eventos
-          ),
-        ),
-        
-        // CHAT COMPLEJO (chat_panel_view) CON ANIMACIÓN PROFESIONAL
-        Positioned(
-          bottom: 0,
-          right: 0,
-          child: AnimatedSlide(
-            duration: const Duration(milliseconds: 400),
-            curve: Curves.easeOutCubic,
-            offset: isOpen ? Offset.zero : const Offset(1.2, 0), // ⬅️ Slide desde derecha
-            child: AnimatedOpacity(
-              duration: const Duration(milliseconds: 300),
-              opacity: isOpen ? 1.0 : 0.0, // ⬅️ Fade in/out
-              child: Visibility(
-                visible: isOpen,
-                maintainState: true,
-                child: Padding(
-                  padding: const EdgeInsets.only(right: 28, bottom: 28), // ⬅️ Más espacio para respirar
-                  child: Container(
-                    width: 380,
-                    height: MediaQuery.of(context).size.height * 0.92, // ⬅️ Más altura (de 85% a 92%)
-                    constraints: const BoxConstraints(
-                      maxHeight: 800, // ⬅️ Altura máxima aumentada
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF181818), // ⬅️ FONDO SÓLIDO
-                      borderRadius: BorderRadius.circular(28), // ⬅️ Bordes redondeados en todos los lados
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.4),
-                          blurRadius: 25,
-                          offset: const Offset(-5, 0), // ⬅️ Sombra profesional
+            // CAPA INVISIBLE DE CAPTURA
+            Positioned.fill(
+              child: Container(
+                color: Colors.transparent,
+              ),
+            ),
+            
+            // CHAT COMPLEJO (Panel)
+            Positioned(
+              bottom: 0,
+              right: 0,
+              child: AnimatedSlide(
+                duration: const Duration(milliseconds: 400),
+                curve: Curves.easeOutCubic,
+                offset: isOpen ? Offset.zero : const Offset(1.2, 0),
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 300),
+                  opacity: isOpen ? 1.0 : 0.0,
+                  child: Visibility(
+                    visible: isOpen,
+                    maintainState: true,
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 28, bottom: 28),
+                      child: Container(
+                        width: 380,
+                        height: MediaQuery.of(context).size.height * 0.92,
+                        constraints: const BoxConstraints(
+                          maxHeight: 800,
                         ),
-                      ],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(28),
-                      child: Stack(
-                        children: [
-                          // ⬅️ CHAT_PANEL_VIEW COMPLETO
-                          const ChatPanelView(),
-                          // BOTÓN CLOSE ENCIMA
-                          Positioned(
-                            top: 16,
-                            right: 16,
-                            child: Material(
-                              color: Colors.transparent,
-                              child: IconButton(
-                                icon: const Icon(Icons.close, color: Colors.white),
-                                onPressed: () => ref.read(isOpenSimpleProvider.notifier).state = false,
-                                tooltip: 'Cerrar chat',
-                              ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF181818),
+                          borderRadius: BorderRadius.circular(28),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.4),
+                              blurRadius: 25,
+                              offset: const Offset(-5, 0),
                             ),
+                          ],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(28),
+                          child: Stack(
+                            children: [
+                              const ChatPanelView(), // ⬅️ Aquí usa BotAvatarWidget(isBubble: false) por defecto
+                              Positioned(
+                                top: 16,
+                                right: 16,
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: IconButton(
+                                    icon: const Icon(Icons.close, color: Colors.white),
+                                    onPressed: () => ref.read(isOpenSimpleProvider.notifier).state = false,
+                                    tooltip: 'Cerrar chat',
+                                  ),
+                                ),
+                              ),
+                            ],
                           ),
-                        ],
+                        ),
                       ),
                     ),
                   ),
                 ),
               ),
             ),
-          ),
-        ),
-        
-        // BURBUJA CON RIVE AVATAR Y HOVER EXPANSIÓN - SIEMPRE renderizada
-        Positioned(
-          bottom: 40,
-          right: 40,
-          child: Visibility(
-            visible: !isOpen,
-            maintainState: true,
-            child: MouseRegion(
-              onEnter: (_) => setState(() => _isHovered = true),
-              onExit: (_) => setState(() => _isHovered = false),
-              child: Consumer(
-                builder: (context, ref, _) {
-                  final botConfig = ref.watch(botConfigProvider);
-                  
-                  return botConfig.when(
-                    data: (config) => _buildExpandableBubble(
-                      name: config.name.toUpperCase(),
-                      subtext: "¿En qué te ayudo?",
-                    ),
-                    loading: () => _buildExpandableBubble(
-                      name: "CARGANDO...",
-                      subtext: "",
-                    ),
-                    error: (_, __) => _buildExpandableBubble(
-                      name: "BOT",
-                      subtext: "Haz click para abrir",
-                    ),
-                  );
-                },
+            
+            // BURBUJA FLOTANTE
+            Positioned(
+              bottom: 40,
+              right: 40,
+              child: Visibility(
+                visible: !isOpen,
+                maintainState: true,
+                child: MouseRegion(
+                  onEnter: (_) => setState(() => _isHovered = true),
+                  onExit: (_) => setState(() => _isHovered = false),
+                  child: Consumer(
+                    builder: (context, ref, _) {
+                      final botConfig = ref.watch(botConfigProvider);
+                      
+                      return botConfig.when(
+                        data: (config) => _buildExpandableBubble(
+                          name: config.name.toUpperCase(),
+                          subtext: "¿En qué te ayudo?",
+                        ),
+                        loading: () => _buildExpandableBubble(
+                          name: "CARGANDO...",
+                          subtext: "",
+                        ),
+                        error: (_, __) => _buildExpandableBubble(
+                          name: "BOT",
+                          subtext: "Haz click para abrir",
+                        ),
+                      );
+                    },
+                  ),
+                ),
               ),
             ),
-          ),
-        ),
           ],
         ),
       ),
@@ -160,15 +151,13 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
   }) {
     const double closedSize = 72.0;
     const double headSize = 58.0;
-    const double padding = 25.0; // Padding lateral
-    const double extraSpace = 40.0; // ⬅️ Espacio extra aumentado para nombres largos
+    const double padding = 25.0; 
+    const double extraSpace = 40.0; 
     
-    // ⬅️ CALCULAR ANCHO REAL DEL TEXTO
     double textWidth = _calculateTextWidth(name, const TextStyle(fontSize: 15, fontWeight: FontWeight.w900));
     double subtextWidth = _calculateTextWidth(subtext, const TextStyle(fontSize: 10));
     double maxTextWidth = textWidth > subtextWidth ? textWidth : subtextWidth;
     
-    // ⬅️ ANCHO TOTAL = avatar + padding + texto + extra
     double expandedWidth = headSize + padding + maxTextWidth + extraSpace;
     double targetWidth = _isHovered ? expandedWidth : closedSize;
     
@@ -203,7 +192,6 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                // TEXTO (solo visible en hover)
                 if (_isHovered)
                   Flexible(
                     child: Padding(
@@ -237,7 +225,6 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
                     ),
                   ),
                 
-                // AVATAR RIVE (cabeza - cabezabot.riv)
                 Container(
                   width: headSize,
                   height: headSize,
@@ -245,10 +232,11 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
                   child: ClipOval(
                     child: Consumer(
                       builder: (context, ref, _) {
-                        final riveLoader = ref.watch(riveHeadFileLoaderProvider); // ⬅️ cabezabot.riv
+                        final riveLoader = ref.watch(riveHeadFileLoaderProvider); 
                         
                         return riveLoader.when(
-                          data: (_) => const BotAvatarWidget(),
+                          // ⬅️ PASO 2: Aquí pasamos isBubble: true
+                          data: (_) => const BotAvatarWidget(isBubble: true),
                           loading: () => const Center(
                             child: CircularProgressIndicator(
                               color: Colors.white,
@@ -273,7 +261,6 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
     );
   }
 
-  // ⬅️ MÉTODO PARA CALCULAR ANCHO REAL DEL TEXTO
   double _calculateTextWidth(String text, TextStyle style) {
     final TextPainter textPainter = TextPainter(
       text: TextSpan(text: text, style: style),

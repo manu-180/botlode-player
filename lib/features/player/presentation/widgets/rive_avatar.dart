@@ -3,13 +3,15 @@ import 'dart:ui';
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/head_tracking_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/loader_provider.dart';
+import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rive/rive.dart';
 
 class BotAvatarWidget extends ConsumerStatefulWidget {
-  const BotAvatarWidget({super.key});
+  final bool isBubble; // ⬅️ NUEVO: Contexto de ubicación
+  const BotAvatarWidget({super.key, this.isBubble = false});
 
   @override
   ConsumerState<BotAvatarWidget> createState() => _BotAvatarWidgetState();
@@ -48,9 +50,7 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
   void _onTick(Duration elapsed) {
     if (_lookXInput == null || _lookYInput == null) return;
     
-    // LÓGICA PURA: 
-    // Tracking = 1.0 (Sin lag). 
-    // Reposo = 0.05 (Suave).
+    // LÓGICA PURA: Tracking sin lag, reposo suave.
     final double smoothFactor = _isTracking ? 1.0 : 0.05;
     
     _currentX = lerpDouble(_currentX, _targetX, smoothFactor) ?? 50;
@@ -79,19 +79,49 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
   @override
   Widget build(BuildContext context) {
     final riveFileAsync = ref.watch(riveFileLoaderProvider);
+    
+    // 1. OBTENER DATOS DE ENTRADA
+    final globalPointer = ref.watch(pointerPositionProvider); // Mouse Global
+    final screenSize = MediaQuery.of(context).size; // Tamaño pantalla
+
+    // 2. CALCULAR MI POSICIÓN (GEOMETRÍA)
+    Offset myCenter;
+    double sensitivity;
+
+    if (widget.isBubble) {
+      // --- MODO BURBUJA ---
+      // Posición fija: bottom: 40, right: 40.
+      // Contenedor ancho variable, pero Avatar pegado a la derecha.
+      // Margen derecho total: 40 (screen) + 7 (margin container) + 29 (mitad avatar) ≈ 76px
+      // Margen inferior total: 40 (screen) + 7 (margin container) + 29 (mitad avatar) ≈ 76px
+      myCenter = Offset(screenSize.width - 76, screenSize.height - 76);
+      sensitivity = 350.0; // Rango medio para la burbuja
+    } else {
+      // --- MODO CHAT PANEL ---
+      // Ancho Panel: 380px (fijo en UltraSimpleBot). Alineado a la derecha.
+      // Centro X Avatar = ScreenWidth - (380 / 2) = ScreenWidth - 190.
+      // Alto Panel: 92% Screen. Top Panel = 8% Screen.
+      // Avatar en Header (180px). Centro Avatar Y = (0.08 * H) + (180 / 2).
+      myCenter = Offset(screenSize.width - 190, (screenSize.height * 0.08) + 90);
+      sensitivity = 800.0; // Rango amplio para cubrir toda la pantalla
+    }
+
+    // 3. DELEGAR CÁLCULO AL CONTROLLER
+    final trackingState = HeadTrackingController.calculateGlobalTracking(
+      globalPointer: globalPointer,
+      widgetCenter: myCenter,
+      sensitivity: sensitivity,
+    );
+
+    // 4. ACTUALIZAR VARIABLES LOCALES
+    _targetX = trackingState.targetX;
+    _targetY = trackingState.targetY;
+    _isTracking = trackingState.isTracking;
 
     // Listener para cambios de mood
     ref.listen(botMoodProvider, (prev, next) {
        if (_moodInput != null) _moodInput!.value = next.toDouble();
     });
-
-    // Escuchamos el estado de tracking calculado por el provider
-    final trackingState = ref.watch(botAvatarTrackingProvider);
-    
-    // Actualizamos las variables locales con los valores calculados
-    _targetX = trackingState.targetX;
-    _targetY = trackingState.targetY;
-    _isTracking = trackingState.isTracking;
 
     return SizedBox(
       width: 300, height: 300,
