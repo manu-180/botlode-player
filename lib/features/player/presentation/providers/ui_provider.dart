@@ -10,7 +10,7 @@ part 'ui_provider.g.dart';
 class ChatOpen extends _$ChatOpen {
   @override
   bool build() {
-    return false; 
+    return true; // ✅ CHAT ABIERTO POR DEFECTO
   }
 
   void set(bool value) {

@@ -139,28 +139,19 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
       if (prev?.currentMood != next.currentMood) ref.read(botMoodProvider.notifier).state = _getMoodIndex(next.currentMood);
     });
 
-    return Theme(
-      data: ThemeData(
-        brightness: isDarkMode ? Brightness.dark : Brightness.light,
-        primaryColor: themeColor,
-        scaffoldBackgroundColor: solidBgColor,
-        textTheme: TextTheme(
-          bodyMedium: TextStyle(color: isDarkMode ? Colors.white : Colors.black),
-          bodyLarge: TextStyle(color: isDarkMode ? Colors.white : Colors.black),
-        )
-      ),
-      child: MouseRegion(
-        hitTestBehavior: HitTestBehavior.translucent, 
-        onHover: (event) {
-          final width = MediaQuery.of(context).size.width.clamp(0.0, 380.0);
-          final double dx = event.localPosition.dx - (width / 2);
-          final double dy = event.localPosition.dy - 100.0;
-          ref.read(pointerPositionProvider.notifier).state = Offset(dx, dy);
-        },
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            // IGUAL QUE LA BURBUJA: Container con decoration + Material transparente dentro
-            return Container(
+    // ❌ ELIMINAR Theme wrapper (diferencia crítica con la burbuja que SÍ funciona)
+    return MouseRegion(
+      hitTestBehavior: HitTestBehavior.translucent, 
+      onHover: (event) {
+        final width = MediaQuery.of(context).size.width.clamp(0.0, 380.0);
+        final double dx = event.localPosition.dx - (width / 2);
+        final double dy = event.localPosition.dy - 100.0;
+        ref.read(pointerPositionProvider.notifier).state = Offset(dx, dy);
+      },
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // IGUAL QUE LA BURBUJA: Container con decoration + Material transparente dentro
+          return Container(
               width: double.infinity,
               height: double.infinity,
               clipBehavior: Clip.hardEdge, 
@@ -304,9 +295,8 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                   ],
                 ),
               ),
-            );
-          },
-        ),
+          );
+        },
       ),
     );
   }
