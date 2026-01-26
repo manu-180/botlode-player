@@ -46,6 +46,13 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
         child: Stack(
           fit: StackFit.expand, // ⬅️ FIX: Llenar todo el espacio
           children: [
+        // ⬅️ CAPA INVISIBLE DE CAPTURA: Atrapa el mouse en TODA la pantalla
+        Positioned.fill(
+          child: Container(
+            color: Colors.transparent, // Invisible pero captura eventos
+          ),
+        ),
+        
         // CHAT COMPLEJO (chat_panel_view) CON ANIMACIÓN PROFESIONAL
         Positioned(
           bottom: 0,
