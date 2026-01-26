@@ -3,7 +3,8 @@ import 'dart:html' as html;
 import 'dart:math' as math;
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
-import 'package:botlode_player/features/player/presentation/views/chat_panel_view.dart';
+// import 'package:botlode_player/features/player/presentation/views/chat_panel_view.dart';
+import 'package:botlode_player/features/player/presentation/views/simple_chat_test.dart'; // ⬅️ TEST
 import 'package:botlode_player/features/player/presentation/widgets/floating_head_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -105,7 +106,7 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
                     maxHeight: safeHeight, 
                     maxWidth: isMobile ? double.infinity : 380
                   ),
-                  child: const ChatPanelView(),
+                  child: const SimpleChatTest(), // ⬅️ TEST WIDGET
                 ),
               ),
             ),
