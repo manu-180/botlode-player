@@ -1,18 +1,17 @@
-{{flutter_js}}
+﻿{{flutter_js}}
 {{flutter_build_config}}
 
-const userConfig = {
-  // Forzamos CanvasKit para máxima fidelidad visual
-  renderer: "canvaskit", 
-};
-
 _flutter.loader.load({
-  config: userConfig,
+  hostElement: document.querySelector('#flutter-app-host'),
   onEntrypointLoaded: async function(engineInitializer) {
+    console.log("ðŸŽ¨ Inicializando Flutter con soporte de transparencia...");
+    console.log("ðŸ“¦ hostElement:", document.querySelector('#flutter-app-host'));
+    
     const appRunner = await engineInitializer.initializeEngine({
-      // ESTA ES LA CLAVE DEL ÉXITO:
-      renderer: "canvaskit", 
+      renderer: "canvaskit",
     });
+    
+    console.log("âœ… Motor Flutter inicializado correctamente");
     await appRunner.runApp();
   }
 });

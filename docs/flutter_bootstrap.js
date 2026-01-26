@@ -37,18 +37,17 @@ if (!window._flutter) {
 _flutter.buildConfig = {"engineRevision":"78fc3012e45889657f72359b005af7beac47ba3d","builds":[{"compileTarget":"dart2js","renderer":"canvaskit","mainJsPath":"main.dart.js"},{}]};
 
 
-const userConfig = {
-  // Forzamos CanvasKit para máxima fidelidad visual
-  renderer: "canvaskit", 
-};
-
 _flutter.loader.load({
-  config: userConfig,
+  hostElement: document.querySelector('#flutter-app-host'),
   onEntrypointLoaded: async function(engineInitializer) {
+    console.log("ðŸŽ¨ Inicializando Flutter con soporte de transparencia...");
+    console.log("ðŸ“¦ hostElement:", document.querySelector('#flutter-app-host'));
+    
     const appRunner = await engineInitializer.initializeEngine({
-      // ESTA ES LA CLAVE DEL ÉXITO:
-      renderer: "canvaskit", 
+      renderer: "canvaskit",
     });
+    
+    console.log("âœ… Motor Flutter inicializado correctamente");
     await appRunner.runApp();
   }
 });

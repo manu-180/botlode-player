@@ -1,9 +1,10 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html>
 <head>
   <base href="/">
 
   <meta charset="UTF-8">
+  <meta name="color-scheme" content="light dark">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Web player for BotsLode units.">
@@ -19,40 +20,41 @@
   <link rel="manifest" href="manifest.json">
 
   <style>
-    /* RESET ABSOLUTO: Elimina márgenes y barras de scroll */
+    /* RESET ABSOLUTO: Elimina mÃ¡rgenes y barras de scroll */
     html, body {
       height: 100%;
       width: 100%;
       margin: 0;
       padding: 0;
-      /* Importante: Dejar que CanvasKit maneje el color, no CSS */
-      background: transparent; 
+      background: transparent !important;
       overflow: hidden;
-      /* Mejora la nitidez del texto en WebGL */
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
+    }
+    
+    /* Contenedor especÃ­fico para Flutter */
+    #flutter-app-host {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: transparent;
+      pointer-events: auto;
+    }
+    
+    /* Forzar transparencia en elementos internos de Flutter */
+    flt-glass-pane,
+    .flt-canvas-container,
+    flt-scene-host {
+      background: transparent !important;
     }
   </style>
 </head>
 <body>
-  <script src="flutter_bootstrap.js" async></script>
+  <!-- Contenedor aislado para Flutter -->
+  <div id="flutter-app-host"></div>
   
-  <script>
-    window.addEventListener('load', function(ev) {
-      _flutter.loader.loadEntrypoint({
-        onEntrypointLoaded: async function(engineInitializer) {
-          
-          let appRunner = await engineInitializer.initializeEngine({
-            // 🚨 CONFIGURACIÓN VITAL PARA SOLID NO-GHOSTING 🚨
-            renderer: "canvaskit", 
-            // Esto asegura que el canvas nazca transparente
-            background_color: "0x00000000" 
-          });
-
-          await appRunner.runApp();
-        }
-      });
-    });
-  </script>
+  <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
