@@ -44,12 +44,12 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
                 visible: isOpen,
                 maintainState: true,
                 child: Padding(
-                  padding: const EdgeInsets.only(right: 16, bottom: 16), // ⬅️ Separación del borde
+                  padding: const EdgeInsets.only(right: 28, bottom: 28), // ⬅️ Más espacio para respirar
                   child: Container(
                     width: 380,
-                    height: MediaQuery.of(context).size.height * 0.85,
+                    height: MediaQuery.of(context).size.height * 0.92, // ⬅️ Más altura (de 85% a 92%)
                     constraints: const BoxConstraints(
-                      maxHeight: 700,
+                      maxHeight: 800, // ⬅️ Altura máxima aumentada
                     ),
                     decoration: BoxDecoration(
                       color: const Color(0xFF181818), // ⬅️ FONDO SÓLIDO
@@ -212,7 +212,7 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
                     ),
                   ),
                 
-                // AVATAR RIVE (cuerpo completo)
+                // AVATAR RIVE (cabeza - cabezabot.riv)
                 Container(
                   width: headSize,
                   height: headSize,
@@ -220,7 +220,7 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
                   child: ClipOval(
                     child: Consumer(
                       builder: (context, ref, _) {
-                        final riveLoader = ref.watch(riveFileLoaderProvider); // ⬅️ Archivo completo
+                        final riveLoader = ref.watch(riveHeadFileLoaderProvider); // ⬅️ cabezabot.riv
                         
                         return riveLoader.when(
                           data: (_) => const BotAvatarWidget(),

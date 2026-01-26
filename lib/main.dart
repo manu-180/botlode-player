@@ -11,7 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String DEPLOY_VERSION = "PLAYER PROGRESIVO v4.8 - PASO 4.7 (ANIMACIÓN PROFESIONAL)";
+const String DEPLOY_VERSION = "PLAYER PROGRESIVO v5.2 - PASO 5.2 (TRACKING GLOBAL MOUSE)";
 
 void main() {
   runZonedGuarded(() async {

@@ -99,9 +99,9 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
 
     // COLORES
     final Color solidBgColor = isDarkMode ? const Color(0xFF181818) : const Color(0xFFF9F9F9); 
-    final Color inputFill = isDarkMode ? const Color(0xFF2C2C2C) : const Color(0xFFFFFFFF);
-    final Color borderColor = isDarkMode ? Colors.white24 : Colors.black12;
-    final Color sendButtonColor = themeColor;
+    final Color inputFill = isDarkMode ? const Color(0xFF252525) : const Color(0xFFFFFFFF); // ⬅️ Input más oscuro
+    final Color borderColor = isDarkMode ? const Color(0xFF3A3A3A) : Colors.black12; // ⬅️ Borde más visible
+    final Color sendButtonColor = const Color(0xFF2196F3); // ⬅️ Azul estándar profesional
 
     final reversedMessages = chatState.messages.reversed.toList();
 
@@ -155,13 +155,28 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
         ),
         child: Material(
           color: Colors.transparent,
-          child: MouseRegion(
-            hitTestBehavior: HitTestBehavior.translucent, 
-            onHover: (event) {
-              final width = MediaQuery.of(context).size.width.clamp(0.0, 380.0);
-              final double dx = event.localPosition.dx - (width / 2);
-              final double dy = event.localPosition.dy - 100.0;
-              ref.read(pointerPositionProvider.notifier).state = Offset(dx, dy);
+          child: Listener(
+            // ⬅️ LISTENER GLOBAL: Captura mouse en toda la pantalla (incluso fuera del chat)
+            behavior: HitTestBehavior.translucent,
+            onPointerMove: (event) {
+              final RenderBox? box = context.findRenderObject() as RenderBox?;
+              if (box != null) {
+                final Offset localPosition = box.globalToLocal(event.position);
+                final Size size = box.size;
+                final double dx = localPosition.dx - (size.width / 2);
+                final double dy = localPosition.dy - 100.0;
+                ref.read(pointerPositionProvider.notifier).state = Offset(dx, dy);
+              }
+            },
+            onPointerHover: (event) {
+              final RenderBox? box = context.findRenderObject() as RenderBox?;
+              if (box != null) {
+                final Offset localPosition = box.globalToLocal(event.position);
+                final Size size = box.size;
+                final double dx = localPosition.dx - (size.width / 2);
+                final double dy = localPosition.dy - 100.0;
+                ref.read(pointerPositionProvider.notifier).state = Offset(dx, dy);
+              }
             },
             child: Stack(
                   children: [
@@ -243,46 +258,107 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                           ),
                         ),
                         
-                        // INPUT AREA
+                        // INPUT AREA MEJORADO
                         Container(
                           padding: EdgeInsets.fromLTRB(16, 12, 16, 16 + (isMobile ? MediaQuery.of(context).padding.bottom : 0)),
-                          color: solidBgColor, 
+                          decoration: BoxDecoration(
+                            color: solidBgColor,
+                            // ⬅️ Sombra sutil hacia arriba
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.1),
+                                blurRadius: 8,
+                                offset: const Offset(0, -2),
+                              ),
+                            ],
+                          ),
                           child: Container(
                             decoration: BoxDecoration(
                               color: inputFill, 
-                              borderRadius: BorderRadius.circular(40), 
-                              border: Border.all(color: borderColor),
+                              borderRadius: BorderRadius.circular(28), // ⬅️ Radio más suave
+                              border: Border.all(
+                                color: borderColor,
+                                width: 1.5, // ⬅️ Borde más visible
+                              ),
+                              // ⬅️ Sombra interna sutil
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.05),
+                                  blurRadius: 4,
+                                  offset: const Offset(0, 2),
+                                ),
+                              ],
                             ),
                             child: Row(
                               children: [
-                                const SizedBox(width: 16),
+                                const SizedBox(width: 18),
                                 Expanded(
                                   child: TextField(
                                     controller: _textController,
                                     enabled: isOnline,
                                     onSubmitted: (_) => isOnline ? _sendMessage() : null,
-                                    style: TextStyle(color: isDarkMode ? Colors.white : Colors.black, fontSize: 14),
-                                    cursorColor: themeColor,
+                                    style: TextStyle(
+                                      color: isDarkMode ? Colors.white : Colors.black, 
+                                      fontSize: 15, // ⬅️ Texto un poco más grande
+                                      fontWeight: FontWeight.w400,
+                                    ),
+                                    cursorColor: sendButtonColor, // ⬅️ Cursor azul
                                     decoration: InputDecoration(
                                       hintText: isOnline ? "Escribe un mensaje..." : "Sin conexión",
-                                      hintStyle: TextStyle(color: isDarkMode ? Colors.white38 : Colors.black38, fontSize: 14),
+                                      hintStyle: TextStyle(
+                                        color: isDarkMode ? Colors.white38 : Colors.black38, 
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w400,
+                                      ),
                                       border: InputBorder.none,
-                                      contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                                      contentPadding: const EdgeInsets.symmetric(vertical: 15),
                                       isDense: true,
                                     ),
                                   ),
                                 ),
-                                AnimatedOpacity(
-                                  duration: const Duration(milliseconds: 200),
-                                  opacity: isOnline ? 1.0 : 0.5,
-                                  child: IconButton(
-                                    onPressed: isOnline ? _sendMessage : null, 
-                                    icon: Icon(Icons.send_rounded, color: isOnline ? sendButtonColor : Colors.grey),
-                                    tooltip: "Enviar",
-                                    splashRadius: 24,
+                                const SizedBox(width: 8),
+                                // ⬅️ BOTÓN DE ENVIAR MEJORADO
+                                AnimatedScale(
+                                  duration: const Duration(milliseconds: 150),
+                                  scale: isOnline ? 1.0 : 0.9,
+                                  child: Container(
+                                    margin: const EdgeInsets.all(4),
+                                    decoration: BoxDecoration(
+                                      gradient: isOnline
+                                          ? const LinearGradient(
+                                              colors: [Color(0xFF2196F3), Color(0xFF1976D2)],
+                                              begin: Alignment.topLeft,
+                                              end: Alignment.bottomRight,
+                                            )
+                                          : null,
+                                      color: isOnline ? null : Colors.grey.shade400,
+                                      shape: BoxShape.circle,
+                                      boxShadow: isOnline ? [
+                                        BoxShadow(
+                                          color: const Color(0xFF2196F3).withOpacity(0.3),
+                                          blurRadius: 8,
+                                          offset: const Offset(0, 2),
+                                        ),
+                                      ] : null,
+                                    ),
+                                    child: Material(
+                                      color: Colors.transparent,
+                                      child: InkWell(
+                                        borderRadius: BorderRadius.circular(24),
+                                        onTap: isOnline ? _sendMessage : null,
+                                        child: Padding(
+                                          padding: const EdgeInsets.all(10),
+                                          child: Icon(
+                                            Icons.send_rounded, 
+                                            color: Colors.white,
+                                            size: 22,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
                                   ),
                                 ),
-                                const SizedBox(width: 4),
+                                const SizedBox(width: 6),
                               ],
                             ),
                           ),
