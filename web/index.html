@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
   <base href="/">
@@ -20,17 +20,16 @@
   <link rel="manifest" href="manifest.json">
 
   <style>
-    /* RESET con fondo TRANSPARENTE */
+    /* RESET básico */
     html, body {
       height: 100%;
       width: 100%;
       margin: 0;
       padding: 0;
-      /* FONDO TRANSPARENTE para iframe */
-      background: transparent !important;
       overflow: hidden;
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
+      /* ⬅️ FIX: SIN forzar transparencia, dejar que Flutter/Scaffold maneje el fondo */
     }
     
     /* Contenedor para Flutter */
@@ -40,7 +39,7 @@
       left: 0;
       width: 100%;
       height: 100%;
-      background: transparent;
+      /* ⬅️ FIX: SIN forzar transparencia */
       pointer-events: auto;
     }
   </style>

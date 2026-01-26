@@ -75,17 +75,15 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
         ref.read(pointerPositionProvider.notifier).state = null;
       },
       child: Stack(
-        fit: StackFit.expand, // ⬅️ CAMBIO: expand para llenar todo
+        fit: StackFit.expand,
         children: [
-        // ✅ FONDO SÓLIDO DETRÁS DEL CHAT (evita transparencia)
+        // ⬅️ FIX: El overlay ahora lo maneja PlayerScreen, aquí solo detectamos el tap
         if (isOpen)
           Positioned.fill(
             child: GestureDetector(
-              behavior: HitTestBehavior.opaque, // ⬅️ CAMBIO: opaque en lugar de translucent
+              behavior: HitTestBehavior.translucent,
               onTap: () => ref.read(chatOpenProvider.notifier).set(false),
-              child: Container(
-                color: Colors.black.withOpacity(0.5), // ⬅️ FONDO SEMITRANSPARENTE
-              ), 
+              child: const SizedBox.expand(), 
             ),
           ),
 
@@ -94,22 +92,12 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
           Positioned(
             bottom: 0, 
             right: 0,
-            child: Container(
-              // ⬅️ WRAPPER CON FONDO SÓLIDO
-              decoration: const BoxDecoration(
-                color: Color(0xFF181818), // ⬅️ MISMO COLOR QUE EL CHAT
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(28),
-                  topRight: Radius.circular(28),
-                ),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: safeHeight, 
+                maxWidth: isMobile ? double.infinity : 380
               ),
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxHeight: safeHeight, 
-                  maxWidth: isMobile ? double.infinity : 380
-                ),
-                child: const SimpleChatTest(), // ⬅️ TEST WIDGET
-              ),
+              child: const SimpleChatTest(), // ⬅️ CHAT COMPLETO (ya tiene su propio Container con fondo)
             ),
           ),
 

@@ -12,9 +12,11 @@ class UltraSimpleBot extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isOpen = ref.watch(isOpenSimpleProvider);
     
-    // ⬅️ FIX: Envolver en Scaffold con backgroundColor
+    // ⬅️ FIX: Fondo dinámico según si el chat está abierto o cerrado
     return Scaffold(
-      backgroundColor: Colors.black, // ⬅️ FONDO SÓLIDO NEGRO (visible cuando chat está cerrado)
+      backgroundColor: isOpen 
+          ? Colors.black.withOpacity(0.5) // ⬅️ SEMI-TRANSPARENTE cuando chat abierto (overlay)
+          : Colors.transparent, // ⬅️ TRANSPARENTE cuando chat cerrado (solo burbuja)
       body: Stack(
         fit: StackFit.expand, // ⬅️ FIX: Llenar todo el espacio
         children: [
