@@ -12,8 +12,12 @@ class UltraSimpleBot extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final isOpen = ref.watch(isOpenSimpleProvider);
     
-    return Stack(
-      children: [
+    // ⬅️ FIX: Envolver en Scaffold con backgroundColor
+    return Scaffold(
+      backgroundColor: Colors.black, // ⬅️ FONDO SÓLIDO NEGRO (visible cuando chat está cerrado)
+      body: Stack(
+        fit: StackFit.expand, // ⬅️ FIX: Llenar todo el espacio
+        children: [
         // CHAT - SIEMPRE renderizado, solo cambia visibilidad
         Positioned(
           bottom: 0,
@@ -99,7 +103,8 @@ class UltraSimpleBot extends ConsumerWidget {
             ),
           ),
         ),
-      ],
+        ],
+      ),
     );
   }
 }

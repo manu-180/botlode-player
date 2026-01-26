@@ -11,7 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String DEPLOY_VERSION = "PLAYER PROGRESIVO v4.1 - PASO 4.0 (PANTALLA BASE + OVERLAY FIX)";
+const String DEPLOY_VERSION = "PLAYER PROGRESIVO v4.2 - PASO 4.1 (SCAFFOLD ROOT FIX)";
 
 void main() {
   runZonedGuarded(() async {
