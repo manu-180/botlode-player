@@ -1,5 +1,7 @@
 // ULTRA SIMPLE - Burbuja + Chat COMPLEJO (chat_panel_view) para testing
+import 'package:botlode_player/features/player/presentation/providers/loader_provider.dart';
 import 'package:botlode_player/features/player/presentation/views/chat_panel_view.dart';
+import 'package:botlode_player/features/player/presentation/widgets/rive_avatar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -27,23 +29,20 @@ class UltraSimpleBot extends ConsumerWidget {
           right: 0,
           child: Visibility(
             visible: isOpen,
-            maintainState: true,  // Mantener estado
+            maintainState: true,
             child: Container(
               width: 380,
-              height: 600,
+              height: MediaQuery.of(context).size.height * 0.85, // ⬅️ 85% altura pantalla
+              constraints: const BoxConstraints(
+                maxHeight: 700, // ⬅️ Altura máxima
+              ),
               decoration: BoxDecoration(
-                color: const Color(0xFF181818), // ⬅️ FONDO SÓLIDO EXPLÍCITO
+                color: const Color(0xFF181818), // ⬅️ FONDO SÓLIDO
                 borderRadius: const BorderRadius.only(
                   topLeft: Radius.circular(28),
                   topRight: Radius.circular(28),
                 ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.5),
-                    blurRadius: 20,
-                    offset: const Offset(0, -5),
-                  ),
-                ],
+                // ⬅️ SIN SOMBRA (causaba el borde oscuro)
               ),
               child: ClipRRect(
                 borderRadius: const BorderRadius.only(
@@ -52,9 +51,9 @@ class UltraSimpleBot extends ConsumerWidget {
                 ),
                 child: Stack(
                   children: [
-                    // ⬅️ CHAT_PANEL_VIEW COMPLETO (el que originalmente funcionaba)
+                    // ⬅️ CHAT_PANEL_VIEW COMPLETO
                     const ChatPanelView(),
-                    // BOTÓN CLOSE ENCIMA (por si el ChatPanelView no tiene uno visible)
+                    // BOTÓN CLOSE ENCIMA
                     Positioned(
                       top: 16,
                       right: 16,
@@ -74,7 +73,7 @@ class UltraSimpleBot extends ConsumerWidget {
           ),
         ),
         
-        // BURBUJA - SIEMPRE renderizada
+        // BURBUJA CON RIVE AVATAR - SIEMPRE renderizada
         Positioned(
           bottom: 40,
           right: 40,
@@ -87,8 +86,12 @@ class UltraSimpleBot extends ConsumerWidget {
                 width: 72,
                 height: 72,
                 decoration: BoxDecoration(
-                  color: Colors.blue,
+                  color: const Color(0xFF2A2A3E), // ⬅️ Color morado oscuro
                   shape: BoxShape.circle,
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.15),
+                    width: 1.0,
+                  ),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withOpacity(0.3),
@@ -97,11 +100,28 @@ class UltraSimpleBot extends ConsumerWidget {
                     ),
                   ],
                 ),
-                alignment: Alignment.center,
-                child: const Icon(
-                  Icons.chat_bubble,
-                  color: Colors.white,
-                  size: 32,
+                child: ClipOval(
+                  child: Consumer(
+                    builder: (context, ref, _) {
+                      // Cargar archivo Rive de la cabeza del bot
+                      final headbotLoader = ref.watch(riveHeadFileLoaderProvider);
+                      
+                      return headbotLoader.when(
+                        data: (_) => const BotAvatarWidget(), // ⬅️ RIVE AVATAR
+                        loading: () => const Center(
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        ),
+                        error: (_, __) => const Icon(
+                          Icons.smart_toy,
+                          color: Colors.white,
+                          size: 32,
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ),
             ),
