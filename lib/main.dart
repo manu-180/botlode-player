@@ -11,7 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String DEPLOY_VERSION = "PLAYER PROGRESIVO v4.7 - PASO 4.6 (EXPANSIÓN DINÁMICA)";
+const String DEPLOY_VERSION = "PLAYER PROGRESIVO v4.8 - PASO 4.7 (ANIMACIÓN PROFESIONAL)";
 
 void main() {
   runZonedGuarded(() async {

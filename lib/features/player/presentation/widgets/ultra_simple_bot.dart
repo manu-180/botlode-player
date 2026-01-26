@@ -29,50 +29,62 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
       body: Stack(
         fit: StackFit.expand, // ⬅️ FIX: Llenar todo el espacio
         children: [
-        // CHAT COMPLEJO (chat_panel_view) - SIEMPRE renderizado, solo cambia visibilidad
+        // CHAT COMPLEJO (chat_panel_view) CON ANIMACIÓN PROFESIONAL
         Positioned(
           bottom: 0,
           right: 0,
-          child: Visibility(
-            visible: isOpen,
-            maintainState: true,
-            child: Container(
-              width: 380,
-              height: MediaQuery.of(context).size.height * 0.85, // ⬅️ 85% altura pantalla
-              constraints: const BoxConstraints(
-                maxHeight: 700, // ⬅️ Altura máxima
-              ),
-              decoration: BoxDecoration(
-                color: const Color(0xFF181818), // ⬅️ FONDO SÓLIDO
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(28),
-                  topRight: Radius.circular(28),
-                ),
-                // ⬅️ SIN SOMBRA (causaba el borde oscuro)
-              ),
-              child: ClipRRect(
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(28),
-                  topRight: Radius.circular(28),
-                ),
-                child: Stack(
-                  children: [
-                    // ⬅️ CHAT_PANEL_VIEW COMPLETO
-                    const ChatPanelView(),
-                    // BOTÓN CLOSE ENCIMA
-                    Positioned(
-                      top: 16,
-                      right: 16,
-                      child: Material(
-                        color: Colors.transparent,
-                        child: IconButton(
-                          icon: const Icon(Icons.close, color: Colors.white),
-                          onPressed: () => ref.read(isOpenSimpleProvider.notifier).state = false,
-                          tooltip: 'Cerrar chat',
+          child: AnimatedSlide(
+            duration: const Duration(milliseconds: 400),
+            curve: Curves.easeOutCubic,
+            offset: isOpen ? Offset.zero : const Offset(1.2, 0), // ⬅️ Slide desde derecha
+            child: AnimatedOpacity(
+              duration: const Duration(milliseconds: 300),
+              opacity: isOpen ? 1.0 : 0.0, // ⬅️ Fade in/out
+              child: Visibility(
+                visible: isOpen,
+                maintainState: true,
+                child: Padding(
+                  padding: const EdgeInsets.only(right: 16, bottom: 16), // ⬅️ Separación del borde
+                  child: Container(
+                    width: 380,
+                    height: MediaQuery.of(context).size.height * 0.85,
+                    constraints: const BoxConstraints(
+                      maxHeight: 700,
+                    ),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF181818), // ⬅️ FONDO SÓLIDO
+                      borderRadius: BorderRadius.circular(28), // ⬅️ Bordes redondeados en todos los lados
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.4),
+                          blurRadius: 25,
+                          offset: const Offset(-5, 0), // ⬅️ Sombra profesional
                         ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(28),
+                      child: Stack(
+                        children: [
+                          // ⬅️ CHAT_PANEL_VIEW COMPLETO
+                          const ChatPanelView(),
+                          // BOTÓN CLOSE ENCIMA
+                          Positioned(
+                            top: 16,
+                            right: 16,
+                            child: Material(
+                              color: Colors.transparent,
+                              child: IconButton(
+                                icon: const Icon(Icons.close, color: Colors.white),
+                                onPressed: () => ref.read(isOpenSimpleProvider.notifier).state = false,
+                                tooltip: 'Cerrar chat',
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -124,7 +136,7 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
     const double closedSize = 72.0;
     const double headSize = 58.0;
     const double padding = 25.0; // Padding lateral
-    const double extraSpace = 20.0; // Espacio extra "por las dudas"
+    const double extraSpace = 40.0; // ⬅️ Espacio extra aumentado para nombres largos
     
     // ⬅️ CALCULAR ANCHO REAL DEL TEXTO
     double textWidth = _calculateTextWidth(name, const TextStyle(fontSize: 15, fontWeight: FontWeight.w900));
@@ -200,7 +212,7 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
                     ),
                   ),
                 
-                // AVATAR RIVE
+                // AVATAR RIVE (cuerpo completo)
                 Container(
                   width: headSize,
                   height: headSize,
@@ -208,9 +220,9 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
                   child: ClipOval(
                     child: Consumer(
                       builder: (context, ref, _) {
-                        final headbotLoader = ref.watch(riveHeadFileLoaderProvider);
+                        final riveLoader = ref.watch(riveFileLoaderProvider); // ⬅️ Archivo completo
                         
-                        return headbotLoader.when(
+                        return riveLoader.when(
                           data: (_) => const BotAvatarWidget(),
                           loading: () => const Center(
                             child: CircularProgressIndicator(
