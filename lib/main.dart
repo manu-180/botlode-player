@@ -11,7 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String DEPLOY_VERSION = "PLAYER PURE v1.6 - HOST ELEMENT + COLOR SCHEME FIX";
+const String DEPLOY_VERSION = "PLAYER PURE v1.7 - HTML RENDERER (TRANSPARENCIA NATIVA)";
 
 void main() {
   runZonedGuarded(() async {

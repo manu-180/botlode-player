@@ -8402,7 +8402,7 @@ _.f=d
 _.a=e},
 ayX:function ayX(){},
 bjn(){A.b0K(new A.aNM(),new A.aNN(),null,t.v7)},
-bhc(){A.eQ("\ud83d\ude80 DEPLOY VERSION: PLAYER PURE v1.6 - HOST ELEMENT + COLOR SCHEME FIX")
+bhc(){A.eQ("\ud83d\ude80 DEPLOY VERSION: PLAYER PURE v1.7 - HTML RENDERER (TRANSPARENCIA NATIVA)")
 A.rb(B.cO,new A.aMC(),t.P)},
 abZ(a){var s,r,q
 try{r=A.aLK(window.parent)
