@@ -1,17 +1,58 @@
-// PASO 3.3: Integración de Rive Avatar + StatusIndicator con debugging
+// PASO 3.7: Mensajes reales + Envío funcional
 import 'package:botlode_player/core/network/connectivity_provider.dart';
+import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
+import 'package:botlode_player/features/player/presentation/providers/chat_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/loader_provider.dart';
+import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
+import 'package:botlode_player/features/player/presentation/widgets/chat_bubble.dart';
 import 'package:botlode_player/features/player/presentation/widgets/rive_avatar.dart';
 import 'package:botlode_player/features/player/presentation/widgets/status_indicator.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class SimpleChatTest extends ConsumerWidget {
+class SimpleChatTest extends ConsumerStatefulWidget {
   const SimpleChatTest({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    // DEBUG EXPLOSIVO: Observar el estado del loader
+  ConsumerState<SimpleChatTest> createState() => _SimpleChatTestState();
+}
+
+class _SimpleChatTestState extends ConsumerState<SimpleChatTest> {
+  final TextEditingController _textController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+
+  int _getMoodIndex(String mood) {
+    switch (mood.toLowerCase()) {
+      case 'angry': return 1;
+      case 'happy': return 2;
+      case 'sales': return 3;
+      case 'confused': return 4;
+      case 'tech': return 5;
+      case 'neutral': default: return 0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _textController.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _sendMessage() {
+    final text = _textController.text;
+    if (text.trim().isEmpty) return;
+    _textController.clear();
+    if (_scrollController.hasClients) {
+      _scrollController.jumpTo(0.0);
+    }
+    ref.read(chatControllerProvider.notifier).sendMessage(text);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final WidgetRef ref = this.ref;
+    // DEBUG: Observar el estado del loader
     final riveLoader = ref.watch(riveFileLoaderProvider);
     
     // PRINT CONDICIONAL DETALLADO
@@ -27,16 +68,28 @@ class SimpleChatTest extends ConsumerWidget {
     // DEBUG CONSOLA WEB
     print('🔍 RIVE LOADER STATE TYPE: ${riveLoader.runtimeType}');
     print('🔍 hasValue: ${riveLoader.hasValue} | isLoading: ${riveLoader.isLoading} | hasError: ${riveLoader.hasError}');
+    
+    // ✅ CHAT STATE REAL
+    final chatState = ref.watch(chatControllerProvider);
+    final reversedMessages = chatState.messages.reversed.toList();
+    
+    // ✅ LISTENER: Sincronizar mood del avatar con el estado del chat
+    ref.listen(chatControllerProvider, (prev, next) {
+      if (prev?.currentMood != next.currentMood) {
+        ref.read(botMoodProvider.notifier).state = _getMoodIndex(next.currentMood);
+      }
+      // Auto-scroll cuando llegan mensajes nuevos
+      if (next.messages.length > (prev?.messages.length ?? 0) && _scrollController.hasClients) {
+        _scrollController.jumpTo(0.0);
+      }
+    });
+    
     // Configuración de colores (hardcoded por ahora)
     const Color bgColor = Color(0xFF181818);
     const Color inputFill = Color(0xFF2C2C2C);
     const Color borderColor = Colors.white24;
     const Color themeColor = Color(0xFFFFC000);
     const bool isDarkMode = true;
-
-    // Estados temporales hardcoded (lo haremos dinámico en Paso 3)
-    const bool isLoading = false;
-    const String currentMood = 'neutral';
     
     // Conectividad real desde provider
     final isOnline = ref.watch(connectivityProvider).asData?.value ?? true;
@@ -73,15 +126,11 @@ class SimpleChatTest extends ConsumerWidget {
               ),
               child: Stack(
                 children: [
-                  // ✅ RIVE AVATAR (LO MÁS IMPORTANTE) con debug mejorado
+                  // ✅ RIVE AVATAR (LO MÁS IMPORTANTE)
                   Positioned.fill(
                     child: Padding(
                       padding: const EdgeInsets.only(bottom: 20),
                       child: Container(
-                        decoration: BoxDecoration(
-                          color: Colors.black12, // Fondo temporal para debugging
-                          border: Border.all(color: Colors.red.withOpacity(0.3), width: 2), // Border para ver el área
-                        ),
                         child: riveLoader.when(
                           data: (_) {
                             print('✅ DATA CALLBACK: Renderizando BotAvatarWidget');
@@ -203,18 +252,14 @@ class SimpleChatTest extends ConsumerWidget {
                       children: [
                         IconButton(
                           icon: const Icon(Icons.refresh_rounded),
-                          onPressed: () {
-                            print('🔄 Refresh presionado');
-                          },
+                          onPressed: () => ref.read(chatResetProvider)(), // ✅ FUNCIONAL
                           color: Colors.white70,
                           tooltip: "Reiniciar",
                         ),
                         const SizedBox(width: 4),
                         IconButton(
                           icon: const Icon(Icons.close_rounded),
-                          onPressed: () {
-                            print('❌ Close presionado');
-                          },
+                          onPressed: () => ref.read(chatOpenProvider.notifier).set(false), // ✅ FUNCIONAL
                           color: Colors.white70,
                           tooltip: "Cerrar",
                         ),
@@ -222,14 +267,14 @@ class SimpleChatTest extends ConsumerWidget {
                     ),
                   ),
                   
-                  // ✅ STATUS INDICATOR REAL
+                  // ✅ STATUS INDICATOR REAL (con estado dinámico)
                   Positioned(
                     bottom: 12,
                     left: 24,
                     child: StatusIndicator(
-                      isLoading: isLoading,
+                      isLoading: chatState.isLoading,
                       isOnline: isOnline,
-                      mood: currentMood,
+                      mood: chatState.currentMood,
                       isDarkMode: isDarkMode,
                     ),
                   ),
@@ -237,20 +282,59 @@ class SimpleChatTest extends ConsumerWidget {
               ),
             ),
 
-            // ========== BODY (CHAT MESSAGES) ==========
+            // ========== BODY (CHAT MESSAGES) ========== ✅ REAL
             Expanded(
               child: Container(
                 color: bgColor,
-                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
-                child: const Center(
-                  child: Text(
-                    'Los mensajes aparecerán aquí\n(Paso 3: Integrar chat provider)',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      color: Colors.white38,
-                      fontSize: 14,
-                    ),
-                  ),
+                child: ListView.builder(
+                  controller: _scrollController,
+                  reverse: true,
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+                  physics: const BouncingScrollPhysics(),
+                  itemCount: reversedMessages.length + (chatState.isLoading ? 1 : 0),
+                  itemBuilder: (context, index) {
+                    // Loading indicator al principio (index 0)
+                    if (chatState.isLoading) {
+                      if (index == 0) {
+                        return Padding(
+                          padding: const EdgeInsets.only(left: 16, top: 8, bottom: 20),
+                          child: Row(
+                            children: [
+                              const SizedBox(
+                                width: 12,
+                                height: 12,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: themeColor,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                "Escribiendo...",
+                                style: TextStyle(
+                                  color: isDarkMode ? Colors.white38 : Colors.black38,
+                                  fontSize: 11,
+                                ),
+                              )
+                            ],
+                          ),
+                        );
+                      }
+                      // Mensajes reales (desplazados por el loading)
+                      final msg = reversedMessages[index - 1];
+                      return ChatBubble(
+                        message: msg,
+                        botThemeColor: themeColor,
+                        isDarkMode: isDarkMode,
+                      );
+                    }
+                    // Sin loading, solo mensajes
+                    return ChatBubble(
+                      message: reversedMessages[index],
+                      botThemeColor: themeColor,
+                      isDarkMode: isDarkMode,
+                    );
+                  },
                 ),
               ),
             ),
@@ -270,10 +354,13 @@ class SimpleChatTest extends ConsumerWidget {
                     const SizedBox(width: 16),
                     Expanded(
                       child: TextField(
-                        enabled: false, // Deshabilitado por ahora
+                        controller: _textController,
+                        enabled: isOnline, // ✅ HABILITADO cuando hay conexión
+                        onSubmitted: (_) => isOnline ? _sendMessage() : null,
                         style: const TextStyle(color: Colors.white, fontSize: 14),
+                        cursorColor: themeColor,
                         decoration: InputDecoration(
-                          hintText: "Escribe un mensaje...",
+                          hintText: isOnline ? "Escribe un mensaje..." : "Sin conexión",
                           hintStyle: TextStyle(
                             color: Colors.white.withOpacity(0.3),
                             fontSize: 14,
@@ -284,11 +371,18 @@ class SimpleChatTest extends ConsumerWidget {
                         ),
                       ),
                     ),
-                    IconButton(
-                      onPressed: null, // Deshabilitado por ahora
-                      icon: const Icon(Icons.send_rounded, color: Colors.grey),
-                      tooltip: "Enviar",
-                      splashRadius: 24,
+                    AnimatedOpacity(
+                      duration: const Duration(milliseconds: 200),
+                      opacity: isOnline ? 1.0 : 0.5,
+                      child: IconButton(
+                        onPressed: isOnline ? _sendMessage : null, // ✅ FUNCIONAL
+                        icon: Icon(
+                          Icons.send_rounded,
+                          color: isOnline ? themeColor : Colors.grey,
+                        ),
+                        tooltip: "Enviar",
+                        splashRadius: 24,
+                      ),
                     ),
                     const SizedBox(width: 4),
                   ],

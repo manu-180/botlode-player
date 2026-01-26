@@ -11,7 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String DEPLOY_VERSION = "PLAYER PROGRESIVO v3.6 - PASO 3.5 (ROUTER FIX → SIMPLE CHAT ACTIVO)";
+const String DEPLOY_VERSION = "PLAYER PROGRESIVO v3.8 - PASO 3.7 (MENSAJES REALES + ENVÍO FUNCIONAL)";
 
 void main() {
   runZonedGuarded(() async {
