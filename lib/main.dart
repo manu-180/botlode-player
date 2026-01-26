@@ -11,7 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String DEPLOY_VERSION = "PLAYER PURE v2.2 - NO THEME WRAPPER + OPEN BY DEFAULT";
+const String DEPLOY_VERSION = "PLAYER PURE v2.3 - NO LAYOUTBUILDER + BUBBLE DEFAULT";
 
 void main() {
   runZonedGuarded(() async {

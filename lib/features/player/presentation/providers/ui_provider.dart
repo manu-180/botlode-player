@@ -10,7 +10,7 @@ part 'ui_provider.g.dart';
 class ChatOpen extends _$ChatOpen {
   @override
   bool build() {
-    return true; // ✅ CHAT ABIERTO POR DEFECTO
+    return false; // ✅ CHAT CERRADO POR DEFECTO (burbuja visible)
   }
 
   void set(bool value) {

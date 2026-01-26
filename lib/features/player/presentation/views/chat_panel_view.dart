@@ -139,33 +139,31 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
       if (prev?.currentMood != next.currentMood) ref.read(botMoodProvider.notifier).state = _getMoodIndex(next.currentMood);
     });
 
-    // ❌ ELIMINAR Theme wrapper (diferencia crítica con la burbuja que SÍ funciona)
-    return MouseRegion(
-      hitTestBehavior: HitTestBehavior.translucent, 
-      onHover: (event) {
-        final width = MediaQuery.of(context).size.width.clamp(0.0, 380.0);
-        final double dx = event.localPosition.dx - (width / 2);
-        final double dy = event.localPosition.dy - 100.0;
-        ref.read(pointerPositionProvider.notifier).state = Offset(dx, dy);
-      },
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          // IGUAL QUE LA BURBUJA: Container con decoration + Material transparente dentro
-          return Container(
-              width: double.infinity,
-              height: double.infinity,
-              clipBehavior: Clip.hardEdge, 
-              decoration: BoxDecoration(
-                color: solidBgColor, 
-                borderRadius: BorderRadius.circular(28),
-                border: Border.all(color: borderColor, width: 1.0),
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 30, offset: const Offset(0, 10))
-                ],
-              ),
-              child: Material(
-                color: Colors.transparent,
-                child: Stack(
+    // ❌ ELIMINAR Theme wrapper Y LayoutBuilder (simplificar render)
+    // IGUAL QUE LA BURBUJA: Container con decoration + Material transparente
+    return Container(
+        width: double.infinity,
+        height: double.infinity,
+        clipBehavior: Clip.hardEdge, 
+        decoration: BoxDecoration(
+          color: solidBgColor, 
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: borderColor, width: 1.0),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 30, offset: const Offset(0, 10))
+          ],
+        ),
+        child: Material(
+          color: Colors.transparent,
+          child: MouseRegion(
+            hitTestBehavior: HitTestBehavior.translucent, 
+            onHover: (event) {
+              final width = MediaQuery.of(context).size.width.clamp(0.0, 380.0);
+              final double dx = event.localPosition.dx - (width / 2);
+              final double dy = event.localPosition.dy - 100.0;
+              ref.read(pointerPositionProvider.notifier).state = Offset(dx, dy);
+            },
+            child: Stack(
                   children: [
                     Positioned.fill(child: Container(color: solidBgColor)),
                     Column(
@@ -294,10 +292,8 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                     _ConnectivityBanner(isOnline: isOnline),
                   ],
                 ),
-              ),
-          );
-        },
-      ),
+          ),
+        ),
     );
   }
 }
