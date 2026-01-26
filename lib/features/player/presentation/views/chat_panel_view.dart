@@ -159,8 +159,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
         },
         child: LayoutBuilder(
           builder: (context, constraints) {
-            // CAMBIO CRÍTICO: Remover Material widget, usar solo Container con BoxDecoration
-            // Material causa problemas de transparencia en iframes
+            // IGUAL QUE LA BURBUJA: Container con decoration + Material transparente dentro
             return Container(
               width: double.infinity,
               height: double.infinity,
@@ -173,7 +172,9 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                   BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 30, offset: const Offset(0, 10))
                 ],
               ),
-              child: Stack(
+              child: Material(
+                color: Colors.transparent,
+                child: Stack(
                   children: [
                     Positioned.fill(child: Container(color: solidBgColor)),
                     Column(
@@ -302,6 +303,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                     _ConnectivityBanner(isOnline: isOnline),
                   ],
                 ),
+              ),
             );
           },
         ),

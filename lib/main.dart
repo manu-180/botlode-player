@@ -11,7 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String DEPLOY_VERSION = "PLAYER PURE v2.0 - NO MATERIAL WIDGET";
+const String DEPLOY_VERSION = "PLAYER PURE v2.1 - MATERIAL TRANSPARENT LIKE BUBBLE";
 
 void main() {
   runZonedGuarded(() async {
