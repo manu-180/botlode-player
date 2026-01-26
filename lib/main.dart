@@ -11,7 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String DEPLOY_VERSION = "PLAYER PROGRESIVO v5.3 - PASO 5.3 (TRACKING GLOBAL REAL)";
+const String DEPLOY_VERSION = "PLAYER PROGRESIVO v5.4 - PASO 5.4 (TRACKING LIMPIO)";
 
 void main() {
   runZonedGuarded(() async {

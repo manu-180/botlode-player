@@ -155,30 +155,8 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
         ),
         child: Material(
           color: Colors.transparent,
-          child: Listener(
-            // ⬅️ LISTENER GLOBAL: Captura mouse en toda la pantalla (incluso fuera del chat)
-            behavior: HitTestBehavior.translucent,
-            onPointerMove: (event) {
-              final RenderBox? box = context.findRenderObject() as RenderBox?;
-              if (box != null) {
-                final Offset localPosition = box.globalToLocal(event.position);
-                final Size size = box.size;
-                final double dx = localPosition.dx - (size.width / 2);
-                final double dy = localPosition.dy - 100.0;
-                ref.read(pointerPositionProvider.notifier).state = Offset(dx, dy);
-              }
-            },
-            onPointerHover: (event) {
-              final RenderBox? box = context.findRenderObject() as RenderBox?;
-              if (box != null) {
-                final Offset localPosition = box.globalToLocal(event.position);
-                final Size size = box.size;
-                final double dx = localPosition.dx - (size.width / 2);
-                final double dy = localPosition.dy - 100.0;
-                ref.read(pointerPositionProvider.notifier).state = Offset(dx, dy);
-              }
-            },
-            child: Stack(
+          // ⬅️ SIN LISTENER LOCAL: El tracking global lo maneja UltraSimpleBot
+          child: Stack(
                   children: [
                     Positioned.fill(child: Container(color: solidBgColor)),
                     Column(
