@@ -87,31 +87,18 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
             ),
           ),
 
-        // PANEL DE CHAT
-        Positioned(
-          bottom: 0, right: 0,
-          child: IgnorePointer(
-            ignoring: !isOpen, 
-            child: AnimatedOpacity(
-              duration: const Duration(milliseconds: 250),
-              opacity: isOpen ? 1.0 : 0.0,
-              curve: Curves.easeOut,
-              child: AnimatedScale(
-                scale: isOpen ? 1.0 : 0.9, 
-                alignment: Alignment.bottomRight,
-                duration: const Duration(milliseconds: 350),
-                curve: isOpen ? Curves.easeOutBack : Curves.easeInCubic, 
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(
-                    maxHeight: safeHeight, 
-                    maxWidth: isMobile ? double.infinity : 380
-                  ),
-                  child: const SimpleChatTest(), // ⬅️ TEST WIDGET
-                ),
+        // PANEL DE CHAT - SIN ANIMACIONES (causan problema en iframe)
+        if (isOpen)
+          Positioned(
+            bottom: 0, right: 0,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: safeHeight, 
+                maxWidth: isMobile ? double.infinity : 380
               ),
+              child: const SimpleChatTest(), // ⬅️ TEST WIDGET
             ),
           ),
-        ),
 
         // BURBUJA FLOTANTE
         Positioned(

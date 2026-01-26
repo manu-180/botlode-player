@@ -11,7 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String DEPLOY_VERSION = "PLAYER TEST v2.4 - SIMPLE CHAT WIDGET";
+const String DEPLOY_VERSION = "PLAYER TEST v2.5 - NO ANIMATIONS ON CHAT";
 
 void main() {
   runZonedGuarded(() async {
