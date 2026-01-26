@@ -111,7 +111,7 @@ class _SimpleChatTestState extends ConsumerState<SimpleChatTest> {
         ],
       ),
       child: Material(
-        color: Colors.transparent,
+        color: bgColor, // ⬅️ FIX: Mismo color que el Container (no transparente)
         child: Column(
           children: [
             // ========== HEADER ==========
