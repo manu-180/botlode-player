@@ -11,7 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String DEPLOY_VERSION = "PLAYER FINAL v2.9 - BOT COMPLETO (POST-FIX)";
+const String DEPLOY_VERSION = "PLAYER PROGRESIVO v3.0 - PASO 2 (CHAT + INPUT FUNCIONAL)";
 
 void main() {
   runZonedGuarded(() async {
