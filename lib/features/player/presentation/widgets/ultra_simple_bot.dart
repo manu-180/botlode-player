@@ -1,6 +1,7 @@
 // ULTRA SIMPLE - Burbuja + Chat COMPLEJO (chat_panel_view) para testing
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/loader_provider.dart';
+import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
 import 'package:botlode_player/features/player/presentation/views/chat_panel_view.dart';
 import 'package:botlode_player/features/player/presentation/widgets/rive_avatar.dart';
 import 'package:flutter/material.dart';
@@ -26,9 +27,25 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
     // ⬅️ FIX: Fondo totalmente transparente (sin overlay oscuro)
     return Scaffold(
       backgroundColor: Colors.transparent, // ⬅️ SIEMPRE TRANSPARENTE
-      body: Stack(
-        fit: StackFit.expand, // ⬅️ FIX: Llenar todo el espacio
-        children: [
+      body: Listener(
+        // ⬅️ LISTENER GLOBAL: Captura mouse en TODA LA PANTALLA para tracking del avatar
+        behavior: HitTestBehavior.translucent,
+        onPointerMove: (event) {
+          // Actualizar posición global del mouse para el tracking del avatar Rive
+          ref.read(pointerPositionProvider.notifier).state = Offset(
+            event.position.dx - (MediaQuery.of(context).size.width / 2),
+            event.position.dy - 100,
+          );
+        },
+        onPointerHover: (event) {
+          ref.read(pointerPositionProvider.notifier).state = Offset(
+            event.position.dx - (MediaQuery.of(context).size.width / 2),
+            event.position.dy - 100,
+          );
+        },
+        child: Stack(
+          fit: StackFit.expand, // ⬅️ FIX: Llenar todo el espacio
+          children: [
         // CHAT COMPLEJO (chat_panel_view) CON ANIMACIÓN PROFESIONAL
         Positioned(
           bottom: 0,
@@ -124,7 +141,8 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
             ),
           ),
         ),
-        ],
+          ],
+        ),
       ),
     );
   }
