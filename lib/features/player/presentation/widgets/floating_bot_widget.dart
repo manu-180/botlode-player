@@ -75,28 +75,41 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
         ref.read(pointerPositionProvider.notifier).state = null;
       },
       child: Stack(
-        fit: StackFit.loose, 
-        alignment: Alignment.bottomRight,
+        fit: StackFit.expand, // ⬅️ CAMBIO: expand para llenar todo
         children: [
+        // ✅ FONDO SÓLIDO DETRÁS DEL CHAT (evita transparencia)
         if (isOpen)
           Positioned.fill(
             child: GestureDetector(
-              behavior: HitTestBehavior.translucent, 
+              behavior: HitTestBehavior.opaque, // ⬅️ CAMBIO: opaque en lugar de translucent
               onTap: () => ref.read(chatOpenProvider.notifier).set(false),
-              child: const SizedBox.expand(), 
+              child: Container(
+                color: Colors.black.withOpacity(0.5), // ⬅️ FONDO SEMITRANSPARENTE
+              ), 
             ),
           ),
 
         // PANEL DE CHAT - SIN ANIMACIONES (causan problema en iframe)
         if (isOpen)
           Positioned(
-            bottom: 0, right: 0,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxHeight: safeHeight, 
-                maxWidth: isMobile ? double.infinity : 380
+            bottom: 0, 
+            right: 0,
+            child: Container(
+              // ⬅️ WRAPPER CON FONDO SÓLIDO
+              decoration: const BoxDecoration(
+                color: Color(0xFF181818), // ⬅️ MISMO COLOR QUE EL CHAT
+                borderRadius: BorderRadius.only(
+                  topLeft: Radius.circular(28),
+                  topRight: Radius.circular(28),
+                ),
               ),
-              child: const SimpleChatTest(), // ⬅️ TEST WIDGET
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: safeHeight, 
+                  maxWidth: isMobile ? double.infinity : 380
+                ),
+                child: const SimpleChatTest(), // ⬅️ TEST WIDGET
+              ),
             ),
           ),
 
