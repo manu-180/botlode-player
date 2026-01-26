@@ -11,7 +11,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String DEPLOY_VERSION = "PLAYER PROGRESIVO v4.3 - PASO 4.2 (CHAT COMPLETO FUNCIONAL)";
+const String DEPLOY_VERSION = "PLAYER PROGRESIVO v4.4 - PASO 4.3 (TEST: ULTRASIMPLE + CHAT_PANEL_VIEW)";
 
 void main() {
   runZonedGuarded(() async {

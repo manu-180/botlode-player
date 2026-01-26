@@ -1,4 +1,5 @@
-// ULTRA SIMPLE - Burbuja + Chat desde cero
+// ULTRA SIMPLE - Burbuja + Chat COMPLEJO (chat_panel_view) para testing
+import 'package:botlode_player/features/player/presentation/views/chat_panel_view.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -20,7 +21,7 @@ class UltraSimpleBot extends ConsumerWidget {
       body: Stack(
         fit: StackFit.expand, // ⬅️ FIX: Llenar todo el espacio
         children: [
-        // CHAT - SIEMPRE renderizado, solo cambia visibilidad
+        // CHAT COMPLEJO (chat_panel_view) - SIEMPRE renderizado, solo cambia visibilidad
         Positioned(
           bottom: 0,
           right: 0,
@@ -30,43 +31,44 @@ class UltraSimpleBot extends ConsumerWidget {
             child: Container(
               width: 380,
               height: 600,
-              color: const Color(0xFF181818), // Gris directo
-              child: Column(
-                children: [
-                  // Header
-                  Container(
-                    height: 80,
-                    color: const Color(0xFF2C2C2C),
-                    alignment: Alignment.center,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Padding(
-                          padding: EdgeInsets.only(left: 20),
-                          child: Text(
-                            'ULTRA SIMPLE CHAT',
-                            style: TextStyle(color: Colors.white, fontSize: 16),
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close, color: Colors.white),
-                          onPressed: () => ref.read(isOpenSimpleProvider.notifier).state = false,
-                        ),
-                      ],
-                    ),
-                  ),
-                  // Body
-                  Expanded(
-                    child: Container(
-                      color: const Color(0xFF181818),
-                      alignment: Alignment.center,
-                      child: const Text(
-                        '✅ SI VES ESTO, GANAMOS',
-                        style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-                      ),
-                    ),
+              decoration: BoxDecoration(
+                color: const Color(0xFF181818), // ⬅️ FONDO SÓLIDO EXPLÍCITO
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(28),
+                  topRight: Radius.circular(28),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.5),
+                    blurRadius: 20,
+                    offset: const Offset(0, -5),
                   ),
                 ],
+              ),
+              child: ClipRRect(
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(28),
+                  topRight: Radius.circular(28),
+                ),
+                child: Stack(
+                  children: [
+                    // ⬅️ CHAT_PANEL_VIEW COMPLETO (el que originalmente funcionaba)
+                    const ChatPanelView(),
+                    // BOTÓN CLOSE ENCIMA (por si el ChatPanelView no tiene uno visible)
+                    Positioned(
+                      top: 16,
+                      right: 16,
+                      child: Material(
+                        color: Colors.transparent,
+                        child: IconButton(
+                          icon: const Icon(Icons.close, color: Colors.white),
+                          onPressed: () => ref.read(isOpenSimpleProvider.notifier).state = false,
+                          tooltip: 'Cerrar chat',
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
