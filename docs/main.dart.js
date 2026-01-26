@@ -50620,7 +50620,7 @@ $1(a){return new A.z0()},
 $S:535}
 A.oL.prototype={}
 A.aMJ.prototype={
-$1(a){return A.b8m(a.jy($.aOw(),t.NT),600,400)},
+$1(a){return A.b8m(a.jy($.aOw(),t.NT),3000,500)},
 $S:534}
 A.aNY.prototype={
 $1(a){return this.aag(a)},

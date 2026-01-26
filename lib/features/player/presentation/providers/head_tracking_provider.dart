@@ -32,12 +32,6 @@ class HeadTrackingState {
 /// Controlador que encapsula toda la lógica matemática de tracking
 class HeadTrackingController {
   /// Calcula la posición objetivo basándose en la posición del puntero
-  /// 
-  /// [deltaPos] - Offset relativo del puntero respecto al centro del widget
-  /// [maxDistance] - Distancia máxima de interés para activar tracking
-  /// [sensitivity] - Factor de sensibilidad del movimiento (menor = más sensible)
-  /// 
-  /// Retorna el nuevo estado de tracking con las coordenadas calculadas
   static HeadTrackingState calculateTracking({
     required Offset? deltaPos,
     required double maxDistance,
@@ -81,7 +75,6 @@ class HeadTrackingController {
 }
 
 /// Provider para floating head (cabeza pequeña flotante)
-/// Configuración: Distancia 400px, Sensibilidad 200
 final floatingHeadTrackingProvider = Provider<HeadTrackingState>((ref) {
   final pointerPosition = ref.watch(pointerPositionProvider);
   
@@ -93,13 +86,13 @@ final floatingHeadTrackingProvider = Provider<HeadTrackingState>((ref) {
 });
 
 /// Provider para bot avatar (cabeza grande del panel de chat)
-/// Configuración: Distancia 600px, Sensibilidad 400
+/// 🛠️ CORRECCIÓN: Aumentamos maxDistance a 3000.0 para cubrir toda la pantalla
 final botAvatarTrackingProvider = Provider<HeadTrackingState>((ref) {
   final pointerPosition = ref.watch(pointerPositionProvider);
   
   return HeadTrackingController.calculateTracking(
     deltaPos: pointerPosition,
-    maxDistance: 600.0,
-    sensitivity: 400.0,
+    maxDistance: 3000.0, // Antes 600.0 -> Ahora cubre monitores ultrawide
+    sensitivity: 500.0,  // Sensibilidad ajustada para movimiento más suave a larga distancia
   );
 });
