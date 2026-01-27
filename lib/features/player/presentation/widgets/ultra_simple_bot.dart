@@ -27,29 +27,27 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
     // ⬅️ FIX: Fondo totalmente transparente
     return Scaffold(
       backgroundColor: Colors.transparent, 
-      body: MouseRegion(
-        // ⬅️ TRACKING GLOBAL: Captura mouse en TODA la pantalla (incluye sobre el chat)
-        onHover: (event) {
+      body: Listener(
+        // ⬅️ TRACKING GLOBAL: Captura TODOS los eventos del mouse
+        behavior: HitTestBehavior.opaque,
+        onPointerMove: (event) {
           ref.read(pointerPositionProvider.notifier).state = event.position;
         },
-        child: Listener(
-          // ⬅️ FALLBACK: Captura eventos que MouseRegion no detecte
-          behavior: HitTestBehavior.translucent,
-          onPointerMove: (event) {
-            ref.read(pointerPositionProvider.notifier).state = event.position;
-          },
-          onPointerHover: (event) {
+        onPointerHover: (event) {
+          ref.read(pointerPositionProvider.notifier).state = event.position;
+        },
+        child: MouseRegion(
+          // ⬅️ REDUNDANCIA: Para eventos que Listener no capture
+          onHover: (event) {
             ref.read(pointerPositionProvider.notifier).state = event.position;
           },
           child: Stack(
             fit: StackFit.expand,
             children: [
-              // CAPA INVISIBLE DE CAPTURA (Garantiza que MouseRegion funcione)
+              // CAPA TRANSPARENTE DE CAPTURA (SIN IgnorePointer para que funcione)
               Positioned.fill(
-                child: IgnorePointer(
-                  child: Container(
-                    color: Colors.transparent,
-                  ),
+                child: Container(
+                  color: Colors.transparent,
                 ),
               ),
             
@@ -148,8 +146,8 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
             ),
           ],
         ),
-      ),
         ),
+      ),
     );
   }
 
