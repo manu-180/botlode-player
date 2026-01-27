@@ -151,7 +151,13 @@ async function extractMeetingWithAI(
   vendorName: string | null
 ): Promise<{ date: string | null; time: string | null; intent: boolean }> {
   try {
-    const extractionPrompt = `Analiza este mensaje y extrae información de reunión/agenda si existe. Responde SOLO con JSON válido, sin texto adicional.
+    const extractionPrompt = `Analiza este mensaje del USUARIO (NO del bot) y determina si el USUARIO está CONFIRMANDO que quiere agendar una reunión.
+
+IMPORTANTE:
+- Solo marca "has_meeting_intent": true si el USUARIO confirma que quiere agendar (ej: "sí, agendemos", "perfecto, quedamos", "sí, para mañana")
+- NO marques true si el bot está proponiendo una reunión
+- NO marques true si es solo una pregunta del usuario
+- Solo marca true si es una CONFIRMACIÓN clara del usuario
 
 Mensaje: "${message}"
 
@@ -162,10 +168,13 @@ Responde con este formato exacto:
   "time": "hora extraída o null"
 }
 
-Ejemplos:
-- "Quiero agendar para mañana a las 15:00" → {"has_meeting_intent": true, "date": "mañana", "time": "15:00"}
+Ejemplos CORRECTOS:
+- "Sí, agendemos para mañana a las 15:00" → {"has_meeting_intent": true, "date": "mañana", "time": "15:00"}
+- "Perfecto, quedamos el lunes" → {"has_meeting_intent": true, "date": "lunes", "time": null}
 - "Mi número es 1234567890" → {"has_meeting_intent": false, "date": null, "time": null}
-- "¿Quedamos el lunes?" → {"has_meeting_intent": true, "date": "lunes", "time": null}`;
+- "¿Quedamos el lunes?" → {"has_meeting_intent": false, "date": null, "time": null} (es pregunta, no confirmación)
+- "Quiero agendar" → {"has_meeting_intent": true, "date": null, "time": null}
+- "Está bien, agendemos" → {"has_meeting_intent": true, "date": null, "time": null}`;
 
     const url = `https://generativelanguage.googleapis.com/${API_VERSION}/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
     const payload = {
@@ -558,8 +567,15 @@ FORMATO JSON OBLIGATORIO:
     const extractedContacts = extractContactsRegex(message);
     const meetingInfo = await extractMeetingWithAI(message, apiKey, vendorName);
     
-    // Si se detecta una reunión en este mensaje, agregarla
-    if (meetingInfo.intent) {
+    // ⬅️ CRÍTICO: Solo guardar reunión si HAY CONTACTO (sin contacto no sirve)
+    // Verificar si hay contacto en este mensaje
+    const hasContactInThisMessage = extractedContacts.some(c => 
+      c.type === 'email' || c.type === 'phone' || c.type === 'whatsapp'
+    );
+    
+    // Solo agregar reunión si el usuario confirmó Y hay contacto
+    if (meetingInfo.intent && hasContactInThisMessage) {
+      log('info', 'Reunión confirmada CON contacto - guardando reunión');
       extractedContacts.push({
         type: 'meeting',
         value: `Reunión agendada${meetingInfo.date ? ` - ${meetingInfo.date}` : ''}${meetingInfo.time ? ` a las ${meetingInfo.time}` : ''}`,
@@ -570,6 +586,8 @@ FORMATO JSON OBLIGATORIO:
           full_message: message.substring(0, 200),
         },
       });
+    } else if (meetingInfo.intent && !hasContactInThisMessage) {
+      log('info', 'Reunión confirmada PERO sin contacto - NO guardando reunión aún (esperando contacto)');
     }
     
     // ⬅️ MEJORADO: Verificar contactos y reuniones en la BD (no solo en el mensaje actual)
@@ -582,6 +600,7 @@ FORMATO JSON OBLIGATORIO:
         .eq('session_id', sessionId)
         .eq('bot_id', botId);
       
+      // ⬅️ Solo considerar reunión previa si realmente existe en BD (fue guardada con contacto)
       hasPreviousMeeting = previousContacts?.some((c: any) => c.contact_type === 'meeting') ?? false;
       hasPreviousContact = previousContacts?.some((c: any) => 
         c.contact_type === 'email' || c.contact_type === 'phone' || c.contact_type === 'whatsapp'
@@ -596,17 +615,23 @@ FORMATO JSON OBLIGATORIO:
       log('warn', 'Error verificando contactos previos', { error: e });
     }
     
-    // ⬅️ NUEVO: Determinar si hay reunión (nueva o previa) y si hay contacto (en mensaje actual O en BD)
-    const hasMeeting = meetingInfo.intent || hasPreviousMeeting;
+    // ⬅️ NUEVO: Determinar si hay reunión confirmada (solo si hay contacto)
+    // hasMeeting solo es true si:
+    // 1. El usuario confirmó reunión EN ESTE MENSAJE Y hay contacto EN ESTE MENSAJE, O
+    // 2. Ya hay una reunión guardada previamente en BD (que solo se guarda si había contacto)
     const hasContactInMessage = extractedContacts.some(c => c.type === 'email' || c.type === 'phone' || c.type === 'whatsapp');
     const hasContact = hasContactInMessage || hasPreviousContact; // ⬅️ Contacto en mensaje actual O en BD
     
+    // ⬅️ Solo considerar reunión si hay contacto (sin contacto no tiene sentido)
+    const hasMeetingConfirmed = (meetingInfo.intent && hasContactInMessage) || hasPreviousMeeting;
+    
     log('info', 'Estado de contacto/reunión', {
-      hasMeeting,
+      hasMeetingConfirmed,
       hasContactInMessage,
       hasPreviousContact,
       hasContact,
-      meetingInMessage: meetingInfo.intent
+      meetingIntentDetected: meetingInfo.intent,
+      willSaveMeeting: meetingInfo.intent && hasContactInMessage
     });
     
     // 8. PARSEAR RESPUESTA DE GEMINI
@@ -628,8 +653,10 @@ FORMATO JSON OBLIGATORIO:
       }
       
       // ⬅️ MEJORADO: Manejo inteligente de contacto y reunión
-      if (hasMeeting && !hasContact) {
-        // Si hay reunión pero NO contacto, verificar si el bot ya pidió contacto
+      // Si el usuario confirmó reunión pero NO hay contacto aún, pedir contacto
+      if (meetingInfo.intent && !hasContactInMessage && !hasPreviousContact) {
+        // El usuario confirmó que quiere agendar, pero aún no dio contacto
+        // Verificar si el bot ya pidió contacto
         const replyLower = parsedResponse.reply.toLowerCase();
         const alreadyAskedForContact = 
           replyLower.includes('contacto') || 
@@ -645,11 +672,11 @@ FORMATO JSON OBLIGATORIO:
             : ` Para concretar la reunión, necesito tu número de contacto o email para que te podamos contactar. ¿Me lo podés dejar?`;
           
           parsedResponse.reply = parsedResponse.reply.trim() + contactRequest;
-          log('info', 'Solicitando contacto después de reunión agendada');
+          log('info', 'Usuario confirmó reunión pero sin contacto - solicitando contacto');
         } else {
           log('info', 'Bot ya solicitó contacto en su respuesta, no duplicar');
         }
-      } else if (hasMeeting && hasContact) {
+      } else if (hasMeetingConfirmed && hasContact) {
         // ⬅️ NUEVO: Si hay reunión Y contacto, confirmar y resumir
         const replyLower = parsedResponse.reply.toLowerCase();
         const alreadyConfirmed = 
@@ -714,9 +741,7 @@ FORMATO JSON OBLIGATORIO:
       }
     }
 
-    // 10. GUARDAR MENSAJES EN LA BASE DE DATOS
-    // ⬅️ IMPORTANTE: Guardar TODOS los mensajes para el historial
-    // Los contactos/reuniones se guardan por separado en extracted_contacts
+    // 10. GUARDAR MENSAJE DEL USUARIO (antes de devolver respuesta para que historial se actualice)
     try {
       await supabaseAdmin.from('chat_logs').insert({
         session_id: sessionId, 
@@ -725,112 +750,131 @@ FORMATO JSON OBLIGATORIO:
         bot_id: botId,
         intent_score: 0 
       });
-      
-      await supabaseAdmin.from('chat_logs').insert({
-        session_id: sessionId, 
-        role: 'bot', 
-        content: parsedResponse.reply, 
-        bot_id: botId, 
-        intent_score: parsedResponse.intent_score || 0 
-      });
-      
-      log('info', 'Mensajes guardados en historial');
+      log('info', 'Mensaje del usuario guardado en historial');
     } catch (e: any) {
-      log('error', 'Error guardando mensajes', { error: e.message });
+      log('error', 'Error guardando mensaje del usuario', { error: e.message });
       // Continuar aunque falle el guardado
     }
 
-    // 11. VERIFICAR Y ENVIAR ALERTA DE LEAD (si el score supera el threshold)
+    // ⬅️ CRÍTICO: Preparar respuesta para devolver INMEDIATAMENTE
+    // Esto asegura que el chat en vivo reciba la respuesta antes que el historial se actualice
+    const responsePayload = JSON.stringify(parsedResponse);
+    
+    // 11. DEVOLVER RESPUESTA INMEDIATAMENTE (sin esperar guardado de respuesta del bot)
+    // Esto hace que el chat en vivo reciba la respuesta primero
+    const httpResponse = new Response(responsePayload, {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 200,
+    });
+
+    // 12. GUARDAR RESPUESTA DEL BOT EN BACKGROUND (después de devolver respuesta)
+    // El historial se actualizará después, pero el chat en vivo ya tiene la respuesta
+    supabaseAdmin.from('chat_logs').insert({
+      session_id: sessionId, 
+      role: 'bot', 
+      content: parsedResponse.reply, 
+      bot_id: botId, 
+      intent_score: parsedResponse.intent_score || 0 
+    }).then(() => {
+      log('info', 'Respuesta del bot guardada en historial (background)');
+    }).catch((e: any) => {
+      log('error', 'Error guardando respuesta del bot', { error: e.message });
+    });
+
+    // 13. VERIFICAR Y ENVIAR ALERTA DE LEAD (en background, no bloquea respuesta)
+    // ⬅️ Mover a background para no retrasar la respuesta HTTP
     const intentScore = parsedResponse.intent_score || 0;
-    if (intentScore >= 80) { // ⬅️ Threshold por defecto (se puede configurar)
-      try {
-        // Verificar configuración de notificaciones
-        const { data: botConfig } = await supabaseAdmin
-          .from('bot_notifications')
-          .select('notification_email, is_enabled, min_score_threshold')
-          .eq('bot_id', botId)
-          .maybeSingle();
+    if (intentScore >= 80) {
+      // Ejecutar en background sin await (no bloquea la respuesta)
+      (async () => {
+        try {
+          // Verificar configuración de notificaciones
+          const { data: botConfig } = await supabaseAdmin
+            .from('bot_notifications')
+            .select('notification_email, is_enabled, min_score_threshold')
+            .eq('bot_id', botId)
+            .maybeSingle();
 
-        if (botConfig && botConfig.is_enabled && botConfig.notification_email) {
-          const threshold = botConfig.min_score_threshold ?? 80;
-          
-          if (intentScore >= threshold) {
-            // Verificar si ya se envió un email para esta sesión
-            const { data: alreadySent } = await supabaseAdmin
-              .from('lead_alerts_sent')
-              .select('id')
-              .eq('session_id', sessionId)
-              .eq('bot_id', botId)
-              .maybeSingle();
-
-            if (!alreadySent) {
-              // Obtener últimos mensajes para contexto
-              const { data: lastMessages } = await supabaseAdmin
-                .from('chat_logs')
-                .select('role, content, created_at')
+          if (botConfig && botConfig.is_enabled && botConfig.notification_email) {
+            const threshold = botConfig.min_score_threshold ?? 80;
+            
+            if (intentScore >= threshold) {
+              // Verificar si ya se envió un email para esta sesión
+              const { data: alreadySent } = await supabaseAdmin
+                .from('lead_alerts_sent')
+                .select('id')
                 .eq('session_id', sessionId)
-                .order('created_at', { ascending: false })
-                .limit(10);
+                .eq('bot_id', botId)
+                .maybeSingle();
 
-              // Llamar a la Edge Function send-lead-alert
-              const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
-              const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
-              const alertUrl = `${supabaseUrl}/functions/v1/send-lead-alert`;
-              
-              try {
-                const alertResponse = await fetch(alertUrl, {
-                  method: 'POST',
-                  headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${serviceRoleKey}`,
-                    'apikey': serviceRoleKey,
-                  },
-                  body: JSON.stringify({
-                    sessionId,
-                    botId,
-                    intentScore,
-                    lastMessages: (lastMessages || []).reverse(),
-                  }),
-                });
+              if (!alreadySent) {
+                // Esperar un momento para que se guarde la respuesta del bot
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                // Obtener últimos mensajes para contexto
+                const { data: lastMessages } = await supabaseAdmin
+                  .from('chat_logs')
+                  .select('role, content, created_at')
+                  .eq('session_id', sessionId)
+                  .order('created_at', { ascending: false })
+                  .limit(10);
 
-                if (alertResponse.ok) {
-                  log('info', '✅ Alerta de lead enviada', { sessionId, botId, intentScore });
-                } else {
-                  const errorText = await alertResponse.text();
-                  log('warn', '⚠️ Error enviando alerta de lead', { 
-                    status: alertResponse.status, 
-                    error: errorText.substring(0, 200) 
+                // Llamar a la Edge Function send-lead-alert
+                const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+                const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+                const alertUrl = `${supabaseUrl}/functions/v1/send-lead-alert`;
+                
+                try {
+                  const alertResponse = await fetch(alertUrl, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${serviceRoleKey}`,
+                      'apikey': serviceRoleKey,
+                    },
+                    body: JSON.stringify({
+                      sessionId,
+                      botId,
+                      intentScore,
+                      lastMessages: (lastMessages || []).reverse(),
+                    }),
                   });
+
+                  if (alertResponse.ok) {
+                    log('info', '✅ Alerta de lead enviada (background)', { sessionId, botId, intentScore });
+                  } else {
+                    const errorText = await alertResponse.text();
+                    log('warn', '⚠️ Error enviando alerta de lead', { 
+                      status: alertResponse.status, 
+                      error: errorText.substring(0, 200) 
+                    });
+                  }
+                } catch (alertError: any) {
+                  log('error', '❌ Error llamando send-lead-alert', { error: alertError.message });
                 }
-              } catch (alertError: any) {
-                log('error', '❌ Error llamando send-lead-alert', { error: alertError.message });
-                // No fallar la función principal si falla el envío de alerta
+              } else {
+                log('info', '📧 Email ya enviado para esta sesión', { sessionId });
               }
-            } else {
-              log('info', '📧 Email ya enviado para esta sesión', { sessionId });
             }
           }
+        } catch (e: any) {
+          log('warn', '⚠️ Error verificando/enviando alerta de lead', { error: e.message });
         }
-      } catch (e: any) {
-        log('warn', '⚠️ Error verificando/enviando alerta de lead', { error: e.message });
-        // No fallar la función principal si falla la verificación de alertas
-      }
+      })(); // ⬅️ Ejecutar en background sin await
     }
 
-    // 12. ACTUALIZAR HEARTBEAT
-    try {
-      await supabaseAdmin.from('session_heartbeats').upsert({
-        session_id: sessionId,
-        bot_id: botId,
-        is_online: true,
-        last_seen: new Date().toISOString()
-      }, { onConflict: 'session_id' });
-    } catch (e: any) {
+    // 14. ACTUALIZAR HEARTBEAT (en background también)
+    supabaseAdmin.from('session_heartbeats').upsert({
+      session_id: sessionId,
+      bot_id: botId,
+      is_online: true,
+      last_seen: new Date().toISOString()
+    }, { onConflict: 'session_id' }).catch((e: any) => {
       log('warn', 'Error actualizando heartbeat', { error: e.message });
-    }
+    });
 
     const processingTime = Date.now() - startTime;
-    log('info', 'Request procesado exitosamente', { 
+    log('info', 'Request procesado exitosamente - respuesta devuelta', { 
       sessionId, 
       botId, 
       processingTimeMs: processingTime,
@@ -838,10 +882,9 @@ FORMATO JSON OBLIGATORIO:
       mood: parsedResponse.mood
     });
 
-    return new Response(JSON.stringify(parsedResponse), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 200,
-    });
+    // ⬅️ DEVOLVER RESPUESTA INMEDIATAMENTE (ya preparada arriba)
+    // Esto hace que el chat en vivo reciba la respuesta antes que el historial se actualice
+    return httpResponse;
 
   } catch (error: any) {
     const processingTime = Date.now() - startTime;

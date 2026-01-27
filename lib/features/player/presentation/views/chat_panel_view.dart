@@ -228,7 +228,20 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                               itemCount: reversedMessages.length + (chatState.isLoading ? 1 : 0),
                               itemBuilder: (context, index) {
                                 if (chatState.isLoading) {
-                                  if (index == 0) return Padding(padding: const EdgeInsets.only(left: 16, top: 8, bottom: 20), child: Row(children: [SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2, color: themeColor)), const SizedBox(width: 8), Text("Escribiendo...", style: TextStyle(color: isDarkMode ? Colors.white38 : Colors.black38, fontSize: 11))]));
+                                  if (index == 0) return Padding(
+                                    padding: const EdgeInsets.only(left: 16, top: 8, bottom: 20), 
+                                    child: Row(
+                                      children: [
+                                        SizedBox(
+                                          width: 12, 
+                                          height: 12, 
+                                          child: CircularProgressIndicator(strokeWidth: 2, color: themeColor)
+                                        ), 
+                                        const SizedBox(width: 8), 
+                                        _ThinkingIndicator(isDarkMode: isDarkMode)
+                                      ]
+                                    )
+                                  );
                                   final msg = reversedMessages[index - 1];
                                   return ChatBubble(message: msg, botThemeColor: themeColor, isDarkMode: isDarkMode);
                                 } 
@@ -484,6 +497,87 @@ class _ConnectivityBannerState extends State<_ConnectivityBanner> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ⬅️ NUEVO: Widget que muestra mensajes progresivos mientras el bot piensa
+class _ThinkingIndicator extends StatefulWidget {
+  final bool isDarkMode;
+  
+  const _ThinkingIndicator({required this.isDarkMode});
+
+  @override
+  State<_ThinkingIndicator> createState() => _ThinkingIndicatorState();
+}
+
+class _ThinkingIndicatorState extends State<_ThinkingIndicator> {
+  String _currentMessage = "Pensando...";
+  DateTime? _startTime;
+  
+  // Mensajes progresivos con sentido
+  final List<String> _messages = [
+    "Pensando...",
+    "Escribiendo...",
+    "Procesando...",
+    "Casi listo...",
+  ];
+  
+  @override
+  void initState() {
+    super.initState();
+    _startTime = DateTime.now();
+    _updateMessage();
+  }
+  
+  void _updateMessage() {
+    if (_startTime == null) return;
+    
+    final elapsed = DateTime.now().difference(_startTime!);
+    final seconds = elapsed.inSeconds;
+    
+    // Cambiar mensaje cada 3 segundos
+    int messageIndex = 0;
+    if (seconds >= 9) {
+      messageIndex = 3; // "Casi listo..."
+    } else if (seconds >= 6) {
+      messageIndex = 2; // "Procesando..."
+    } else if (seconds >= 3) {
+      messageIndex = 1; // "Escribiendo..."
+    } else {
+      messageIndex = 0; // "Pensando..."
+    }
+    
+    if (mounted && _currentMessage != _messages[messageIndex]) {
+      setState(() {
+        _currentMessage = _messages[messageIndex];
+      });
+    }
+    
+    // Continuar actualizando cada segundo
+    if (mounted && seconds < 12) {
+      Future.delayed(const Duration(seconds: 1), _updateMessage);
+    }
+  }
+  
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 300),
+      transitionBuilder: (child, animation) {
+        return FadeTransition(
+          opacity: animation,
+          child: child,
+        );
+      },
+      child: Text(
+        _currentMessage,
+        key: ValueKey(_currentMessage),
+        style: TextStyle(
+          color: widget.isDarkMode ? Colors.white38 : Colors.black38, 
+          fontSize: 11,
         ),
       ),
     );
