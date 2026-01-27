@@ -78,7 +78,10 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
 
   @override
   Widget build(BuildContext context) {
-    final riveFileAsync = ref.watch(riveFileLoaderProvider);
+    // ⬅️ SELECCIONAR ARCHIVO RIVE CORRECTO según contexto
+    final riveFileAsync = widget.isBubble 
+        ? ref.watch(riveHeadFileLoaderProvider)   // ⬅️ BURBUJA: Solo cabeza
+        : ref.watch(riveFileLoaderProvider);      // ⬅️ CHAT: Cuerpo completo
     
     // 1. OBTENER DATOS DE ENTRADA
     final globalPointer = ref.watch(pointerPositionProvider); // Mouse Global

@@ -12,7 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String DEPLOY_VERSION = "PLAYER PROGRESIVO v5.8 - PASO 5.8 - Mouse Tracking Iframe Fix";
+const String DEPLOY_VERSION = "PLAYER PROGRESIVO v5.10 - PASO 5.10 - Bubble uses Head Rive";
 
 void main() {
   runZonedGuarded(() async {
@@ -87,6 +87,11 @@ void _setupGlobalMouseTrackingWithProvider(ProviderContainer container) {
       container.read(pointerPositionProvider.notifier).state = Offset(x, y);
     });
     
+    // ⬅️ NUEVO: Detectar cuando el mouse SALE de la pantalla
+    html.document.onMouseLeave.listen((event) {
+      container.read(pointerPositionProvider.notifier).state = null;
+    });
+    
     // 2. Listener de MENSAJES del parent (funciona cuando el mouse está FUERA del iframe)
     html.window.onMessage.listen((event) {
       try {
@@ -95,13 +100,16 @@ void _setupGlobalMouseTrackingWithProvider(ProviderContainer container) {
           final x = (data['x'] as num).toDouble();
           final y = (data['y'] as num).toDouble();
           container.read(pointerPositionProvider.notifier).state = Offset(x, y);
+        } else if (data is Map && data['type'] == 'MOUSE_LEAVE') {
+          // ⬅️ NUEVO: El HTML padre nos avisa que el mouse salió completamente
+          container.read(pointerPositionProvider.notifier).state = null;
         }
       } catch (e) {
         // Ignorar mensajes mal formados
       }
     });
     
-    print("✅ Global mouse tracking activado (LOCAL + PostMessage)");
+    print("✅ Global mouse tracking activado (LOCAL + PostMessage + MouseLeave)");
   } catch (e) {
     print("⚠️ Error al configurar mouse tracking: $e");
   }

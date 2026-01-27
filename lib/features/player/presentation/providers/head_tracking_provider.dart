@@ -1,7 +1,6 @@
 // Archivo: lib/features/player/presentation/providers/head_tracking_provider.dart
 import 'dart:math' as math;
 import 'dart:ui';
-import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Modelo inmutable para el estado de tracking
@@ -37,6 +36,7 @@ class HeadTrackingController {
     required Offset? globalPointer,
     required Offset widgetCenter,
     required double sensitivity,
+    double maxDistance = 1200.0, // ⬅️ NUEVO: Distancia máxima antes de volver al centro
   }) {
     // 1. Si el mouse no está en pantalla, mirar al centro
     if (globalPointer == null) {
@@ -46,6 +46,14 @@ class HeadTrackingController {
     // 2. Calcular VECTOR DELTA (Distancia real en píxeles)
     final double dx = globalPointer.dx - widgetCenter.dx;
     final double dy = globalPointer.dy - widgetCenter.dy;
+    
+    // ⬅️ NUEVO: Calcular distancia euclidiana
+    final double distance = math.sqrt(dx * dx + dy * dy);
+    
+    // ⬅️ NUEVO: Si el mouse está MUY LEJOS, volver al centro suavemente
+    if (distance > maxDistance) {
+      return const HeadTrackingState(targetX: 50.0, targetY: 50.0, isTracking: false);
+    }
 
     // 3. Normalizar a Inputs Rive (0..100, donde 50 es el centro)
     // Fórmula: 50 + (distancia / sensibilidad * 50)
