@@ -22,6 +22,20 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
   @override
   Widget build(BuildContext context) {
     final isOpen = ref.watch(isOpenSimpleProvider);
+    final screenSize = MediaQuery.of(context).size;
+    
+    // ⬅️ RESPONSIVE: Detectar móvil y calcular dimensiones seguras
+    final bool isMobile = screenSize.width < 600;
+    final double chatWidth = isMobile 
+        ? (screenSize.width - 16).clamp(320.0, 380.0) // Móvil: ancho disponible - padding, min 320px
+        : 380.0; // Desktop: fijo 380px
+    
+    final double horizontalPadding = isMobile ? 8.0 : 28.0; // Menos padding en móvil
+    final double verticalPadding = isMobile ? 8.0 : 28.0;
+    
+    // ⬅️ Altura segura: 92% de pantalla, máximo 800px, mínimo 400px
+    final double chatHeight = (screenSize.height * 0.92 - verticalPadding * 2)
+        .clamp(400.0, 800.0);
     
     // ⬅️ FIX: Fondo totalmente transparente
     // ✅ TRACKING GLOBAL: Manejado por JavaScript nativo en main.dart
@@ -57,12 +71,20 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
                       // ⬅️ NUEVO: Detener propagación de clics dentro del chat
                       onTap: () {}, // No hacer nada, solo detener propagación
                       child: Padding(
-                        padding: const EdgeInsets.only(right: 28, bottom: 28),
+                        padding: EdgeInsets.only(
+                          right: horizontalPadding, 
+                          bottom: verticalPadding,
+                          left: isMobile ? horizontalPadding : 0, // ⬅️ Padding izquierdo en móvil
+                          top: isMobile ? verticalPadding : 0, // ⬅️ Padding superior en móvil
+                        ),
                         child: Container(
-                        width: 380,
-                        height: MediaQuery.of(context).size.height * 0.92,
-                        constraints: const BoxConstraints(
-                          maxHeight: 800,
+                        width: chatWidth, // ⬅️ RESPONSIVE: Ancho adaptativo
+                        height: chatHeight, // ⬅️ RESPONSIVE: Altura segura
+                        constraints: BoxConstraints(
+                          maxWidth: chatWidth, // ⬅️ Asegurar que nunca exceda el ancho calculado
+                          maxHeight: chatHeight, // ⬅️ Asegurar que nunca exceda la altura calculada
+                          minWidth: isMobile ? 320.0 : 380.0, // ⬅️ Ancho mínimo
+                          minHeight: 400.0, // ⬅️ Altura mínima
                         ),
                         decoration: BoxDecoration(
                           color: const Color(0xFF181818),
@@ -126,8 +148,8 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
             
             // BURBUJA FLOTANTE
             Positioned(
-              bottom: 40,
-              right: 40,
+              bottom: isMobile ? 16.0 : 40.0, // ⬅️ RESPONSIVE: Menos espacio en móvil
+              right: isMobile ? 16.0 : 40.0, // ⬅️ RESPONSIVE: Menos espacio en móvil
               child: Visibility(
                 visible: !isOpen,
                 maintainState: true,
