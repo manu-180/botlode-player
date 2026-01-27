@@ -1,6 +1,8 @@
 // Archivo: lib/core/services/presence_manager.dart
 import 'dart:async';
+import 'dart:convert';
 import 'dart:html' as html;
+import 'package:botlode_player/core/config/app_config.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class PresenceManager {
@@ -17,7 +19,57 @@ class PresenceManager {
   // ESTADO OBJETIVO (La verdad absoluta)
   bool _shouldBeOnline = false;
 
-  PresenceManager(this._supabase, {required this.sessionId, required this.botId});
+  PresenceManager(this._supabase, {required this.sessionId, required this.botId}) {
+    // ⬅️ NUEVO: Configurar listener de cierre de pestaña INMEDIATAMENTE al crear
+    // Esto asegura que siempre se marque como offline al cerrar, incluso si está online
+    _setupTabCloseListener();
+  }
+
+  /// ⬅️ NUEVO: Configurar listener de cierre de pestaña
+  void _setupTabCloseListener() {
+    _tabCloseSubscription?.cancel();
+    _tabCloseSubscription = html.window.onBeforeUnload.listen((event) {
+      // ⬅️ CRÍTICO: Marcar como offline al cerrar pestaña (síncrono y confiable)
+      print("🚪 Pestaña cerrada -> Marcando como OFFLINE");
+      try {
+        final url = '${AppConfig.supabaseUrl}/rest/v1/session_heartbeats?on_conflict=session_id';
+        final body = jsonEncode({
+          'session_id': sessionId,
+          'bot_id': botId,
+          'is_online': false,
+          'last_seen': DateTime.now().toIso8601String(),
+        });
+        
+        // ⬅️ Usar sendBeacon (más confiable para cierre de pestaña, no bloquea)
+        // sendBeacon garantiza que se envíe incluso si la pestaña se cierra
+        final blob = html.Blob([utf8.encode(body)], 'application/json');
+        final success = html.window.navigator.sendBeacon(
+          url,
+          blob,
+        );
+        
+        if (success) {
+          print("✅ Estado OFFLINE enviado con sendBeacon antes de cerrar pestaña");
+        } else {
+          // ⬅️ Fallback: Intentar petición síncrona si sendBeacon falla
+          try {
+            final xhr = html.HttpRequest();
+            xhr.open('POST', url);
+            xhr.setRequestHeader('apikey', AppConfig.supabaseAnonKey);
+            xhr.setRequestHeader('Authorization', 'Bearer ${AppConfig.supabaseAnonKey}');
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.setRequestHeader('Prefer', 'resolution=merge-duplicates');
+            xhr.send(body);
+            print("✅ Estado OFFLINE enviado con XHR síncrono");
+          } catch (e2) {
+            print("⚠️ Fallback XHR también falló: $e2");
+          }
+        }
+      } catch (e) {
+        print("⚠️ Error al marcar offline en cierre de pestaña: $e");
+      }
+    });
+  }
 
   /// 🟢 ENTRA EN LÍNEA (Con Debounce y Retry)
   void setOnline() {
@@ -57,19 +109,8 @@ class PresenceManager {
       });
     }
 
-    // GESTIÓN DE CIERRE DE PESTAÑA
-    _tabCloseSubscription?.cancel();
-    if (isOnline) {
-      _tabCloseSubscription = html.window.onBeforeUnload.listen((event) {
-        // Intento desesperado de decir adiós al cerrar tab
-        _supabase.from('session_heartbeats').upsert({
-          'session_id': sessionId,
-          'bot_id': botId,
-          'is_online': false,
-          'last_seen': DateTime.now().toIso8601String(),
-        });
-      });
-    }
+    // ⬅️ NOTA: El listener de cierre de pestaña ya está configurado en el constructor
+    // No necesitamos reconfigurarlo aquí, ya está siempre activo
 
     // ENVÍO REAL
     await _sendToSupabase(isOnline);
