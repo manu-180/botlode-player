@@ -27,9 +27,17 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
     // ✅ TRACKING GLOBAL: Manejado por JavaScript nativo en main.dart
     return Scaffold(
       backgroundColor: Colors.transparent, 
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
+      body: GestureDetector(
+        // ⬅️ NUEVO: Cerrar chat al hacer clic fuera
+        onTap: () {
+          if (isOpen) {
+            ref.read(isOpenSimpleProvider.notifier).state = false;
+          }
+        },
+        behavior: HitTestBehavior.translucent,
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
             
             // CHAT COMPLEJO (Panel)
             Positioned(
@@ -45,9 +53,12 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
                   child: Visibility(
                     visible: isOpen,
                     maintainState: true,
-                    child: Padding(
-                      padding: const EdgeInsets.only(right: 28, bottom: 28),
-                      child: Container(
+                    child: GestureDetector(
+                      // ⬅️ NUEVO: Detener propagación de clics dentro del chat
+                      onTap: () {}, // No hacer nada, solo detener propagación
+                      child: Padding(
+                        padding: const EdgeInsets.only(right: 28, bottom: 28),
+                        child: Container(
                         width: 380,
                         height: MediaQuery.of(context).size.height * 0.92,
                         constraints: const BoxConstraints(
@@ -72,18 +83,40 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
                               Positioned(
                                 top: 16,
                                 right: 16,
-                                child: Material(
-                                  color: Colors.transparent,
-                                  child: IconButton(
-                                    icon: const Icon(Icons.close, color: Colors.white),
-                                    onPressed: () => ref.read(isOpenSimpleProvider.notifier).state = false,
-                                    tooltip: 'Cerrar chat',
-                                  ),
+
+                                child: Consumer(
+                                  builder: (context, ref, _) {
+                                    final botConfig = ref.watch(botConfigProvider);
+                                    final isDarkMode = botConfig.asData?.value.isDarkMode ?? true;
+                                    
+                                    // ⬅️ Color adaptativo según tema
+                                    final iconColor = isDarkMode 
+                                        ? Colors.white 
+                                        : Colors.black87;
+                                    
+                                    return Material(
+                                      color: Colors.transparent,
+                                      child: IconButton(
+                                        icon: Icon(Icons.close_rounded, color: iconColor),
+                                        onPressed: () => ref.read(isOpenSimpleProvider.notifier).state = false,
+                                        tooltip: 'Cerrar chat',
+                                        style: IconButton.styleFrom(
+                                          backgroundColor: isDarkMode 
+                                              ? Colors.white.withOpacity(0.1)
+                                              : Colors.black.withOpacity(0.05),
+                                          hoverColor: isDarkMode
+                                              ? Colors.white.withOpacity(0.2)
+                                              : Colors.black.withOpacity(0.1),
+                                        ),
+                                      ),
+                                    );
+                                  },
                                 ),
                               ),
                             ],
                           ),
                         ),
+                      ),
                       ),
                     ),
                   ),
@@ -125,6 +158,7 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
               ),
             ),
         ],
+        ),
       ),
     );
   }
@@ -133,115 +167,134 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
     required String name,
     required String subtext,
   }) {
-    const double closedSize = 80.0; // ⬅️ Aumentado de 72 a 80
-    const double headSize = 68.0; // ⬅️ Aumentado de 58 a 68
-    const double padding = 25.0; 
-    const double extraSpace = 40.0; 
-    
-    double textWidth = _calculateTextWidth(name, const TextStyle(fontSize: 15, fontWeight: FontWeight.w900));
-    double subtextWidth = _calculateTextWidth(subtext, const TextStyle(fontSize: 10));
-    double maxTextWidth = textWidth > subtextWidth ? textWidth : subtextWidth;
-    
-    double expandedWidth = headSize + padding + maxTextWidth + extraSpace;
-    double targetWidth = _isHovered ? expandedWidth : closedSize;
-    
-    return GestureDetector(
-      onTap: () => ref.read(isOpenSimpleProvider.notifier).state = true,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 350),
-        curve: Curves.easeOutCubic,
-        width: targetWidth,
-        height: closedSize,
-        decoration: BoxDecoration(
-          color: const Color(0xFF2A2A3E),
-          borderRadius: BorderRadius.circular(closedSize / 2),
-          border: Border.all(
-            color: Colors.white.withOpacity(0.15),
-            width: 1.0,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.3),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Material(
-          color: Colors.transparent,
-          borderRadius: BorderRadius.circular(closedSize / 2),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(closedSize / 2),
-            onTap: () => ref.read(isOpenSimpleProvider.notifier).state = true,
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                if (_isHovered)
-                  Flexible(
-                    child: Padding(
-                      padding: const EdgeInsets.only(left: padding, right: 12),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            name,
-                            textAlign: TextAlign.right,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w900,
-                              fontSize: 15,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          if (subtext.isNotEmpty)
-                            Text(
-                              subtext,
-                              textAlign: TextAlign.right,
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.85),
-                                fontSize: 10,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                        ],
-                      ),
-                    ),
-                  ),
-                
-                Container(
-                  width: headSize,
-                  height: headSize,
-                  margin: const EdgeInsets.all(7),
-                  child: ClipOval(
-                    child: Consumer(
-                      builder: (context, ref, _) {
-                        final riveLoader = ref.watch(riveHeadFileLoaderProvider); 
-                        
-                        return riveLoader.when(
-                          // ⬅️ PASO 2: Aquí pasamos isBubble: true
-                          data: (_) => const BotAvatarWidget(isBubble: true),
-                          loading: () => const Center(
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2,
-                            ),
-                          ),
-                          error: (_, __) => const Icon(
-                            Icons.smart_toy,
-                            color: Colors.white,
-                            size: 32,
-                          ),
-                        );
-                      },
-                    ),
-                  ),
+    return Consumer(
+      builder: (context, ref, _) {
+        final botConfig = ref.watch(botConfigProvider);
+        final isDarkMode = botConfig.asData?.value.isDarkMode ?? true;
+        
+        const double closedSize = 80.0; // ⬅️ Aumentado de 72 a 80
+        const double headSize = 68.0; // ⬅️ Aumentado de 58 a 68
+        const double padding = 25.0; 
+        const double extraSpace = 40.0; 
+        
+        double textWidth = _calculateTextWidth(name, const TextStyle(fontSize: 15, fontWeight: FontWeight.w900));
+        double subtextWidth = _calculateTextWidth(subtext, const TextStyle(fontSize: 10));
+        double maxTextWidth = textWidth > subtextWidth ? textWidth : subtextWidth;
+        
+        double expandedWidth = headSize + padding + maxTextWidth + extraSpace;
+        double targetWidth = _isHovered ? expandedWidth : closedSize;
+        
+        // ⬅️ COLORES ADAPTATIVOS según tema (sutil pero profesional)
+        final bubbleColor = isDarkMode 
+            ? const Color(0xFF2A2A3E)  // Dark: Mantener el color actual (te gusta)
+            : const Color(0xFF3A3A4E); // Light: Ligeramente más claro pero mantiene identidad
+        
+        final borderColor = isDarkMode
+            ? Colors.white.withOpacity(0.15)
+            : Colors.black.withOpacity(0.1);
+        
+        return GestureDetector(
+          onTap: () => ref.read(isOpenSimpleProvider.notifier).state = true,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 350),
+            curve: Curves.easeOutCubic,
+            width: targetWidth,
+            height: closedSize,
+            decoration: BoxDecoration(
+              color: bubbleColor,
+              borderRadius: BorderRadius.circular(closedSize / 2),
+              border: Border.all(
+                color: borderColor,
+                width: 1.0,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(isDarkMode ? 0.3 : 0.15),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
                 ),
               ],
             ),
+            child: Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(closedSize / 2),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(closedSize / 2),
+                onTap: () => ref.read(isOpenSimpleProvider.notifier).state = true,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    if (_isHovered)
+                      Flexible(
+                        child: Padding(
+                          padding: const EdgeInsets.only(left: padding, right: 12),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                name,
+                                textAlign: TextAlign.right,
+                                style: TextStyle(
+                                  color: isDarkMode ? Colors.white : Colors.black87,
+                                  fontWeight: FontWeight.w900,
+                                  fontSize: 15,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              if (subtext.isNotEmpty)
+                                Text(
+                                  subtext,
+                                  textAlign: TextAlign.right,
+                                  style: TextStyle(
+                                    color: isDarkMode 
+                                        ? Colors.white.withOpacity(0.85)
+                                        : Colors.black87.withOpacity(0.7),
+                                    fontSize: 10,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    
+                    Container(
+                      width: headSize,
+                      height: headSize,
+                      margin: const EdgeInsets.all(7),
+                      child: ClipOval(
+                        child: Consumer(
+                          builder: (context, ref, _) {
+                            final riveLoader = ref.watch(riveHeadFileLoaderProvider); 
+                            
+                            return riveLoader.when(
+                              // ⬅️ PASO 2: Aquí pasamos isBubble: true
+                              data: (_) => const BotAvatarWidget(isBubble: true),
+                              loading: () => const Center(
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              ),
+                              error: (_, __) => const Icon(
+                                Icons.smart_toy,
+                                color: Colors.white,
+                                size: 32,
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+
+      },
     );
   }
 
