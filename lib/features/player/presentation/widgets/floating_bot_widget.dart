@@ -2,6 +2,7 @@
 import 'dart:html' as html;
 import 'dart:math' as math;
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
+import 'package:botlode_player/features/player/presentation/providers/chat_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
 // import 'package:botlode_player/features/player/presentation/views/chat_panel_view.dart';
 import 'package:botlode_player/features/player/presentation/views/simple_chat_test.dart'; // ⬅️ TEST
@@ -29,6 +30,22 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     final isOpen = ref.watch(chatOpenProvider);
     final botConfigAsync = ref.watch(botConfigProvider);
     final isHovered = ref.watch(isHoveredExternalProvider);
+    
+    // ⬅️ LISTENER: Resetear mood cuando se cierra el chat
+    ref.listen(chatOpenProvider, (previous, next) {
+      if (previous == true && next == false) {
+        // Chat se cerró, resetear mood
+        ref.read(botMoodProvider.notifier).state = 0; // 0 = idle/neutral
+        try {
+          final chatState = ref.read(chatControllerProvider);
+          if (chatState.currentMood != 'neutral' && chatState.currentMood != 'idle') {
+            ref.read(chatControllerProvider.notifier).state = chatState.copyWith(currentMood: 'neutral');
+          }
+        } catch (e) {
+          // Ignorar errores si el provider no está disponible
+        }
+      }
+    });
 
     final screenSize = MediaQuery.of(context).size;
     final isMobile = screenSize.width < 600;
@@ -78,16 +95,6 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
       child: Stack(
         fit: StackFit.expand,
         children: [
-        // ⬅️ FIX: El overlay ahora lo maneja PlayerScreen, aquí solo detectamos el tap
-        if (isOpen)
-          Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onTap: () => ref.read(chatOpenProvider.notifier).set(false),
-              child: const SizedBox.expand(), 
-            ),
-          ),
-
         // PANEL DE CHAT - SIN ANIMACIONES (causan problema en iframe)
         // Posicionado desde arriba, dejando espacio para appbar (80px)
         if (isOpen)
@@ -100,6 +107,40 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
                 maxWidth: isMobile ? double.infinity : 420 // Ancho aumentado
               ),
               child: const SimpleChatTest(), // ⬅️ CHAT COMPLETO (ya tiene su propio Container con fondo)
+            ),
+          ),
+
+        // ⬅️ OVERLAY: Detectar clicks fuera del chat para cerrarlo
+        // Debe estar DESPUÉS del chat en el Stack para estar encima
+        if (isOpen)
+          Positioned.fill(
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTapDown: (details) {
+                // Calcular si el tap está dentro del área del chat
+                final chatWidth = isMobile ? screenSize.width : 420.0;
+                final chatLeft = screenSize.width - chatWidth;
+                final chatTop = 80.0;
+                final chatRight = screenSize.width;
+                final chatBottom = chatTop + safeHeight;
+                
+                final tapX = details.localPosition.dx;
+                final tapY = details.localPosition.dy;
+                
+                // Solo cerrar si el tap está FUERA del área del chat
+                final isOutsideChat = tapX < chatLeft || 
+                                      tapX > chatRight || 
+                                      tapY < chatTop || 
+                                      tapY > chatBottom;
+                
+                if (isOutsideChat) {
+                  // Cerrar chat (el listener se encargará de resetear el mood)
+                  ref.read(chatOpenProvider.notifier).set(false);
+                }
+              },
+              child: Container(
+                color: Colors.transparent,
+              ),
             ),
           ),
 

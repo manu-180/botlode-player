@@ -127,23 +127,28 @@ class _SimpleChatTestState extends ConsumerState<SimpleChatTest> {
     // Conectividad real desde provider
     final isOnline = ref.watch(connectivityProvider).asData?.value ?? true;
 
-    return Container(
-      width: double.infinity,
-      height: double.infinity,
-      clipBehavior: Clip.hardEdge,
-      decoration: BoxDecoration(
-        color: bgColor,
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: borderColor, width: 1.0),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.5),
-            blurRadius: 30,
-            offset: const Offset(0, 10),
-          )
-        ],
-      ),
-      child: Material(
+    return GestureDetector(
+      // Consumir todos los taps dentro del chat para que no se propaguen al overlay
+      onTap: () {
+        // No hacer nada, solo consumir el tap
+      },
+      child: Container(
+        width: double.infinity,
+        height: double.infinity,
+        clipBehavior: Clip.hardEdge,
+        decoration: BoxDecoration(
+          color: bgColor,
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: borderColor, width: 1.0),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.5),
+              blurRadius: 30,
+              offset: const Offset(0, 10),
+            )
+          ],
+        ),
+        child: Material(
         color: bgColor, // ⬅️ FIX: Mismo color que el Container (no transparente)
         child: Column(
           children: [
@@ -424,6 +429,7 @@ class _SimpleChatTestState extends ConsumerState<SimpleChatTest> {
             ),
           ],
         ),
+      ),
       ),
     );
   }
