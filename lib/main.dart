@@ -12,7 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String DEPLOY_VERSION = "PLAYER PROGRESIVO v5.7 - PASO 5.7 - Mouse Tracking Fix";
+const String DEPLOY_VERSION = "PLAYER PROGRESIVO v5.8 - PASO 5.8 - Mouse Tracking Iframe Fix";
 
 void main() {
   runZonedGuarded(() async {
@@ -78,15 +78,30 @@ void _setupIframeListeners() {
 // ✅ LISTENER GLOBAL DE MOUSE (JavaScript nativo) + RIVERPOD
 void _setupGlobalMouseTrackingWithProvider(ProviderContainer container) {
   try {
+    // ⬅️ ESTRATEGIA DUAL: Local + PostMessage (para iframes)
+    
+    // 1. Listener LOCAL (funciona cuando NO está en iframe o mouse sobre el iframe)
     html.document.onMouseMove.listen((event) {
-      // Captura la posición del mouse en coordenadas de ventana
       final x = event.client.x.toDouble();
       final y = event.client.y.toDouble();
-      
-      // ⬅️ ACTUALIZAR PROVIDER DIRECTAMENTE
       container.read(pointerPositionProvider.notifier).state = Offset(x, y);
     });
-    print("✅ Global mouse tracking activado con Riverpod");
+    
+    // 2. Listener de MENSAJES del parent (funciona cuando el mouse está FUERA del iframe)
+    html.window.onMessage.listen((event) {
+      try {
+        final data = event.data;
+        if (data is Map && data['type'] == 'MOUSE_MOVE') {
+          final x = (data['x'] as num).toDouble();
+          final y = (data['y'] as num).toDouble();
+          container.read(pointerPositionProvider.notifier).state = Offset(x, y);
+        }
+      } catch (e) {
+        // Ignorar mensajes mal formados
+      }
+    });
+    
+    print("✅ Global mouse tracking activado (LOCAL + PostMessage)");
   } catch (e) {
     print("⚠️ Error al configurar mouse tracking: $e");
   }
