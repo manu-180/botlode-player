@@ -32,9 +32,6 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
   
   bool _isTracking = false;
 
-  final String _stateMachineName = 'State Machine';
-  final String _artboardName = 'Catbot';
-
   @override
   void initState() {
     super.initState();
@@ -61,7 +58,17 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
   }
 
   void _onRiveInit(Artboard artboard) {
-    final controller = StateMachineController.fromArtboard(artboard, _stateMachineName);
+    // ⬅️ DETECCIÓN AUTOMÁTICA: Intentar diferentes nombres de State Machine
+    StateMachineController? controller;
+    
+    // Intentar 'State Machine 1' primero (para cabezabot.riv)
+    controller = StateMachineController.fromArtboard(artboard, 'State Machine 1');
+    
+    // Si no existe, intentar 'State Machine' (para catbotlode.riv)
+    if (controller == null) {
+      controller = StateMachineController.fromArtboard(artboard, 'State Machine');
+    }
+    
     if (controller != null) {
       artboard.addController(controller);
       _controller = controller;
@@ -73,6 +80,8 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       _moodInput?.value = ref.read(botMoodProvider).toDouble();
       _lookXInput?.value = 50; 
       _lookYInput?.value = 50; 
+    } else {
+      print("⚠️ No se encontró State Machine en el archivo Rive");
     }
   }
 
@@ -90,6 +99,7 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
     // 2. CALCULAR MI POSICIÓN (GEOMETRÍA)
     Offset myCenter;
     double sensitivity;
+    double maxDistance; // ⬅️ NUEVO: Distancia máxima según contexto
 
     if (widget.isBubble) {
       // --- MODO BURBUJA ---
@@ -99,6 +109,7 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       // Margen inferior total: 40 (screen) + 7 (margin container) + 29 (mitad avatar) ≈ 76px
       myCenter = Offset(screenSize.width - 76, screenSize.height - 76);
       sensitivity = 350.0; // Rango medio para la burbuja
+      maxDistance = 900.0; // ⬅️ BURBUJA: Rango más compacto (900px)
     } else {
       // --- MODO CHAT PANEL ---
       // Ancho Panel: 380px. Padding right: 28px.
@@ -111,6 +122,7 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       
       myCenter = Offset(chatCenterX, chatAvatarCenterY);
       sensitivity = 600.0; // ⬅️ Sensibilidad ajustada
+      maxDistance = 1500.0; // ⬅️ CHAT: Rango más generoso (1500px)
     }
 
     // 3. DELEGAR CÁLCULO AL CONTROLLER
@@ -118,6 +130,7 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       globalPointer: globalPointer,
       widgetCenter: myCenter,
       sensitivity: sensitivity,
+      maxDistance: maxDistance, // ⬅️ Pasar distancia máxima según contexto
     );
 
     // 4. ACTUALIZAR VARIABLES LOCALES
@@ -134,8 +147,10 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       width: 300, height: 300,
       child: riveFileAsync.when(
         data: (riveFile) {
+          // ⬅️ NO especificar artboard: usar el artboard por defecto del archivo
+          // Esto funciona tanto para cabezabot.riv como para catbotlode.riv
           return RiveAnimation.direct(
-            riveFile, artboard: _artboardName, fit: BoxFit.contain, onInit: _onRiveInit,
+            riveFile, fit: BoxFit.contain, onInit: _onRiveInit,
           );
         },
         loading: () => const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFFC000)))), 

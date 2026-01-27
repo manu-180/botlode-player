@@ -12,7 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String DEPLOY_VERSION = "PLAYER PROGRESIVO v5.10 - PASO 5.10 - Bubble uses Head Rive";
+const String DEPLOY_VERSION = "PLAYER PROGRESIVO v5.12 - PASO 5.12 - Contextual Max Distance";
 
 void main() {
   runZonedGuarded(() async {
