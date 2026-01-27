@@ -572,8 +572,9 @@ FORMATO JSON OBLIGATORIO:
       });
     }
     
-    // Verificar si hay reunión agendada previa sin contacto
-    let hasPreviousMeetingWithoutContact = false;
+    // ⬅️ MEJORADO: Verificar contactos y reuniones en la BD (no solo en el mensaje actual)
+    let hasPreviousMeeting = false;
+    let hasPreviousContact = false;
     try {
       const { data: previousContacts } = await supabaseAdmin
         .from('extracted_contacts')
@@ -581,19 +582,32 @@ FORMATO JSON OBLIGATORIO:
         .eq('session_id', sessionId)
         .eq('bot_id', botId);
       
-      const hasPreviousMeeting = previousContacts?.some((c: any) => c.contact_type === 'meeting') ?? false;
-      const hasPreviousContact = previousContacts?.some((c: any) => 
+      hasPreviousMeeting = previousContacts?.some((c: any) => c.contact_type === 'meeting') ?? false;
+      hasPreviousContact = previousContacts?.some((c: any) => 
         c.contact_type === 'email' || c.contact_type === 'phone' || c.contact_type === 'whatsapp'
       ) ?? false;
       
-      hasPreviousMeetingWithoutContact = hasPreviousMeeting && !hasPreviousContact;
+      log('info', 'Contactos previos en BD', { 
+        hasMeeting: hasPreviousMeeting, 
+        hasContact: hasPreviousContact,
+        totalContacts: previousContacts?.length ?? 0
+      });
     } catch (e) {
-      // Ignorar error
+      log('warn', 'Error verificando contactos previos', { error: e });
     }
     
-    // ⬅️ NUEVO: Determinar si hay reunión (nueva o previa) y si hay contacto
-    const hasMeeting = meetingInfo.intent || hasPreviousMeetingWithoutContact;
-    const hasContact = extractedContacts.some(c => c.type === 'email' || c.type === 'phone' || c.type === 'whatsapp');
+    // ⬅️ NUEVO: Determinar si hay reunión (nueva o previa) y si hay contacto (en mensaje actual O en BD)
+    const hasMeeting = meetingInfo.intent || hasPreviousMeeting;
+    const hasContactInMessage = extractedContacts.some(c => c.type === 'email' || c.type === 'phone' || c.type === 'whatsapp');
+    const hasContact = hasContactInMessage || hasPreviousContact; // ⬅️ Contacto en mensaje actual O en BD
+    
+    log('info', 'Estado de contacto/reunión', {
+      hasMeeting,
+      hasContactInMessage,
+      hasPreviousContact,
+      hasContact,
+      meetingInMessage: meetingInfo.intent
+    });
     
     // 8. PARSEAR RESPUESTA DE GEMINI
     let rawReply = data.candidates?.[0]?.content?.parts?.[0]?.text || '{"reply":"Error de análisis.","mood":"confused","intent_score":0}';

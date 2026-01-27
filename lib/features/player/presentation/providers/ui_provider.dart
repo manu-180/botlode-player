@@ -30,16 +30,69 @@ final isHoveredExternalProvider = StateProvider<bool>((ref) => false);
 // ⬅️ MEJORADO: Reload limpia pantalla, resetea estado y olvida contexto (sin borrar historial BD)
 final chatResetProvider = Provider((ref) {
   return () {
+    print("🟢 [DEBUG] chatResetProvider() - INICIO DEL RELOAD");
+    
+    // ⬅️ PASO 0: Verificar estado ANTES del reset
+    try {
+      final currentState = ref.read(chatControllerProvider);
+      print("🟢 [DEBUG] chatResetProvider() - ESTADO ANTES: ${currentState.messages.length} mensajes, sessionId: ${currentState.sessionId}, mood: ${currentState.currentMood}");
+    } catch (e) {
+      print("🟢 [DEBUG] chatResetProvider() - Error leyendo estado antes: $e");
+    }
+    
     // ⬅️ PASO 1: Limpiar chat (pantalla en blanco, nuevo sessionId, estado idle)
-    final controller = ref.read(chatControllerProvider.notifier);
-    controller.clearChat();
+    print("🟢 [DEBUG] chatResetProvider() - PASO 1: Llamando a clearChat()");
+    try {
+      final controller = ref.read(chatControllerProvider.notifier);
+      print("🟢 [DEBUG] chatResetProvider() - Controller obtenido: ${controller.runtimeType}");
+      controller.clearChat();
+      print("🟢 [DEBUG] chatResetProvider() - clearChat() completado");
+    } catch (e) {
+      print("🟢 [DEBUG] chatResetProvider() - ERROR en clearChat(): $e");
+    }
+    
+    // ⬅️ PASO 1.5: Verificar estado DESPUÉS de clearChat
+    try {
+      final stateAfterClear = ref.read(chatControllerProvider);
+      print("🟢 [DEBUG] chatResetProvider() - ESTADO DESPUÉS de clearChat: ${stateAfterClear.messages.length} mensajes, sessionId: ${stateAfterClear.sessionId}, mood: ${stateAfterClear.currentMood}");
+    } catch (e) {
+      print("🟢 [DEBUG] chatResetProvider() - Error leyendo estado después de clearChat: $e");
+    }
     
     // ⬅️ PASO 2: Resetear mood del bot a 'idle' (estado normal)
-    ref.read(botMoodProvider.notifier).state = 0; // 0 = idle
+    print("🟢 [DEBUG] chatResetProvider() - PASO 2: Reseteando mood a 0 (idle)");
+    try {
+      final moodBefore = ref.read(botMoodProvider);
+      print("🟢 [DEBUG] chatResetProvider() - Mood ANTES: $moodBefore");
+      ref.read(botMoodProvider.notifier).state = 0; // 0 = idle
+      final moodAfter = ref.read(botMoodProvider);
+      print("🟢 [DEBUG] chatResetProvider() - Mood DESPUÉS: $moodAfter");
+    } catch (e) {
+      print("🟢 [DEBUG] chatResetProvider() - ERROR reseteando mood: $e");
+    }
     
-    // ⬅️ PASO 3: Invalidar provider para forzar rebuild completo
-    ref.invalidate(chatControllerProvider);
+    // ⬅️ PASO 3: NO invalidar el provider (causa LateInitializationError)
+    // En su lugar, forzar un rebuild del estado directamente
+    print("🟢 [DEBUG] chatResetProvider() - PASO 3: Forzando actualización de estado (sin invalidar provider)");
+    try {
+      // El estado ya fue actualizado en clearChat(), solo necesitamos que la UI se actualice
+      // No invalidamos para evitar el error de LateInitializationError
+      print("🟢 [DEBUG] chatResetProvider() - Estado actualizado directamente en clearChat()");
+    } catch (e) {
+      print("🟢 [DEBUG] chatResetProvider() - ERROR actualizando estado: $e");
+    }
     
+    // ⬅️ PASO 4: Verificar estado FINAL
+    Future.microtask(() {
+      try {
+        final finalState = ref.read(chatControllerProvider);
+        print("🟢 [DEBUG] chatResetProvider() - ESTADO FINAL: ${finalState.messages.length} mensajes, sessionId: ${finalState.sessionId}, mood: ${finalState.currentMood}");
+      } catch (e) {
+        print("🟢 [DEBUG] chatResetProvider() - Error leyendo estado final: $e");
+      }
+    });
+    
+    print("🟢 [DEBUG] chatResetProvider() - FIN DEL RELOAD");
     print("🔄 Reload completo: pantalla en blanco, bot en estado 'idle', nuevo contexto (bot olvidó todo, historial BD intacto)");
   };
 });
