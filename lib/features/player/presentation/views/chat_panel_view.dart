@@ -85,6 +85,8 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
     _textController.clear();
     if (_scrollController.hasClients) _scrollController.jumpTo(0.0);
     ref.read(chatControllerProvider.notifier).sendMessage(text);
+    // ⬅️ NUEVO: El input se bloqueará automáticamente porque isLoading será true
+    // Y se desbloqueará y enfocará automáticamente cuando isLoading vuelva a false
   }
 
   @override
@@ -228,6 +230,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                               itemCount: reversedMessages.length + (chatState.isLoading ? 1 : 0),
                               itemBuilder: (context, index) {
                                 if (chatState.isLoading) {
+
                                   if (index == 0) return Padding(
                                     padding: const EdgeInsets.only(left: 16, top: 8, bottom: 20), 
                                     child: Row(
@@ -265,6 +268,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                             ],
                           ),
                           child: _ProfessionalInputField(
+                            isLoading: chatState.isLoading, // ⬅️ NUEVO: Pasar estado de carga
                             controller: _textController,
                             isOnline: isOnline,
                             isDarkMode: isDarkMode,
@@ -289,6 +293,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
 class _ProfessionalInputField extends StatefulWidget {
   final TextEditingController controller;
   final bool isOnline;
+  final bool isLoading; // ⬅️ NUEVO: Para bloquear mientras el bot responde
   final bool isDarkMode;
   final Color themeColor;
   final Color inputFill;
@@ -299,6 +304,7 @@ class _ProfessionalInputField extends StatefulWidget {
   const _ProfessionalInputField({
     required this.controller,
     required this.isOnline,
+    required this.isLoading,
     required this.isDarkMode,
     required this.themeColor,
     required this.inputFill,
@@ -319,12 +325,36 @@ class _ProfessionalInputFieldState extends State<_ProfessionalInputField> {
   @override
   void initState() {
     super.initState();
+    
     _focusNode.addListener(() {
       setState(() => _isFocused = _focusNode.hasFocus);
     });
+    
     widget.controller.addListener(() {
       setState(() => _hasText = widget.controller.text.trim().isNotEmpty);
     });
+    
+    // ⬅️ NUEVO: Enfocar automáticamente cuando el widget se inicializa
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && widget.isOnline && !widget.isLoading) {
+        _focusNode.requestFocus();
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(_ProfessionalInputField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    
+    // ⬅️ NUEVO: Cuando isLoading cambia de true a false, enfocar automáticamente
+    if (oldWidget.isLoading && !widget.isLoading && widget.isOnline) {
+      // Pequeño delay para asegurar que la UI se actualizó
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (mounted && _focusNode.canRequestFocus) {
+          _focusNode.requestFocus();
+        }
+      });
+    }
   }
 
   @override
@@ -335,100 +365,118 @@ class _ProfessionalInputFieldState extends State<_ProfessionalInputField> {
 
   @override
   Widget build(BuildContext context) {
+    final isInputEnabled = widget.isOnline && !widget.isLoading; // ⬅️ NUEVO: Bloquear mientras carga
     final borderColor = _isFocused ? widget.inputBorderFocused : widget.inputBorder;
+    final inputOpacity = isInputEnabled ? 1.0 : 0.6; // ⬅️ NUEVO: Reducir opacidad cuando está bloqueado
     
-    return Container(
-      decoration: BoxDecoration(
-        color: widget.inputFill,
-        borderRadius: BorderRadius.circular(24),
-        border: Border.all(
-          color: borderColor,
-          width: 1.0,
-        ),
-        boxShadow: _isFocused ? [
-          BoxShadow(
-            color: widget.themeColor.withOpacity(0.1),
-            blurRadius: 12,
-            spreadRadius: 0,
+    return AnimatedOpacity(
+      duration: const Duration(milliseconds: 200),
+      opacity: inputOpacity,
+      child: Container(
+        decoration: BoxDecoration(
+          color: widget.inputFill,
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(
+            color: borderColor,
+            width: 1.0,
           ),
-        ] : null,
-      ),
-      child: Row(
-        children: [
-          const SizedBox(width: 20),
-          Expanded(
-            child: TextField(
-              controller: widget.controller,
-              focusNode: _focusNode,
-              enabled: widget.isOnline,
-              onSubmitted: (_) => widget.isOnline && _hasText ? widget.onSend() : null,
-              style: TextStyle(
-                color: widget.isDarkMode ? Colors.white : Colors.black87,
-                fontSize: 15,
-                fontWeight: FontWeight.w400,
-                letterSpacing: 0.2,
-              ),
-              cursorColor: widget.themeColor,
-              decoration: InputDecoration(
-                hintText: widget.isOnline ? "Escribe un mensaje..." : "Sin conexión",
-                hintStyle: TextStyle(
-                  color: widget.isDarkMode ? Colors.white.withOpacity(0.4) : Colors.black.withOpacity(0.4),
+          boxShadow: _isFocused ? [
+            BoxShadow(
+              color: widget.themeColor.withOpacity(0.1),
+              blurRadius: 12,
+              spreadRadius: 0,
+            ),
+          ] : null,
+        ),
+        child: Row(
+          children: [
+            const SizedBox(width: 20),
+            Expanded(
+              child: TextField(
+                controller: widget.controller,
+                focusNode: _focusNode,
+                enabled: isInputEnabled, // ⬅️ NUEVO: Bloquear cuando isLoading es true
+                readOnly: widget.isLoading, // ⬅️ NUEVO: Bloquear escritura mientras el bot responde
+                onSubmitted: (_) => isInputEnabled && _hasText ? widget.onSend() : null,
+                style: TextStyle(
+                  color: widget.isDarkMode ? Colors.white : Colors.black87,
                   fontSize: 15,
                   fontWeight: FontWeight.w400,
+                  letterSpacing: 0.2,
                 ),
-                border: InputBorder.none,
-                contentPadding: const EdgeInsets.symmetric(vertical: 16),
-                isDense: true,
+                cursorColor: widget.themeColor,
+                decoration: InputDecoration(
+                  hintText: widget.isLoading 
+                      ? "El bot está respondiendo..." 
+                      : (widget.isOnline ? "Escribe un mensaje..." : "Sin conexión"),
+                  hintStyle: TextStyle(
+                    color: widget.isDarkMode ? Colors.white.withOpacity(0.4) : Colors.black.withOpacity(0.4),
+                    fontSize: 15,
+                    fontWeight: FontWeight.w400,
+                  ),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                  isDense: true,
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 8),
-          // ⬅️ BOTÓN DE ENVIAR - Estilo minimalista y elegante
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOutCubic,
-            margin: const EdgeInsets.all(6),
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              gradient: (widget.isOnline && _hasText)
-                  ? LinearGradient(
-                      colors: [
-                        widget.themeColor,
-                        widget.themeColor.withOpacity(0.8),
-                      ],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                    )
-                  : null,
-              color: (widget.isOnline && _hasText) ? null : Colors.grey.withOpacity(0.3),
-              shape: BoxShape.circle,
-              boxShadow: (widget.isOnline && _hasText) ? [
-                BoxShadow(
-                  color: widget.themeColor.withOpacity(0.4),
-                  blurRadius: 8,
-                  spreadRadius: 0,
-                  offset: const Offset(0, 2),
-                ),
-              ] : null,
-            ),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(20),
-                onTap: (widget.isOnline && _hasText) ? widget.onSend : null,
-                child: Center(
-                  child: Icon(
-                    Icons.send_rounded,
-                    color: (widget.isOnline && _hasText) ? Colors.white : Colors.grey.shade600,
-                    size: 20,
+            const SizedBox(width: 8),
+            // ⬅️ BOTÓN DE ENVIAR - Estilo minimalista y elegante
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOutCubic,
+              margin: const EdgeInsets.all(6),
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                gradient: (isInputEnabled && _hasText)
+                    ? LinearGradient(
+                        colors: [
+                          widget.themeColor,
+                          widget.themeColor.withOpacity(0.8),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      )
+                    : null,
+                color: (isInputEnabled && _hasText) ? null : Colors.grey.withOpacity(0.3),
+                shape: BoxShape.circle,
+                boxShadow: (isInputEnabled && _hasText) ? [
+                  BoxShadow(
+                    color: widget.themeColor.withOpacity(0.4),
+                    blurRadius: 8,
+                    spreadRadius: 0,
+                    offset: const Offset(0, 2),
+                  ),
+                ] : null,
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(20),
+                  onTap: (isInputEnabled && _hasText) ? widget.onSend : null,
+                  child: Center(
+                    child: widget.isLoading
+                        ? SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.grey.shade600),
+                            ),
+                          )
+                        : Icon(
+                            Icons.send_rounded,
+                            color: (isInputEnabled && _hasText) ? Colors.white : Colors.grey.shade600,
+                            size: 20,
+                          ),
                   ),
                 ),
               ),
             ),
-          ),
-          const SizedBox(width: 6),
-        ],
+            const SizedBox(width: 6),
+          ],
+        ),
       ),
     );
   }
@@ -514,14 +562,14 @@ class _ThinkingIndicator extends StatefulWidget {
 }
 
 class _ThinkingIndicatorState extends State<_ThinkingIndicator> {
-  String _currentMessage = "Pensando...";
+  String _currentMessage = "Procesando...";
   DateTime? _startTime;
   
   // Mensajes progresivos con sentido
   final List<String> _messages = [
-    "Pensando...",
-    "Escribiendo...",
     "Procesando...",
+    "Escribiendo...",
+    "Analizando...",
     "Casi listo...",
   ];
   
@@ -543,11 +591,11 @@ class _ThinkingIndicatorState extends State<_ThinkingIndicator> {
     if (seconds >= 9) {
       messageIndex = 3; // "Casi listo..."
     } else if (seconds >= 6) {
-      messageIndex = 2; // "Procesando..."
+      messageIndex = 2; // "Analizando..."
     } else if (seconds >= 3) {
       messageIndex = 1; // "Escribiendo..."
     } else {
-      messageIndex = 0; // "Pensando..."
+      messageIndex = 0; // "Procesando..."
     }
     
     if (mounted && _currentMessage != _messages[messageIndex]) {

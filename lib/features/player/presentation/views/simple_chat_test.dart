@@ -43,10 +43,18 @@ class _SimpleChatTestState extends ConsumerState<SimpleChatTest> {
     final text = _textController.text;
     if (text.trim().isEmpty) return;
     _textController.clear();
-    if (_scrollController.hasClients) {
-      _scrollController.jumpTo(0.0);
-    }
     ref.read(chatControllerProvider.notifier).sendMessage(text);
+    
+    // Auto-scroll después de enviar mensaje (esperar a que se renderice)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          0.0,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
   }
 
   @override
@@ -78,9 +86,34 @@ class _SimpleChatTestState extends ConsumerState<SimpleChatTest> {
       if (prev?.currentMood != next.currentMood) {
         ref.read(botMoodProvider.notifier).state = _getMoodIndex(next.currentMood);
       }
+      
       // Auto-scroll cuando llegan mensajes nuevos
-      if (next.messages.length > (prev?.messages.length ?? 0) && _scrollController.hasClients) {
-        _scrollController.jumpTo(0.0);
+      final hasNewMessage = next.messages.length > (prev?.messages.length ?? 0);
+      // También hacer scroll cuando termina de cargar (el bot respondió)
+      final finishedLoading = prev?.isLoading == true && next.isLoading == false;
+      
+      if ((hasNewMessage || finishedLoading) && _scrollController.hasClients) {
+        // Verificar si el usuario está cerca del final (dentro de 100px)
+        // Si está scrolleando hacia arriba viendo mensajes antiguos, no forzar scroll
+        final isNearBottom = _scrollController.offset < 100.0;
+        
+        // Solo hacer auto-scroll si está cerca del final o si es un mensaje del bot (siempre mostrar respuestas del bot)
+        final isBotMessage = hasNewMessage && next.messages.isNotEmpty && 
+                             next.messages.last.role == 'bot';
+        
+        if (isNearBottom || isBotMessage || finishedLoading) {
+          // Usar addPostFrameCallback para asegurar que el scroll ocurra después del render
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (_scrollController.hasClients) {
+              // Con reverse: true, el índice 0 está al final (abajo), así que scroll a 0.0 muestra el más nuevo
+              _scrollController.animateTo(
+                0.0,
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOut,
+              );
+            }
+          });
+        }
       }
     });
     
@@ -310,7 +343,7 @@ class _SimpleChatTestState extends ConsumerState<SimpleChatTest> {
                               ),
                               const SizedBox(width: 8),
                               Text(
-                                "Escribiendo...",
+                                "Procesando...",
                                 style: TextStyle(
                                   color: isDarkMode ? Colors.white38 : Colors.black38,
                                   fontSize: 11,

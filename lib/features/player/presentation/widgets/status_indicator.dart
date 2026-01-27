@@ -26,7 +26,7 @@ class StatusIndicator extends StatelessWidget {
       text = "DESCONECTADO";
       color = const Color(0xFFFF003C); // Rojo Alerta
     } else if (isLoading) {
-      text = "ESCRIBIENDO...";
+      text = "PROCESANDO...";
       color = const Color(0xFF00FF94); 
     } else {
       switch (mood.toLowerCase()) {

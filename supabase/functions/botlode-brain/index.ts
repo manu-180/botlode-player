@@ -13,8 +13,23 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-// ⬅️ MEJORA 1: Logging estructurado para debugging profesional
+// ⬅️ MEJORA 1: Logging optimizado para evitar saturación de BigQuery
+// Solo loggea errores y warnings críticos para reducir carga en BigQuery
+const LOG_LEVEL = Deno.env.get('LOG_LEVEL') || 'error'; // 'error' | 'warn' | 'info'
+const ENABLE_LOGGING = LOG_LEVEL !== 'none';
+
 function log(level: 'info' | 'warn' | 'error', message: string, data?: any) {
+  // Solo loggear si está habilitado y el nivel es suficiente
+  if (!ENABLE_LOGGING) return;
+  
+  // Mapeo de niveles: error=0, warn=1, info=2
+  const levelPriority = { error: 0, warn: 1, info: 2 };
+  const currentPriority = levelPriority[LOG_LEVEL as keyof typeof levelPriority] ?? 0;
+  const messagePriority = levelPriority[level];
+  
+  // Solo loggear si el nivel del mensaje es igual o menor al configurado
+  if (messagePriority > currentPriority) return;
+  
   const timestamp = new Date().toISOString();
   const logEntry = {
     timestamp,
@@ -42,8 +57,9 @@ async function fetchGeminiWithRetry(
       
       if (response.ok) {
         const data = await response.json();
-        if (attempt > 0) {
-          log('info', `Gemini request succeeded after ${attempt} retries`);
+        // Solo loggear retries exitosos si hay más de 1 intento (casos problemáticos)
+        if (attempt > 1) {
+          log('warn', `Gemini request succeeded after ${attempt} retries`);
         }
         return data;
       }
@@ -292,7 +308,8 @@ serve(async (req) => {
     // Validación de entrada
     validateInput(sessionId, botId, message);
 
-    log('info', 'Processing bot request', { sessionId, botId, messageLength: message.length });
+    // Log inicial solo en modo debug (no en producción para reducir BigQuery)
+    // log('info', 'Processing bot request', { sessionId, botId, messageLength: message.length });
 
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -327,9 +344,10 @@ serve(async (req) => {
     const systemPrompt = botConfig.system_prompt || "";
     const vendorName = extractVendorName(systemPrompt);
     
-    if (vendorName) {
-      log('info', 'Vendor name extraído', { vendorName });
-    }
+    // Logging reducido - solo en caso de problemas
+    // if (vendorName) {
+    //   log('info', 'Vendor name extraído', { vendorName });
+    // }
 
     // 4. CONSTRUIR SYSTEM INSTRUCTION (Prompt optimizado)
     const systemInstructionText = `
@@ -575,7 +593,8 @@ FORMATO JSON OBLIGATORIO:
     
     // Solo agregar reunión si el usuario confirmó Y hay contacto
     if (meetingInfo.intent && hasContactInThisMessage) {
-      log('info', 'Reunión confirmada CON contacto - guardando reunión');
+      // Logging reducido para evitar saturación BigQuery
+      // log('info', 'Reunión confirmada CON contacto - guardando reunión');
       extractedContacts.push({
         type: 'meeting',
         value: `Reunión agendada${meetingInfo.date ? ` - ${meetingInfo.date}` : ''}${meetingInfo.time ? ` a las ${meetingInfo.time}` : ''}`,
@@ -587,12 +606,15 @@ FORMATO JSON OBLIGATORIO:
         },
       });
     } else if (meetingInfo.intent && !hasContactInThisMessage) {
-      log('info', 'Reunión confirmada PERO sin contacto - NO guardando reunión aún (esperando contacto)');
+      // Logging reducido
+      // log('info', 'Reunión confirmada PERO sin contacto - NO guardando reunión aún (esperando contacto)');
     }
     
     // ⬅️ MEJORADO: Verificar contactos y reuniones en la BD (no solo en el mensaje actual)
     let hasPreviousMeeting = false;
     let hasPreviousContact = false;
+    let pendingMeetingInfo: { date: string | null; time: string | null } | null = null;
+    
     try {
       const { data: previousContacts } = await supabaseAdmin
         .from('extracted_contacts')
@@ -606,33 +628,93 @@ FORMATO JSON OBLIGATORIO:
         c.contact_type === 'email' || c.contact_type === 'phone' || c.contact_type === 'whatsapp'
       ) ?? false;
       
-      log('info', 'Contactos previos en BD', { 
-        hasMeeting: hasPreviousMeeting, 
-        hasContact: hasPreviousContact,
-        totalContacts: previousContacts?.length ?? 0
-      });
+      // Logging reducido - solo en caso de debugging
+      // log('info', 'Contactos previos en BD', { 
+      //   hasMeeting: hasPreviousMeeting, 
+      //   hasContact: hasPreviousContact,
+      //   totalContacts: previousContacts?.length ?? 0
+      // });
     } catch (e) {
       log('warn', 'Error verificando contactos previos', { error: e });
     }
     
-    // ⬅️ NUEVO: Determinar si hay reunión confirmada (solo si hay contacto)
-    // hasMeeting solo es true si:
-    // 1. El usuario confirmó reunión EN ESTE MENSAJE Y hay contacto EN ESTE MENSAJE, O
-    // 2. Ya hay una reunión guardada previamente en BD (que solo se guarda si había contacto)
+    // ⬅️ NUEVO: Si el usuario da contacto pero NO confirmó reunión en este mensaje,
+    // verificar si confirmó reunión en mensajes anteriores (últimos 5 mensajes)
     const hasContactInMessage = extractedContacts.some(c => c.type === 'email' || c.type === 'phone' || c.type === 'whatsapp');
+    
+    if (hasContactInMessage && !meetingInfo.intent && !hasPreviousMeeting) {
+      try {
+        // Buscar en los últimos mensajes del usuario para ver si confirmó una reunión
+        const { data: recentMessages } = await supabaseAdmin
+          .from('chat_logs')
+          .select('content, created_at')
+          .eq('session_id', sessionId)
+          .eq('bot_id', botId)
+          .eq('role', 'user')
+          .order('created_at', { ascending: false })
+          .limit(5);
+        
+        if (recentMessages && recentMessages.length > 0) {
+          // Buscar en los mensajes recientes si hay confirmación de reunión
+          for (const msg of recentMessages) {
+            const previousMeetingCheck = await extractMeetingWithAI(msg.content, apiKey, vendorName);
+            if (previousMeetingCheck.intent) {
+              // Encontramos una confirmación de reunión previa
+              pendingMeetingInfo = {
+                date: previousMeetingCheck.date,
+                time: previousMeetingCheck.time,
+              };
+              // Logging reducido
+              // log('info', 'Reunión confirmada previamente encontrada en mensajes anteriores', {
+              //   date: pendingMeetingInfo.date,
+              //   time: pendingMeetingInfo.time,
+              //   messagePreview: msg.content.substring(0, 100)
+              // });
+              break; // Solo necesitamos la más reciente
+            }
+          }
+        }
+      } catch (e: any) {
+        log('warn', 'Error buscando reunión previa en mensajes', { error: e.message });
+      }
+    }
+    
+    // ⬅️ NUEVO: Si encontramos una reunión pendiente (confirmada antes pero sin contacto),
+    // y ahora el usuario da contacto, guardar la reunión
+    if (pendingMeetingInfo && hasContactInMessage && !hasPreviousMeeting) {
+      // Logging reducido
+      // log('info', 'Guardando reunión pendiente ahora que hay contacto');
+      extractedContacts.push({
+        type: 'meeting',
+        value: `Reunión agendada${pendingMeetingInfo.date ? ` - ${pendingMeetingInfo.date}` : ''}${pendingMeetingInfo.time ? ` a las ${pendingMeetingInfo.time}` : ''}`,
+        metadata: {
+          intent: 'meeting_scheduled',
+          date: pendingMeetingInfo.date,
+          time: pendingMeetingInfo.time,
+          full_message: message.substring(0, 200),
+          recovered_from_previous_message: true, // ⬅️ Marcar que se recuperó de mensaje anterior
+        },
+      });
+    }
+    
     const hasContact = hasContactInMessage || hasPreviousContact; // ⬅️ Contacto en mensaje actual O en BD
     
-    // ⬅️ Solo considerar reunión si hay contacto (sin contacto no tiene sentido)
-    const hasMeetingConfirmed = (meetingInfo.intent && hasContactInMessage) || hasPreviousMeeting;
+    // ⬅️ Determinar si hay reunión confirmada:
+    // 1. El usuario confirmó reunión EN ESTE MENSAJE Y hay contacto EN ESTE MENSAJE, O
+    // 2. Ya hay una reunión guardada previamente en BD, O
+    // 3. Encontramos una reunión pendiente y ahora hay contacto
+    const hasMeetingConfirmed = (meetingInfo.intent && hasContactInMessage) || hasPreviousMeeting || (pendingMeetingInfo !== null && hasContactInMessage);
     
-    log('info', 'Estado de contacto/reunión', {
-      hasMeetingConfirmed,
-      hasContactInMessage,
-      hasPreviousContact,
-      hasContact,
-      meetingIntentDetected: meetingInfo.intent,
-      willSaveMeeting: meetingInfo.intent && hasContactInMessage
-    });
+    // Logging reducido - solo en modo debug
+    // log('info', 'Estado de contacto/reunión', {
+    //   hasMeetingConfirmed,
+    //   hasContactInMessage,
+    //   hasPreviousContact,
+    //   hasContact,
+    //   meetingIntentDetected: meetingInfo.intent,
+    //   pendingMeetingFound: pendingMeetingInfo !== null,
+    //   willSaveMeeting: (meetingInfo.intent && hasContactInMessage) || (pendingMeetingInfo !== null && hasContactInMessage)
+    // });
     
     // 8. PARSEAR RESPUESTA DE GEMINI
     let rawReply = data.candidates?.[0]?.content?.parts?.[0]?.text || '{"reply":"Error de análisis.","mood":"confused","intent_score":0}';
@@ -672,9 +754,11 @@ FORMATO JSON OBLIGATORIO:
             : ` Para concretar la reunión, necesito tu número de contacto o email para que te podamos contactar. ¿Me lo podés dejar?`;
           
           parsedResponse.reply = parsedResponse.reply.trim() + contactRequest;
-          log('info', 'Usuario confirmó reunión pero sin contacto - solicitando contacto');
+          // Logging reducido
+          // log('info', 'Usuario confirmó reunión pero sin contacto - solicitando contacto');
         } else {
-          log('info', 'Bot ya solicitó contacto en su respuesta, no duplicar');
+          // Logging reducido
+          // log('info', 'Bot ya solicitó contacto en su respuesta, no duplicar');
         }
       } else if (hasMeetingConfirmed && hasContact) {
         // ⬅️ NUEVO: Si hay reunión Y contacto, confirmar y resumir
@@ -685,10 +769,10 @@ FORMATO JSON OBLIGATORIO:
           replyLower.includes('ya tengo');
         
         if (!alreadyConfirmed) {
-          // Buscar fecha y hora de la reunión
+          // Buscar fecha y hora de la reunión (puede estar en el mensaje actual o en pendingMeetingInfo)
           const meetingContact = extractedContacts.find(c => c.type === 'meeting');
-          const meetingDate = meetingContact?.metadata?.date || '';
-          const meetingTime = meetingContact?.metadata?.time || '';
+          const meetingDate = meetingContact?.metadata?.date || pendingMeetingInfo?.date || meetingInfo.date || '';
+          const meetingTime = meetingContact?.metadata?.time || pendingMeetingInfo?.time || meetingInfo.time || '';
           
           let confirmation = '';
           if (meetingDate || meetingTime) {
@@ -703,7 +787,10 @@ FORMATO JSON OBLIGATORIO:
           }
           
           parsedResponse.reply = parsedResponse.reply.trim() + confirmation;
-          log('info', 'Confirmando contacto y resumiendo reunión');
+          // Logging reducido
+          // log('info', 'Confirmando contacto y resumiendo reunión', {
+          //   recoveredFromPrevious: pendingMeetingInfo !== null
+          // });
         }
       }
     } catch (e: any) {
@@ -731,10 +818,11 @@ FORMATO JSON OBLIGATORIO:
           { onConflict: 'session_id,contact_type,contact_value' }
         );
         
-        log('info', `Contactos/Reuniones extraídos y guardados`, { 
-          count: extractedContacts.length,
-          types: extractedContacts.map(c => c.type)
-        });
+        // Logging reducido - solo loggear si hay error
+        // log('info', `Contactos/Reuniones extraídos y guardados`, { 
+        //   count: extractedContacts.length,
+        //   types: extractedContacts.map(c => c.type)
+        // });
       } catch (e: any) {
         log('error', 'Error guardando contactos', { error: e.message });
         // No fallar la función si falla el guardado de contactos
@@ -750,7 +838,8 @@ FORMATO JSON OBLIGATORIO:
         bot_id: botId,
         intent_score: 0 
       });
-      log('info', 'Mensaje del usuario guardado en historial');
+      // Logging reducido
+      // log('info', 'Mensaje del usuario guardado en historial');
     } catch (e: any) {
       log('error', 'Error guardando mensaje del usuario', { error: e.message });
       // Continuar aunque falle el guardado
@@ -776,7 +865,8 @@ FORMATO JSON OBLIGATORIO:
       bot_id: botId, 
       intent_score: parsedResponse.intent_score || 0 
     }).then(() => {
-      log('info', 'Respuesta del bot guardada en historial (background)');
+      // Logging reducido - solo en caso de error
+      // log('info', 'Respuesta del bot guardada en historial (background)');
     }).catch((e: any) => {
       log('error', 'Error guardando respuesta del bot', { error: e.message });
     });
@@ -841,7 +931,8 @@ FORMATO JSON OBLIGATORIO:
                   });
 
                   if (alertResponse.ok) {
-                    log('info', '✅ Alerta de lead enviada (background)', { sessionId, botId, intentScore });
+                    // Logging reducido - solo errores
+                    // log('info', '✅ Alerta de lead enviada (background)', { sessionId, botId, intentScore });
                   } else {
                     const errorText = await alertResponse.text();
                     log('warn', '⚠️ Error enviando alerta de lead', { 
@@ -853,7 +944,8 @@ FORMATO JSON OBLIGATORIO:
                   log('error', '❌ Error llamando send-lead-alert', { error: alertError.message });
                 }
               } else {
-                log('info', '📧 Email ya enviado para esta sesión', { sessionId });
+                // Logging reducido
+                // log('info', '📧 Email ya enviado para esta sesión', { sessionId });
               }
             }
           }
@@ -864,23 +956,30 @@ FORMATO JSON OBLIGATORIO:
     }
 
     // 14. ACTUALIZAR HEARTBEAT (en background también)
-    supabaseAdmin.from('session_heartbeats').upsert({
-      session_id: sessionId,
-      bot_id: botId,
-      is_online: true,
-      last_seen: new Date().toISOString()
-    }, { onConflict: 'session_id' }).catch((e: any) => {
-      log('warn', 'Error actualizando heartbeat', { error: e.message });
-    });
+    (async () => {
+      try {
+        await supabaseAdmin.from('session_heartbeats').upsert({
+          session_id: sessionId,
+          bot_id: botId,
+          is_online: true,
+          last_seen: new Date().toISOString()
+        }, { onConflict: 'session_id' });
+      } catch (e: any) {
+        log('warn', 'Error actualizando heartbeat', { error: e.message });
+      }
+    })();
 
     const processingTime = Date.now() - startTime;
-    log('info', 'Request procesado exitosamente - respuesta devuelta', { 
-      sessionId, 
-      botId, 
-      processingTimeMs: processingTime,
-      intentScore: parsedResponse.intent_score,
-      mood: parsedResponse.mood
-    });
+    // Logging reducido - solo loggear si el tiempo de procesamiento es anormal (>5s)
+    if (processingTime > 5000) {
+      log('warn', 'Request procesado con tiempo alto', { 
+        sessionId, 
+        botId, 
+        processingTimeMs: processingTime,
+        intentScore: parsedResponse.intent_score,
+        mood: parsedResponse.mood
+      });
+    }
 
     // ⬅️ DEVOLVER RESPUESTA INMEDIATAMENTE (ya preparada arriba)
     // Esto hace que el chat en vivo reciba la respuesta antes que el historial se actualice

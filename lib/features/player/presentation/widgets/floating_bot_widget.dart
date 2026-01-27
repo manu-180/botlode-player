@@ -32,7 +32,8 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
 
     final screenSize = MediaQuery.of(context).size;
     final isMobile = screenSize.width < 600;
-    final double safeHeight = (screenSize.height - 120.0).clamp(400.0, 800.0);
+    // Altura aumentada: casi toda la pantalla, dejando espacio para appbar (80px)
+    final double safeHeight = (screenSize.height - 80.0).clamp(600.0, double.infinity);
 
     const double ghostPadding = 40.0;
 
@@ -49,13 +50,13 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
         
         if (isOpen) {
           // Chat ABIERTO: calcular respecto al avatar dentro del chat
-          // El chat está en bottom-right con ancho máximo de 380px (o menos en móvil)
-          final double chatWidth = screenSize.width.clamp(0.0, 380.0);
+          // El chat está en top con ancho máximo de 420px (o menos en móvil)
+          final double chatWidth = isMobile ? screenSize.width : 420.0;
           final double chatHeight = safeHeight;
           
-          // Avatar está centrado horizontalmente en el chat y a ~100px del top
-          final double avatarCenterX = screenSize.width - (chatWidth / 2);
-          final double avatarCenterY = (screenSize.height - chatHeight) + 100.0;
+          // Avatar está centrado horizontalmente en el chat y a ~100px del top del chat (80px appbar + 100px)
+          final double avatarCenterX = isMobile ? screenSize.width / 2 : screenSize.width - (chatWidth / 2);
+          final double avatarCenterY = 80.0 + 100.0; // appbar + offset del avatar
           
           dx = event.position.dx - avatarCenterX;
           dy = event.position.dy - avatarCenterY;
@@ -88,14 +89,15 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
           ),
 
         // PANEL DE CHAT - SIN ANIMACIONES (causan problema en iframe)
+        // Posicionado desde arriba, dejando espacio para appbar (80px)
         if (isOpen)
           Positioned(
-            bottom: 0, 
+            top: 80, // Espacio para appbar
             right: 0,
             child: ConstrainedBox(
               constraints: BoxConstraints(
                 maxHeight: safeHeight, 
-                maxWidth: isMobile ? double.infinity : 380
+                maxWidth: isMobile ? double.infinity : 420 // Ancho aumentado
               ),
               child: const SimpleChatTest(), // ⬅️ CHAT COMPLETO (ya tiene su propio Container con fondo)
             ),
