@@ -14,4 +14,26 @@ class ChatMessage {
     required this.role,
     required this.timestamp,
   });
+
+  // ⬅️ NUEVO: Serialización para persistencia
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'text': text,
+      'role': role.name,
+      'timestamp': timestamp.toIso8601String(),
+    };
+  }
+
+  factory ChatMessage.fromJson(Map<String, dynamic> json) {
+    return ChatMessage(
+      id: json['id'] as String,
+      text: json['text'] as String,
+      role: MessageRole.values.firstWhere(
+        (e) => e.name == json['role'],
+        orElse: () => MessageRole.bot,
+      ),
+      timestamp: DateTime.parse(json['timestamp'] as String),
+    );
+  }
 }

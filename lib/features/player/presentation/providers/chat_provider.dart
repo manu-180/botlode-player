@@ -1,4 +1,5 @@
 // Archivo: lib/features/player/presentation/providers/chat_provider.dart
+import 'package:botlode_player/core/services/chat_persistence_service.dart';
 import 'package:botlode_player/features/player/domain/models/chat_message.dart';
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/chat_repository_provider.dart';
@@ -40,21 +41,35 @@ class ChatState {
 @riverpod
 class ChatController extends _$ChatController {
   final _uuid = const Uuid();
-  // Session ID única por recarga de página
-  final _sessionId = const Uuid().v4(); 
+  // ⬅️ NUEVO: Session ID persistente (sobrevive a recargas)
+  late final String _sessionId;
 
   @override
   ChatState build() {
+    // ⬅️ NUEVO: Cargar sessionId persistente o crear uno nuevo
+    _sessionId = ChatPersistenceService.getOrCreateSessionId();
+    
+    // ⬅️ NUEVO: Cargar mensajes guardados si existen
+    final storedMessages = ChatPersistenceService.getStoredMessages();
+    
+    // Si hay mensajes guardados, usarlos; si no, mensaje inicial
+    final initialMessages = storedMessages.isNotEmpty
+        ? storedMessages
+        : [
+            ChatMessage(
+              id: 'init',
+              text: 'Sistema en línea. ¿En qué puedo ayudarte hoy?',
+              role: MessageRole.bot,
+              timestamp: DateTime.now(),
+            )
+          ];
+    
+    // Guardar mensajes iniciales
+    ChatPersistenceService.saveMessages(initialMessages);
+    
     return ChatState(
-      sessionId: _sessionId, // <--- Aquí se inicializa
-      messages: [
-        ChatMessage(
-          id: 'init',
-          text: 'Sistema en línea. ¿En qué puedo ayudarte hoy?',
-          role: MessageRole.bot,
-          timestamp: DateTime.now(),
-        )
-      ]
+      sessionId: _sessionId,
+      messages: initialMessages,
     );
   }
 
@@ -76,6 +91,9 @@ class ChatController extends _$ChatController {
       isLoading: true, 
       currentMood: 'thinking', 
     );
+    
+    // ⬅️ NUEVO: Guardar mensajes después de agregar el del usuario
+    ChatPersistenceService.saveMessages(state.messages);
 
     final response = await repository.sendMessage(
       message: text,
@@ -90,10 +108,14 @@ class ChatController extends _$ChatController {
       timestamp: DateTime.now(),
     );
 
+    final updatedMessages = [...state.messages, botMsg];
     state = state.copyWith(
-      messages: [...state.messages, botMsg],
+      messages: updatedMessages,
       isLoading: false,
       currentMood: response.mood,
     );
+    
+    // ⬅️ NUEVO: Guardar mensajes después de recibir respuesta del bot
+    ChatPersistenceService.saveMessages(updatedMessages);
   }
 }
