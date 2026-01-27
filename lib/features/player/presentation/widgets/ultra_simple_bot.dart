@@ -131,9 +131,14 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
     final double horizontalPadding = isMobile ? 8.0 : 28.0; // Menos padding en móvil
     final double verticalPadding = isMobile ? 8.0 : 28.0;
     
-    // ⬅️ Altura segura: 92% de pantalla, máximo 800px, mínimo 400px
-    final double chatHeight = (screenSize.height * 0.92 - verticalPadding * 2)
-        .clamp(400.0, 800.0);
+    // ⬅️ MEJORADO: Altura más generosa aprovechando mejor el espacio
+    // - Usa 95% de la pantalla (antes 92%) para aprovechar más espacio
+    // - Máximo 900px (antes 800px) para pantallas grandes
+    // - Mínimo 400px para pantallas pequeñas
+    // - Margen superior mínimo de 40px para evitar tocar appbars
+    final double maxAvailableHeight = screenSize.height - 40.0; // Margen superior seguro
+    final double calculatedHeight = (maxAvailableHeight * 0.95) - (verticalPadding * 2);
+    final double chatHeight = calculatedHeight.clamp(400.0, 900.0);
     
     // ⬅️ FIX: Fondo totalmente transparente
     // ✅ TRACKING GLOBAL: Manejado por JavaScript nativo en main.dart
@@ -173,16 +178,16 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
                           right: horizontalPadding, 
                           bottom: verticalPadding,
                           left: isMobile ? horizontalPadding : 0, // ⬅️ Padding izquierdo en móvil
-                          top: isMobile ? verticalPadding : 0, // ⬅️ Padding superior en móvil
+                          top: isMobile ? 40.0 : 0, // ⬅️ Padding superior en móvil (margen seguro para appbar)
                         ),
                         child: Container(
                         width: chatWidth, // ⬅️ RESPONSIVE: Ancho adaptativo
-                        height: chatHeight, // ⬅️ RESPONSIVE: Altura segura
+                        height: chatHeight, // ⬅️ RESPONSIVE: Altura optimizada (95% pantalla, max 900px)
                         constraints: BoxConstraints(
                           maxWidth: chatWidth, // ⬅️ Asegurar que nunca exceda el ancho calculado
                           maxHeight: chatHeight, // ⬅️ Asegurar que nunca exceda la altura calculada
                           minWidth: isMobile ? 320.0 : 380.0, // ⬅️ Ancho mínimo
-                          minHeight: 400.0, // ⬅️ Altura mínima
+                          minHeight: 400.0, // ⬅️ Altura mínima (nunca se corta)
                         ),
                         decoration: BoxDecoration(
                           color: const Color(0xFF181818),

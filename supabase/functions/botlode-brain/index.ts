@@ -622,50 +622,29 @@ FORMATO JSON OBLIGATORIO:
     }
 
     // 10. GUARDAR MENSAJES EN LA BASE DE DATOS
-    // ⬅️ NUEVO: Solo guardar mensajes si hay contacto o reunión agendada
-    const hasContactNow = extractedContacts.some(c => c.type === 'email' || c.type === 'phone' || c.type === 'whatsapp');
-    const hasMeetingNow = extractedContacts.some(c => c.type === 'meeting');
-    
-    // Verificar si hay reunión o contacto en la base de datos (después de guardar los nuevos)
-    let hasAnyContactOrMeeting = false;
+    // ⬅️ IMPORTANTE: Guardar TODOS los mensajes para el historial
+    // Los contactos/reuniones se guardan por separado en extracted_contacts
     try {
-      const { data: allContacts } = await supabaseAdmin
-        .from('extracted_contacts')
-        .select('contact_type')
-        .eq('session_id', sessionId)
-        .eq('bot_id', botId);
+      await supabaseAdmin.from('chat_logs').insert({
+        session_id: sessionId, 
+        role: 'user', 
+        content: message, 
+        bot_id: botId,
+        intent_score: 0 
+      });
       
-      hasAnyContactOrMeeting = (allContacts?.length ?? 0) > 0;
-    } catch (e) {
-      // Ignorar error
-    }
-    
-    // Guardar mensajes SOLO si hay contacto o reunión agendada
-    if (hasAnyContactOrMeeting) {
-      try {
-        await supabaseAdmin.from('chat_logs').insert({
-          session_id: sessionId, 
-          role: 'user', 
-          content: message, 
-          bot_id: botId,
-          intent_score: 0 
-        });
-        
-        await supabaseAdmin.from('chat_logs').insert({
-          session_id: sessionId, 
-          role: 'bot', 
-          content: parsedResponse.reply, 
-          bot_id: botId, 
-          intent_score: parsedResponse.intent_score || 0 
-        });
-        
-        log('info', 'Mensajes guardados (hay contacto/reunión)');
-      } catch (e: any) {
-        log('error', 'Error guardando mensajes', { error: e.message });
-        // Continuar aunque falle el guardado
-      }
-    } else {
-      log('info', 'Mensajes NO guardados (sin contacto ni reunión agendada)');
+      await supabaseAdmin.from('chat_logs').insert({
+        session_id: sessionId, 
+        role: 'bot', 
+        content: parsedResponse.reply, 
+        bot_id: botId, 
+        intent_score: parsedResponse.intent_score || 0 
+      });
+      
+      log('info', 'Mensajes guardados en historial');
+    } catch (e: any) {
+      log('error', 'Error guardando mensajes', { error: e.message });
+      // Continuar aunque falle el guardado
     }
 
     // 11. VERIFICAR Y ENVIAR ALERTA DE LEAD (si el score supera el threshold)
