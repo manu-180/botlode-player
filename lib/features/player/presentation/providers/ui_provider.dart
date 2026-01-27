@@ -2,6 +2,7 @@
 import 'dart:ui';
 import 'package:botlode_player/core/services/chat_persistence_service.dart';
 import 'package:botlode_player/features/player/presentation/providers/chat_provider.dart';
+import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
@@ -26,12 +27,19 @@ final pointerPositionProvider = StateProvider<Offset?>((ref) => null);
 //asdsad
 final isHoveredExternalProvider = StateProvider<bool>((ref) => false);
 
-// ⬅️ MEJORADO: Reload inicia un NUEVO chat (nuevo sessionId + estado limpio)
+// ⬅️ MEJORADO: Reload limpia pantalla, resetea estado y olvida contexto (sin borrar historial BD)
 final chatResetProvider = Provider((ref) {
   return () {
-    // ⬅️ Iniciar un chat completamente nuevo (nuevo sessionId = nuevo contexto)
+    // ⬅️ PASO 1: Limpiar chat (pantalla en blanco, nuevo sessionId, estado idle)
     final controller = ref.read(chatControllerProvider.notifier);
     controller.clearChat();
-    print("🔄 Nuevo chat iniciado: sessionId nuevo, estado limpio, bot empieza desde cero");
+    
+    // ⬅️ PASO 2: Resetear mood del bot a 'idle' (estado normal)
+    ref.read(botMoodProvider.notifier).state = 0; // 0 = idle
+    
+    // ⬅️ PASO 3: Invalidar provider para forzar rebuild completo
+    ref.invalidate(chatControllerProvider);
+    
+    print("🔄 Reload completo: pantalla en blanco, bot en estado 'idle', nuevo contexto (bot olvidó todo, historial BD intacto)");
   };
 });

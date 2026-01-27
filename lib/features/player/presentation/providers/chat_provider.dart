@@ -121,10 +121,10 @@ class ChatController extends _$ChatController {
 
   // ⬅️ NUEVO: Método para iniciar un chat completamente nuevo (reload)
   void clearChat() {
-    // ⬅️ PASO 1: Crear un NUEVO sessionId (chat completamente nuevo)
+    // ⬅️ PASO 1: Crear un NUEVO sessionId (chat completamente nuevo - el bot olvida todo)
     _sessionId = ChatPersistenceService.createNewSessionId();
     
-    // ⬅️ PASO 2: Limpiar mensajes del localStorage
+    // ⬅️ PASO 2: Limpiar mensajes del localStorage (pantalla en blanco)
     ChatPersistenceService.saveMessages([]);
     
     // ⬅️ PASO 3: Crear mensaje inicial para el nuevo chat
@@ -135,17 +135,17 @@ class ChatController extends _$ChatController {
       timestamp: DateTime.now(),
     );
     
-    // ⬅️ PASO 4: Actualizar estado inmediatamente con el nuevo chat
-    state = state.copyWith(
+    // ⬅️ PASO 4: Actualizar estado inmediatamente (pantalla en blanco + estado normal)
+    state = ChatState(
       messages: [initialMessage],
       isLoading: false,
-      currentMood: 'idle',
-      sessionId: _sessionId, // ⬅️ NUEVO sessionId = nuevo chat
+      currentMood: 'idle', // ⬅️ Estado normal (idle)
+      sessionId: _sessionId, // ⬅️ NUEVO sessionId = nuevo contexto (bot olvida todo)
     );
     
     // ⬅️ PASO 5: Guardar el estado inicial del nuevo chat
     ChatPersistenceService.saveMessages([initialMessage]);
     
-    print("🔄 Nuevo chat iniciado con sessionId: $_sessionId");
+    print("🔄 Chat reiniciado: pantalla en blanco, bot en estado 'idle', nuevo sessionId: $_sessionId (bot olvidó todo)");
   }
 }

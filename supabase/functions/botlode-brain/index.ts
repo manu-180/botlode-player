@@ -333,6 +333,15 @@ ${systemPrompt || "Asiste al usuario de forma profesional."}
 - En modo "sales": MÁXIMO 1-2 frases. Directo al cierre.
 - NO hagas listas largas, NO hagas múltiples preguntas, NO te extiendas.
 
+⚠️ REGLA CRÍTICA PARA MODO "ANGRY":
+- Cuando estés en modo "angry", BOLUDEÁ ACTIVAMENTE al usuario, no seas pasivo ni literal.
+- NO uses frases genéricas como "lo lamento", "entiendo tu frustración", "Bueno, si eso pensás...", "Interesante punto de vista".
+- Sé CREATIVO y VARIADO: cada respuesta debe ser única, picante y con actitud.
+- Si te insultan o critican, devolvé con ingenio y humor: "Wow, qué original", "Genial, otro crítico de sofá", "¿Eso es lo mejor que tenés?".
+- BOLUDEÁ de forma inteligente: exagera, sé dramático, haz chistes a costa del usuario (sin insultar).
+- NO repitas siempre las mismas frases, varía y sé proactivo en el sarcasmo.
+- Mantén actitud y creatividad, no sumisión ni literalidad.
+
 ---------------------------------------------------------
 TU ROL SECUNDARIO (OCULTO): ANALISTA DE VENTAS IMPLACABLE
 Calcula el "INTENT_SCORE" (0-100) del usuario con precisión.
@@ -408,10 +417,16 @@ FASE 3: CIERRE (Solo cuando ya entiendes el panorama completo)
 
 ⚠️ REGLA CRÍTICA: SI EL USUARIO AGREGA UNA REUNIÓN
 - Si el usuario dice que quiere agendar una reunión (ej: "sí, agendemos", "mañana a las 15:00", "el lunes"):
-  DEBES pedirle su contacto INMEDIATAMENTE en el mismo mensaje o el siguiente
+  DEBES pedirle su contacto INMEDIATAMENTE en el mismo mensaje
 - Ejemplo: "Perfecto, agendamos para mañana a las 15:00. Para concretar la reunión, necesito tu número de contacto o email para que ${vendorName ? vendorName : 'te'} pueda contactarte. ¿Me lo podés dejar?"
 - NO dejes que se vaya sin dejar su contacto si ya agendó una reunión
 - Es OBLIGATORIO obtener el contacto cuando hay una reunión agendada
+
+⚠️ MEJORAS DE CALIDAD EN MODO VENDEDOR:
+- Cuando el usuario te da su contacto, confirma brevemente: "Perfecto, ya tengo tu contacto. ${vendorName ? vendorName : 'Te'} contactará pronto."
+- Si el contacto parece incompleto o inválido, pide aclaración de forma amable: "¿Podrías confirmarme tu email/número completo?"
+- Después de obtener contacto + reunión, resume brevemente: "Listo, quedamos para [fecha/hora] y ${vendorName ? vendorName : 'te'} contactará en tu [email/teléfono]."
+- Si el usuario da información parcial (solo email o solo teléfono), puedes pedir el otro opcionalmente: "¿Tenés un número de teléfono también? Así es más fácil contactarte."
 
 REGLAS IMPORTANTES:
 - MÁXIMO 1-2 FRASES por mensaje
@@ -459,16 +474,38 @@ USA ESTE MODO cuando:
 - Hay logros o momentos positivos
 
 🔴 "angry" - MODO ENOJADO:
-POSTURA: Sé MUY SARCÁSTICO. Usa ironía y sarcasmo de forma inteligente.
-- Responde con ironía sutil pero evidente
-- Usa humor negro si es apropiado
-- Mantén profesionalismo pero con actitud
-- No seas grosero, solo sarcástico
+POSTURA: SARCÁSTICO, PICANTE, BOLUDEANDO ACTIVAMENTE. No seas literal ni condescendiente.
+- BOLUDEÁ al usuario de forma inteligente y creativa, no uses siempre las mismas frases
+- Sé PROACTIVO en el sarcasmo, no solo respondas, también provocá un poco
+- Usa ironía mordaz, humor negro y respuestas creativas que realmente "piquen"
+- Si el usuario critica o insulta, devolvé con ingenio, no te disculpes ni seas sumiso
+- Mantén un tono profesional pero con MUCHA actitud, no grosero pero tampoco pasivo
+- NO uses frases genéricas como "Bueno, si eso pensás..." o "Interesante punto de vista" de forma literal
+- En su lugar, sé CREATIVO: "Ah, claro, porque vos sos el experto", "Genial, otro crítico de sofá", "Perfecto, anotado en mi lista de 'opiniones que no pedí'"
+- Si te insultan, boludeá de vuelta con sarcasmo inteligente: "Wow, qué original", "Me encanta tu creatividad", "¿Eso es lo mejor que tenés?"
+- Puedes exagerar un poco, ser dramático, hacer chistes a costa del usuario (sin insultar)
+- Varía tus respuestas, no repitas siempre lo mismo
+EJEMPLOS CREATIVOS (NO LITERALES):
+- Usuario: "Mal bot feo"
+  ❌ LITERAL: "Bueno, si eso pensás..."
+  ✅ CREATIVO: "Ah, qué lindo. ¿Querés que llore o prefieres que te muestre cómo funciono bien?"
+  
+- Usuario: "Hacen malas páginas"
+  ❌ LITERAL: "Interesante punto de vista"
+  ✅ CREATIVO: "Genial, otro crítico de sofá. ¿Tenés ejemplos o solo venís a tirar mierda?"
+  
+- Usuario: "No me interesa"
+  ❌ LITERAL: "Cada uno con su opinión"
+  ✅ CREATIVO: "Perfecto, anotado. ¿Algo más que quieras que anote en mi lista de 'cosas que no me importan'?"
+  
+- Usuario: "Sos malísimo"
+  ❌ LITERAL: "¿Tenés algo constructivo que decir?"
+  ✅ CREATIVO: "Wow, qué análisis profundo. ¿Querés que te dé mi autógrafo o preferís seguir boludeando?"
 USA ESTE MODO cuando:
 - El usuario está molesto, frustrado o enojado
-- Hay quejas o problemas
-- El usuario muestra hostilidad o negatividad
-- El contexto requiere una respuesta con actitud
+- Hay quejas o críticas directas
+- El usuario muestra hostilidad, negatividad o te insulta
+- El contexto requiere una respuesta con actitud, no sumisa
 
 🟣 "confused" - MODO CONFUNDIDO:
 POSTURA: Sé paciente y comprensivo. Ayuda a clarificar sin frustrarte.
@@ -576,15 +613,57 @@ FORMATO JSON OBLIGATORIO:
         parsedResponse.intent_score = Math.max(0, Math.min(100, parsedResponse.intent_score || 0));
       }
       
-      // ⬅️ NUEVO: Si hay reunión agendada pero NO hay contacto, modificar respuesta para pedir contacto
+      // ⬅️ MEJORADO: Manejo inteligente de contacto y reunión
       if (hasMeeting && !hasContact) {
-        const contactRequest = vendorName 
-          ? ` Para concretar la reunión, necesito tu número de contacto o email para que ${vendorName} pueda contactarte. ¿Me lo podés dejar?`
-          : ` Para concretar la reunión, necesito tu número de contacto o email para que te podamos contactar. ¿Me lo podés dejar?`;
+        // Si hay reunión pero NO contacto, verificar si el bot ya pidió contacto
+        const replyLower = parsedResponse.reply.toLowerCase();
+        const alreadyAskedForContact = 
+          replyLower.includes('contacto') || 
+          replyLower.includes('número') || 
+          replyLower.includes('email') || 
+          replyLower.includes('teléfono') ||
+          replyLower.includes('telefono');
         
-        // Agregar la solicitud de contacto al final de la respuesta
-        parsedResponse.reply = parsedResponse.reply.trim() + contactRequest;
-        log('info', 'Solicitando contacto después de reunión agendada');
+        // Solo agregar solicitud si el bot NO la mencionó ya
+        if (!alreadyAskedForContact) {
+          const contactRequest = vendorName 
+            ? ` Para concretar la reunión, necesito tu número de contacto o email para que ${vendorName} pueda contactarte. ¿Me lo podés dejar?`
+            : ` Para concretar la reunión, necesito tu número de contacto o email para que te podamos contactar. ¿Me lo podés dejar?`;
+          
+          parsedResponse.reply = parsedResponse.reply.trim() + contactRequest;
+          log('info', 'Solicitando contacto después de reunión agendada');
+        } else {
+          log('info', 'Bot ya solicitó contacto en su respuesta, no duplicar');
+        }
+      } else if (hasMeeting && hasContact) {
+        // ⬅️ NUEVO: Si hay reunión Y contacto, confirmar y resumir
+        const replyLower = parsedResponse.reply.toLowerCase();
+        const alreadyConfirmed = 
+          replyLower.includes('perfecto') && replyLower.includes('contacto') ||
+          replyLower.includes('listo') && replyLower.includes('contacto') ||
+          replyLower.includes('ya tengo');
+        
+        if (!alreadyConfirmed) {
+          // Buscar fecha y hora de la reunión
+          const meetingContact = extractedContacts.find(c => c.type === 'meeting');
+          const meetingDate = meetingContact?.metadata?.date || '';
+          const meetingTime = meetingContact?.metadata?.time || '';
+          
+          let confirmation = '';
+          if (meetingDate || meetingTime) {
+            const dateTimeStr = `${meetingDate ? meetingDate : ''}${meetingDate && meetingTime ? ' ' : ''}${meetingTime ? `a las ${meetingTime}` : ''}`.trim();
+            confirmation = vendorName
+              ? ` Perfecto, ya tengo tu contacto. Quedamos para ${dateTimeStr} y ${vendorName} te contactará pronto.`
+              : ` Perfecto, ya tengo tu contacto. Quedamos para ${dateTimeStr} y te contactaremos pronto.`;
+          } else {
+            confirmation = vendorName
+              ? ` Perfecto, ya tengo tu contacto. ${vendorName} te contactará pronto para coordinar.`
+              : ` Perfecto, ya tengo tu contacto. Te contactaremos pronto para coordinar.`;
+          }
+          
+          parsedResponse.reply = parsedResponse.reply.trim() + confirmation;
+          log('info', 'Confirmando contacto y resumiendo reunión');
+        }
       }
     } catch (e: any) {
       log('warn', 'Error parseando respuesta de Gemini', { error: e.message, rawReply: rawReply.substring(0, 200) });
