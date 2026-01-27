@@ -305,13 +305,19 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
         double targetWidth = _isHovered ? expandedWidth : closedSize;
         
         // ⬅️ COLORES ADAPTATIVOS según tema (sutil pero profesional)
+        // ESTRATEGIA: Mantener identidad visual (burbuja oscura) pero optimizar contraste
         final bubbleColor = isDarkMode 
             ? const Color(0xFF2A2A3E)  // Dark: Mantener el color actual (te gusta)
-            : const Color(0xFF3A3A4E); // Light: Ligeramente más claro pero mantiene identidad
+            : const Color(0xFF4A4A5E); // Light: Un poco más claro para mejor contraste, pero mantiene identidad oscura
         
         final borderColor = isDarkMode
             ? Colors.white.withOpacity(0.15)
-            : Colors.black.withOpacity(0.1);
+            : Colors.white.withOpacity(0.2); // Light: Borde más visible para definir mejor la burbuja
+        
+        // ⬅️ CRÍTICO: Texto siempre claro para máximo contraste con burbuja oscura
+        // Esto garantiza legibilidad perfecta en ambos modos manteniendo la identidad visual
+        final textColor = Colors.white; // Siempre blanco para contraste óptimo
+        final subtextColor = Colors.white.withOpacity(0.85); // Subtexto con opacidad sutil
         
         return GestureDetector(
           onTap: () => ref.read(isOpenSimpleProvider.notifier).state = true,
@@ -356,7 +362,7 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
                                 name,
                                 textAlign: TextAlign.right,
                                 style: TextStyle(
-                                  color: isDarkMode ? Colors.white : Colors.black87,
+                                  color: textColor, // ⬅️ Siempre blanco para contraste óptimo
                                   fontWeight: FontWeight.w900,
                                   fontSize: 15,
                                 ),
@@ -367,9 +373,7 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
                                   subtext,
                                   textAlign: TextAlign.right,
                                   style: TextStyle(
-                                    color: isDarkMode 
-                                        ? Colors.white.withOpacity(0.85)
-                                        : Colors.black87.withOpacity(0.7),
+                                    color: subtextColor, // ⬅️ Blanco con opacidad para jerarquía visual
                                     fontSize: 10,
                                   ),
                                   overflow: TextOverflow.ellipsis,

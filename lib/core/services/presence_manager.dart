@@ -31,6 +31,15 @@ class PresenceManager {
     _tabCloseSubscription = html.window.onBeforeUnload.listen((event) {
       // ⬅️ CRÍTICO: Marcar como offline al cerrar pestaña (síncrono y confiable)
       print("🚪 Pestaña cerrada -> Marcando como OFFLINE");
+      
+      // ⬅️ Cancelar todos los timers para evitar actualizaciones posteriores
+      _heartbeatTimer?.cancel();
+      _debounceTimer?.cancel();
+      _retryTimer?.cancel();
+      
+      // ⬅️ Forzar estado offline
+      _shouldBeOnline = false;
+      
       try {
         final url = '${AppConfig.supabaseUrl}/rest/v1/session_heartbeats?on_conflict=session_id';
         final body = jsonEncode({
@@ -40,33 +49,58 @@ class PresenceManager {
           'last_seen': DateTime.now().toIso8601String(),
         });
         
-        // ⬅️ Usar sendBeacon (más confiable para cierre de pestaña, no bloquea)
-        // sendBeacon garantiza que se envíe incluso si la pestaña se cierra
-        final blob = html.Blob([utf8.encode(body)], 'application/json');
-        final success = html.window.navigator.sendBeacon(
-          url,
-          blob,
-        );
+        // ⬅️ ESTRATEGIA DUAL: Intentar sendBeacon primero, luego XHR síncrono como fallback
+        // sendBeacon puede fallar en algunos navegadores con JSON, así que siempre tenemos fallback
         
-        if (success) {
-          print("✅ Estado OFFLINE enviado con sendBeacon antes de cerrar pestaña");
-        } else {
-          // ⬅️ Fallback: Intentar petición síncrona si sendBeacon falla
-          try {
-            final xhr = html.HttpRequest();
-            xhr.open('POST', url);
-            xhr.setRequestHeader('apikey', AppConfig.supabaseAnonKey);
-            xhr.setRequestHeader('Authorization', 'Bearer ${AppConfig.supabaseAnonKey}');
-            xhr.setRequestHeader('Content-Type', 'application/json');
-            xhr.setRequestHeader('Prefer', 'resolution=merge-duplicates');
-            xhr.send(body);
-            print("✅ Estado OFFLINE enviado con XHR síncrono");
-          } catch (e2) {
-            print("⚠️ Fallback XHR también falló: $e2");
+        // 1. Intentar sendBeacon (no bloquea, más confiable)
+        try {
+          final blob = html.Blob([utf8.encode(body)], 'application/json');
+          final beaconSuccess = html.window.navigator.sendBeacon(
+            url,
+            blob,
+          );
+          
+          if (beaconSuccess) {
+            print("✅ Estado OFFLINE enviado con sendBeacon antes de cerrar pestaña");
+            return; // Si sendBeacon funciona, no necesitamos XHR
           }
+        } catch (beaconError) {
+          print("⚠️ sendBeacon falló: $beaconError, usando fallback XHR");
+        }
+        
+        // 2. Fallback: XHR SÍNCRONO (bloquea pero garantiza envío)
+        try {
+          final xhr = html.HttpRequest();
+          // ⬅️ CRÍTICO: async: false hace que sea síncrono (bloquea hasta completar)
+          // En dart:html, open() acepta async como parámetro opcional (por defecto true)
+          xhr.open('POST', url, async: false);
+          xhr.setRequestHeader('apikey', AppConfig.supabaseAnonKey);
+          xhr.setRequestHeader('Authorization', 'Bearer ${AppConfig.supabaseAnonKey}');
+          xhr.setRequestHeader('Content-Type', 'application/json');
+          xhr.setRequestHeader('Prefer', 'resolution=merge-duplicates');
+          
+          // ⬅️ Enviar de forma síncrona (bloquea hasta que se complete)
+          xhr.send(body);
+          
+          // ⬅️ Verificar respuesta (solo si la petición se completó)
+          final status = xhr.status;
+          if (xhr.readyState == html.HttpRequest.DONE && status != null) {
+            if (status >= 200 && status < 300) {
+              print("✅ Estado OFFLINE enviado con XHR síncrono (status: $status)");
+            } else {
+              print("⚠️ XHR síncrono completó pero con status: $status, response: ${xhr.responseText}");
+            }
+          } else {
+            print("⚠️ XHR síncrono no completó (readyState: ${xhr.readyState}, status: $status)");
+          }
+        } catch (xhrError) {
+          print("⚠️ XHR síncrono también falló: $xhrError");
+          // ⬅️ Último recurso: Intentar con fetch keepalive (si está disponible)
+          // Nota: fetch keepalive no está disponible en dart:html, así que esto es solo para logs
+          print("⚠️ No hay más métodos disponibles para enviar estado offline");
         }
       } catch (e) {
-        print("⚠️ Error al marcar offline en cierre de pestaña: $e");
+        print("⚠️ Error general al marcar offline en cierre de pestaña: $e");
       }
     });
   }
