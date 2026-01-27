@@ -99,9 +99,11 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
 
     // COLORES
     final Color solidBgColor = isDarkMode ? const Color(0xFF181818) : const Color(0xFFF9F9F9); 
-    final Color inputFill = isDarkMode ? const Color(0xFF252525) : const Color(0xFFFFFFFF); // ⬅️ Input más oscuro
-    final Color borderColor = isDarkMode ? const Color(0xFF3A3A3A) : Colors.black12; // ⬅️ Borde más visible
-    final Color sendButtonColor = const Color(0xFF2196F3); // ⬅️ Azul estándar profesional
+    final Color borderColor = isDarkMode ? const Color(0xFF3A3A3A) : Colors.black12; // ⬅️ Borde general
+    // ⬅️ NUEVO: Input con diseño profesional y elegante
+    final Color inputFill = isDarkMode ? const Color(0xFF1F1F1F) : const Color(0xFFFFFFFF);
+    final Color inputBorder = isDarkMode ? const Color(0xFF2D2D2D) : Colors.grey.shade300;
+    final Color inputBorderFocused = isDarkMode ? const Color(0xFF4A4A4A) : Colors.grey.shade500;
 
     final reversedMessages = chatState.messages.reversed.toList();
 
@@ -236,109 +238,28 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                           ),
                         ),
                         
-                        // INPUT AREA MEJORADO
+                        // ⬅️ INPUT AREA REDISEÑADO - Estilo profesional y moderno
                         Container(
-                          padding: EdgeInsets.fromLTRB(16, 12, 16, 16 + (isMobile ? MediaQuery.of(context).padding.bottom : 0)),
+                          padding: EdgeInsets.fromLTRB(20, 16, 20, 20 + (isMobile ? MediaQuery.of(context).padding.bottom : 0)),
                           decoration: BoxDecoration(
                             color: solidBgColor,
-                            // ⬅️ Sombra sutil hacia arriba
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
-                                blurRadius: 8,
-                                offset: const Offset(0, -2),
+                                color: Colors.black.withOpacity(0.15),
+                                blurRadius: 12,
+                                offset: const Offset(0, -4),
                               ),
                             ],
                           ),
-                          child: Container(
-                            decoration: BoxDecoration(
-                              color: inputFill, 
-                              borderRadius: BorderRadius.circular(28), // ⬅️ Radio más suave
-                              border: Border.all(
-                                color: borderColor,
-                                width: 1.5, // ⬅️ Borde más visible
-                              ),
-                              // ⬅️ Sombra interna sutil
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.05),
-                                  blurRadius: 4,
-                                  offset: const Offset(0, 2),
-                                ),
-                              ],
-                            ),
-                            child: Row(
-                              children: [
-                                const SizedBox(width: 18),
-                                Expanded(
-                                  child: TextField(
-                                    controller: _textController,
-                                    enabled: isOnline,
-                                    onSubmitted: (_) => isOnline ? _sendMessage() : null,
-                                    style: TextStyle(
-                                      color: isDarkMode ? Colors.white : Colors.black, 
-                                      fontSize: 15, // ⬅️ Texto un poco más grande
-                                      fontWeight: FontWeight.w400,
-                                    ),
-                                    cursorColor: sendButtonColor, // ⬅️ Cursor azul
-                                    decoration: InputDecoration(
-                                      hintText: isOnline ? "Escribe un mensaje..." : "Sin conexión",
-                                      hintStyle: TextStyle(
-                                        color: isDarkMode ? Colors.white38 : Colors.black38, 
-                                        fontSize: 15,
-                                        fontWeight: FontWeight.w400,
-                                      ),
-                                      border: InputBorder.none,
-                                      contentPadding: const EdgeInsets.symmetric(vertical: 15),
-                                      isDense: true,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                // ⬅️ BOTÓN DE ENVIAR MEJORADO
-                                AnimatedScale(
-                                  duration: const Duration(milliseconds: 150),
-                                  scale: isOnline ? 1.0 : 0.9,
-                                  child: Container(
-                                    margin: const EdgeInsets.all(4),
-                                    decoration: BoxDecoration(
-                                      gradient: isOnline
-                                          ? const LinearGradient(
-                                              colors: [Color(0xFF2196F3), Color(0xFF1976D2)],
-                                              begin: Alignment.topLeft,
-                                              end: Alignment.bottomRight,
-                                            )
-                                          : null,
-                                      color: isOnline ? null : Colors.grey.shade400,
-                                      shape: BoxShape.circle,
-                                      boxShadow: isOnline ? [
-                                        BoxShadow(
-                                          color: const Color(0xFF2196F3).withOpacity(0.3),
-                                          blurRadius: 8,
-                                          offset: const Offset(0, 2),
-                                        ),
-                                      ] : null,
-                                    ),
-                                    child: Material(
-                                      color: Colors.transparent,
-                                      child: InkWell(
-                                        borderRadius: BorderRadius.circular(24),
-                                        onTap: isOnline ? _sendMessage : null,
-                                        child: Padding(
-                                          padding: const EdgeInsets.all(10),
-                                          child: Icon(
-                                            Icons.send_rounded, 
-                                            color: Colors.white,
-                                            size: 22,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                              ],
-                            ),
+                          child: _ProfessionalInputField(
+                            controller: _textController,
+                            isOnline: isOnline,
+                            isDarkMode: isDarkMode,
+                            themeColor: themeColor,
+                            inputFill: inputFill,
+                            inputBorder: inputBorder,
+                            inputBorderFocused: inputBorderFocused,
+                            onSend: _sendMessage,
                           ),
                         ),
                       ],
@@ -347,6 +268,155 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                   ],
                 ),
         ),
+    );
+  }
+}
+
+// ⬅️ INPUT PROFESIONAL - Diseño moderno y elegante
+class _ProfessionalInputField extends StatefulWidget {
+  final TextEditingController controller;
+  final bool isOnline;
+  final bool isDarkMode;
+  final Color themeColor;
+  final Color inputFill;
+  final Color inputBorder;
+  final Color inputBorderFocused;
+  final VoidCallback onSend;
+
+  const _ProfessionalInputField({
+    required this.controller,
+    required this.isOnline,
+    required this.isDarkMode,
+    required this.themeColor,
+    required this.inputFill,
+    required this.inputBorder,
+    required this.inputBorderFocused,
+    required this.onSend,
+  });
+
+  @override
+  State<_ProfessionalInputField> createState() => _ProfessionalInputFieldState();
+}
+
+class _ProfessionalInputFieldState extends State<_ProfessionalInputField> {
+  final FocusNode _focusNode = FocusNode();
+  bool _isFocused = false;
+  bool _hasText = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(() {
+      setState(() => _isFocused = _focusNode.hasFocus);
+    });
+    widget.controller.addListener(() {
+      setState(() => _hasText = widget.controller.text.trim().isNotEmpty);
+    });
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final borderColor = _isFocused ? widget.inputBorderFocused : widget.inputBorder;
+    
+    return Container(
+      decoration: BoxDecoration(
+        color: widget.inputFill,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: borderColor,
+          width: 1.0,
+        ),
+        boxShadow: _isFocused ? [
+          BoxShadow(
+            color: widget.themeColor.withOpacity(0.1),
+            blurRadius: 12,
+            spreadRadius: 0,
+          ),
+        ] : null,
+      ),
+      child: Row(
+        children: [
+          const SizedBox(width: 20),
+          Expanded(
+            child: TextField(
+              controller: widget.controller,
+              focusNode: _focusNode,
+              enabled: widget.isOnline,
+              onSubmitted: (_) => widget.isOnline && _hasText ? widget.onSend() : null,
+              style: TextStyle(
+                color: widget.isDarkMode ? Colors.white : Colors.black87,
+                fontSize: 15,
+                fontWeight: FontWeight.w400,
+                letterSpacing: 0.2,
+              ),
+              cursorColor: widget.themeColor,
+              decoration: InputDecoration(
+                hintText: widget.isOnline ? "Escribe un mensaje..." : "Sin conexión",
+                hintStyle: TextStyle(
+                  color: widget.isDarkMode ? Colors.white.withOpacity(0.4) : Colors.black.withOpacity(0.4),
+                  fontSize: 15,
+                  fontWeight: FontWeight.w400,
+                ),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                isDense: true,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          // ⬅️ BOTÓN DE ENVIAR - Estilo minimalista y elegante
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOutCubic,
+            margin: const EdgeInsets.all(6),
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              gradient: (widget.isOnline && _hasText)
+                  ? LinearGradient(
+                      colors: [
+                        widget.themeColor,
+                        widget.themeColor.withOpacity(0.8),
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    )
+                  : null,
+              color: (widget.isOnline && _hasText) ? null : Colors.grey.withOpacity(0.3),
+              shape: BoxShape.circle,
+              boxShadow: (widget.isOnline && _hasText) ? [
+                BoxShadow(
+                  color: widget.themeColor.withOpacity(0.4),
+                  blurRadius: 8,
+                  spreadRadius: 0,
+                  offset: const Offset(0, 2),
+                ),
+              ] : null,
+            ),
+            child: Material(
+              color: Colors.transparent,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(20),
+                onTap: (widget.isOnline && _hasText) ? widget.onSend : null,
+                child: Center(
+                  child: Icon(
+                    Icons.send_rounded,
+                    color: (widget.isOnline && _hasText) ? Colors.white : Colors.grey.shade600,
+                    size: 20,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 6),
+        ],
+      ),
     );
   }
 }

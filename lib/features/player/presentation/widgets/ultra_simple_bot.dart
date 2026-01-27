@@ -133,8 +133,8 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
     required String name,
     required String subtext,
   }) {
-    const double closedSize = 72.0;
-    const double headSize = 58.0;
+    const double closedSize = 80.0; // ⬅️ Aumentado de 72 a 80
+    const double headSize = 68.0; // ⬅️ Aumentado de 58 a 68
     const double padding = 25.0; 
     const double extraSpace = 40.0; 
     

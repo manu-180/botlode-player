@@ -12,7 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String DEPLOY_VERSION = "PLAYER PROGRESIVO v5.12 - PASO 5.12 - Contextual Max Distance";
+const String DEPLOY_VERSION = "PLAYER PROGRESIVO v5.16 - PASO 5.16 - Professional Input Redesign";
 
 void main() {
   runZonedGuarded(() async {

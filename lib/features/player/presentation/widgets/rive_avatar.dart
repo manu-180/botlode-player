@@ -109,7 +109,7 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       // Margen inferior total: 40 (screen) + 7 (margin container) + 29 (mitad avatar) ≈ 76px
       myCenter = Offset(screenSize.width - 76, screenSize.height - 76);
       sensitivity = 350.0; // Rango medio para la burbuja
-      maxDistance = 900.0; // ⬅️ BURBUJA: Rango más compacto (900px)
+      maxDistance = 500.0; // ⬅️ BURBUJA: Rango ajustado (500px)
     } else {
       // --- MODO CHAT PANEL ---
       // Ancho Panel: 380px. Padding right: 28px.
@@ -122,7 +122,7 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       
       myCenter = Offset(chatCenterX, chatAvatarCenterY);
       sensitivity = 600.0; // ⬅️ Sensibilidad ajustada
-      maxDistance = 1500.0; // ⬅️ CHAT: Rango más generoso (1500px)
+      maxDistance = 600.0; // ⬅️ CHAT: Rango ajustado (600px)
     }
 
     // 3. DELEGAR CÁLCULO AL CONTROLLER
@@ -143,8 +143,12 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
        if (_moodInput != null) _moodInput!.value = next.toDouble();
     });
 
+    // ⬅️ Tamaño según contexto: Burbuja más pequeña, Chat más grande
+    final double avatarSize = widget.isBubble ? 68.0 : 300.0;
+    
     return SizedBox(
-      width: 300, height: 300,
+      width: avatarSize, 
+      height: avatarSize,
       child: riveFileAsync.when(
         data: (riveFile) {
           // ⬅️ NO especificar artboard: usar el artboard por defecto del archivo
