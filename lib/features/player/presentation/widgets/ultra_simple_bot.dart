@@ -1,5 +1,7 @@
 // ULTRA SIMPLE - Burbuja + Chat COMPLEJO (chat_panel_view) para testing
+import 'package:botlode_player/core/services/presence_manager_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
+import 'package:botlode_player/features/player/presentation/providers/chat_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/loader_provider.dart';
 import 'package:botlode_player/features/player/presentation/views/chat_panel_view.dart';
 import 'package:botlode_player/features/player/presentation/widgets/rive_avatar.dart';
@@ -18,11 +20,52 @@ class UltraSimpleBot extends ConsumerStatefulWidget {
 
 class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
   bool _isHovered = false;
+  bool _hasInitializedPresence = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // ⬅️ Pre-inicializar providers necesarios para PresenceManager
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      try {
+        // 1. Asegurar que chatControllerProvider esté inicializado (necesario para sessionId)
+        ref.read(chatControllerProvider);
+        // 2. Forzar creación del PresenceManager para que esté disponible
+        ref.read(presenceManagerProvider);
+        _hasInitializedPresence = true;
+        print("✅ PresenceManager inicializado en UltraSimpleBot");
+      } catch (e) {
+        print("⚠️ Error al inicializar PresenceManager: $e");
+      }
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     final isOpen = ref.watch(isOpenSimpleProvider);
     final screenSize = MediaQuery.of(context).size;
+    
+    // ⬅️ NUEVO: Sincronizar estado online/offline con el historial
+    ref.listen(isOpenSimpleProvider, (previous, current) {
+      try {
+        // Asegurar que el provider esté inicializado
+        if (!_hasInitializedPresence) {
+          ref.read(presenceManagerProvider);
+          _hasInitializedPresence = true;
+        }
+        
+        final manager = ref.read(presenceManagerProvider);
+        if (current) {
+          print("🟢 Chat Abierto (UltraSimple) -> Enviando ONLINE");
+          manager.setOnline();
+        } else {
+          print("🔴 Chat Cerrado (UltraSimple) -> Enviando OFFLINE");
+          manager.setOffline();
+        }
+      } catch (e) {
+        print("⚠️ Error al acceder a PresenceManager (UltraSimple): $e");
+      }
+    });
     
     // ⬅️ RESPONSIVE: Detectar móvil y calcular dimensiones seguras
     final bool isMobile = screenSize.width < 600;
