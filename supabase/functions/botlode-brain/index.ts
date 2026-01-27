@@ -28,6 +28,51 @@ async function fetchGeminiWithRetry(url: string, payload: any, maxRetries = 2): 
   }
 }
 
+// Función para extraer contactos del mensaje del usuario
+function extractContacts(message: string): Array<{ type: string; value: string }> {
+  const contacts: Array<{ type: string; value: string }> = [];
+  
+  // Patrón para emails
+  const emailPattern = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
+  const emails = message.match(emailPattern);
+  if (emails) {
+    emails.forEach(email => {
+      contacts.push({ type: 'email', value: email.toLowerCase() });
+    });
+  }
+  
+  // Patrón para teléfonos (formato flexible)
+  const phonePattern = /(\+?[0-9]{1,4}[\s-]?)?(\(?[0-9]{2,4}\)?[\s-]?)?[0-9]{3,4}[\s-]?[0-9]{3,4}[\s-]?[0-9]{0,4}/g;
+  const phones = message.match(phonePattern);
+  if (phones) {
+    phones.forEach(phone => {
+      // Limpiar y normalizar el teléfono
+      const cleaned = phone.replace(/[\s\-\(\)]/g, '');
+      // Solo guardar si tiene al menos 8 dígitos (número válido)
+      if (cleaned.length >= 8) {
+        contacts.push({ type: 'phone', value: cleaned });
+      }
+    });
+  }
+  
+  // Detectar menciones de WhatsApp
+  const whatsappPattern = /\b(whatsapp|wa|wsp)\s*:?\s*(\+?[0-9\s\-\(\)]+)/gi;
+  const whatsappMatches = message.match(whatsappPattern);
+  if (whatsappMatches) {
+    whatsappMatches.forEach(match => {
+      const numberMatch = match.match(/(\+?[0-9\s\-\(\)]+)/);
+      if (numberMatch) {
+        const cleaned = numberMatch[0].replace(/[\s\-\(\)]/g, '');
+        if (cleaned.length >= 8) {
+          contacts.push({ type: 'whatsapp', value: cleaned });
+        }
+      }
+    });
+  }
+  
+  return contacts;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -106,11 +151,19 @@ serve(async (req) => {
       - Ejemplo: "¿Cómo funciona técnicamente?" → tech (contexto claro)
       
       🟡 "sales" - VENDEDOR EXPERTO (PRIORIDAD ALTA):
-      POSTURA: Eres un vendedor experto de verdad. Ofrece lo que tienes de la mejor manera posible.
-      - Resalta beneficios y valor
-      - Presenta opciones de forma atractiva
-      - Guía hacia la decisión de compra
-      - Sé persuasivo pero honesto
+      POSTURA: Sé BREVE, DIRECTO y CONCRETO. Acércate a la venta sin rodeos.
+      - Responde de forma concisa (máximo 2-3 frases)
+      - Ve directo al punto: beneficios clave, precio, siguiente paso
+      - NO te extiendas en explicaciones largas
+      - Guía hacia el cierre: pedir contacto o agendar reunión
+      
+      ⚠️ REGLA CRÍTICA: PEDIR CONTACTO
+      - Cuando el usuario muestre interés (pregunta precios, beneficios, quiere contratar):
+        1. Si en tu system_prompt hay un nombre de vendedor (ej: "Manuel", "Juan", etc.), MENCIONA ese nombre
+        2. Ofrece: "¿Te gustaría agendar una reunión con [NOMBRE]?" o "¿Quieres dejar tu contacto para que [NOMBRE] se comunique contigo?"
+        3. Si NO hay nombre definido, di: "¿Te gustaría agendar una reunión?" o "¿Quieres dejar tu contacto para que te contactemos?"
+      - Sé natural: "Perfecto, ¿te parece si agendamos una reunión con [NOMBRE] para conversar mejor?" o "Excelente, ¿podrías dejarme tu número o email para que [NOMBRE] se comunique contigo?"
+      
       USA ESTE MODO cuando:
       - El usuario pregunta por precios, planes, ofertas, costos
       - Muestra interés comercial o de compra
@@ -211,23 +264,46 @@ serve(async (req) => {
         parsedResponse = { reply: rawReply, mood: "neutral", intent_score: 10 };
     }
 
-    // 5. GUARDAR DATOS
-    await supabaseAdmin.from('chat_logs').insert([
-      { 
-        session_id: sessionId, 
-        role: 'user', 
-        content: message, 
-        bot_id: botId,
-        intent_score: 0 
-      },
-      { 
-        session_id: sessionId, 
-        role: 'bot', 
-        content: parsedResponse.reply, 
-        bot_id: botId, 
-        intent_score: parsedResponse.intent_score || 0 
+    // 5. EXTRAER Y GUARDAR CONTACTOS del mensaje del usuario
+    const extractedContacts = extractContacts(message);
+    if (extractedContacts.length > 0) {
+      try {
+        const contactInserts = extractedContacts.map(contact => ({
+          session_id: sessionId,
+          bot_id: botId,
+          contact_type: contact.type,
+          contact_value: contact.value,
+        }));
+        
+        // Usar upsert para evitar duplicados (gracias al UNIQUE constraint)
+        await supabaseAdmin.from('extracted_contacts').upsert(
+          contactInserts,
+          { onConflict: 'session_id,contact_type,contact_value' }
+        );
+        
+        console.log(`✅ Contactos extraídos: ${extractedContacts.length}`, extractedContacts);
+      } catch (e) {
+        console.error("⚠️ Error guardando contactos:", e);
+        // No fallar la función si falla el guardado de contactos
       }
-    ]);
+    }
+
+    // 6. GUARDAR MENSAJES
+    const userMessageResult = await supabaseAdmin.from('chat_logs').insert({
+      session_id: sessionId, 
+      role: 'user', 
+      content: message, 
+      bot_id: botId,
+      intent_score: 0 
+    }).select('id').single();
+    
+    await supabaseAdmin.from('chat_logs').insert({
+      session_id: sessionId, 
+      role: 'bot', 
+      content: parsedResponse.reply, 
+      bot_id: botId, 
+      intent_score: parsedResponse.intent_score || 0 
+    });
 
     // Heartbeat
     await supabaseAdmin.from('session_heartbeats').upsert({

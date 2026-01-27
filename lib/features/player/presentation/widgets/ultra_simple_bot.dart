@@ -1,4 +1,5 @@
 // ULTRA SIMPLE - Burbuja + Chat COMPLEJO (chat_panel_view) para testing
+import 'package:botlode_player/core/services/presence_manager.dart';
 import 'package:botlode_player/core/services/presence_manager_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/chat_provider.dart';
@@ -20,7 +21,8 @@ class UltraSimpleBot extends ConsumerStatefulWidget {
 
 class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
   bool _isHovered = false;
-  bool _hasInitializedPresence = false;
+  PresenceManager? _presenceManager; // ⬅️ NUEVO: Mantener referencia al manager
+  bool _lastKnownOpenState = false; // ⬅️ NUEVO: Trackear último estado conocido
 
   @override
   void initState() {
@@ -30,14 +32,32 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
       try {
         // 1. Asegurar que chatControllerProvider esté inicializado (necesario para sessionId)
         ref.read(chatControllerProvider);
-        // 2. Forzar creación del PresenceManager para que esté disponible
-        ref.read(presenceManagerProvider);
-        _hasInitializedPresence = true;
-        print("✅ PresenceManager inicializado en UltraSimpleBot");
+        print("✅ Providers inicializados en UltraSimpleBot");
+        
+        // ⬅️ NUEVO: Si el chat ya está abierto al inicializar, marcar como online
+        // Nota: El presenceManager se obtendrá en el build con ref.watch()
+        if (ref.read(isOpenSimpleProvider)) {
+          Future.microtask(() {
+            try {
+              final manager = ref.read(presenceManagerProvider);
+              manager.setOnline();
+              print("🟢 Chat ya estaba abierto -> Marcando ONLINE");
+            } catch (e) {
+              print("⚠️ Error al marcar online en initState: $e");
+            }
+          });
+        }
       } catch (e) {
-        print("⚠️ Error al inicializar PresenceManager: $e");
+        print("⚠️ Error al inicializar providers: $e");
       }
     });
+  }
+
+  @override
+  void dispose() {
+    // ⬅️ NUEVO: Asegurar que se marque como offline al dispose del widget
+    _presenceManager?.setOffline();
+    super.dispose();
   }
 
   @override
@@ -45,27 +65,62 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
     final isOpen = ref.watch(isOpenSimpleProvider);
     final screenSize = MediaQuery.of(context).size;
     
+    // ⬅️ CRÍTICO: Usar ref.watch() para mantener el provider vivo mientras el widget esté montado
+    // Esto evita que se dispose inmediatamente después de usarlo
+    final presenceManager = ref.watch(presenceManagerProvider);
+    _presenceManager = presenceManager; // Actualizar referencia
+    
     // ⬅️ NUEVO: Sincronizar estado online/offline con el historial
+    // ⚠️ IMPORTANTE: Usar Future.microtask para asegurar que se ejecute después del build
     ref.listen(isOpenSimpleProvider, (previous, current) {
-      try {
-        // Asegurar que el provider esté inicializado
-        if (!_hasInitializedPresence) {
-          ref.read(presenceManagerProvider);
-          _hasInitializedPresence = true;
+      // ⬅️ Solo procesar si el estado realmente cambió
+      if (previous == current) return;
+      
+      Future.microtask(() {
+        try {
+          if (current) {
+            print("🟢 Chat Abierto (UltraSimple) -> Enviando ONLINE");
+            presenceManager.setOnline();
+            _lastKnownOpenState = true;
+          } else {
+            print("🔴 Chat Cerrado (UltraSimple) -> Enviando OFFLINE");
+            presenceManager.setOffline();
+            _lastKnownOpenState = false;
+          }
+        } catch (e) {
+          print("⚠️ Error al acceder a PresenceManager (UltraSimple): $e");
+          // ⬅️ Reintentar después de un breve delay
+          Future.delayed(const Duration(milliseconds: 200), () {
+            try {
+              if (current) {
+                presenceManager.setOnline();
+                _lastKnownOpenState = true;
+                print("✅ Reintento exitoso: ONLINE");
+              } else {
+                presenceManager.setOffline();
+                _lastKnownOpenState = false;
+                print("✅ Reintento exitoso: OFFLINE");
+              }
+            } catch (e2) {
+              print("⚠️ Reintento también falló: $e2");
+            }
+          });
         }
-        
-        final manager = ref.read(presenceManagerProvider);
-        if (current) {
-          print("🟢 Chat Abierto (UltraSimple) -> Enviando ONLINE");
-          manager.setOnline();
-        } else {
-          print("🔴 Chat Cerrado (UltraSimple) -> Enviando OFFLINE");
-          manager.setOffline();
-        }
-      } catch (e) {
-        print("⚠️ Error al acceder a PresenceManager (UltraSimple): $e");
-      }
+      });
     });
+    
+    // ⬅️ NUEVO: Verificar estado inicial - si el chat está abierto y aún no se ha marcado
+    if (isOpen && !_lastKnownOpenState) {
+      Future.microtask(() {
+        try {
+          print("🟢 Chat abierto en build inicial -> Marcando ONLINE");
+          presenceManager.setOnline();
+          _lastKnownOpenState = true;
+        } catch (e) {
+          print("⚠️ Error al marcar online en verificación inicial: $e");
+        }
+      });
+    }
     
     // ⬅️ RESPONSIVE: Detectar móvil y calcular dimensiones seguras
     final bool isMobile = screenSize.width < 600;
