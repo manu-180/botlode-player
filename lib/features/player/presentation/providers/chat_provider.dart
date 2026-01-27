@@ -118,4 +118,34 @@ class ChatController extends _$ChatController {
     // ⬅️ NUEVO: Guardar mensajes después de recibir respuesta del bot
     ChatPersistenceService.saveMessages(updatedMessages);
   }
+
+  // ⬅️ NUEVO: Método para iniciar un chat completamente nuevo (reload)
+  void clearChat() {
+    // ⬅️ PASO 1: Crear un NUEVO sessionId (chat completamente nuevo)
+    _sessionId = ChatPersistenceService.createNewSessionId();
+    
+    // ⬅️ PASO 2: Limpiar mensajes del localStorage
+    ChatPersistenceService.saveMessages([]);
+    
+    // ⬅️ PASO 3: Crear mensaje inicial para el nuevo chat
+    final initialMessage = ChatMessage(
+      id: 'init',
+      text: 'Sistema en línea. ¿En qué puedo ayudarte hoy?',
+      role: MessageRole.bot,
+      timestamp: DateTime.now(),
+    );
+    
+    // ⬅️ PASO 4: Actualizar estado inmediatamente con el nuevo chat
+    state = state.copyWith(
+      messages: [initialMessage],
+      isLoading: false,
+      currentMood: 'idle',
+      sessionId: _sessionId, // ⬅️ NUEVO sessionId = nuevo chat
+    );
+    
+    // ⬅️ PASO 5: Guardar el estado inicial del nuevo chat
+    ChatPersistenceService.saveMessages([initialMessage]);
+    
+    print("🔄 Nuevo chat iniciado con sessionId: $_sessionId");
+  }
 }

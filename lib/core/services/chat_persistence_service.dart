@@ -73,6 +73,8 @@ class ChatPersistenceService {
   }
 
   // ⬅️ Limpiar persistencia (solo para reload - NO borra mensajes de BD)
+  // ⚠️ NOTA: Este método ya no se usa directamente, se usa createNewSessionId() + saveMessages([])
+  // Se mantiene por compatibilidad pero el flujo correcto es crear nuevo sessionId y limpiar mensajes
   static void clearContext() {
     try {
       // Crear nuevo sessionId (el bot "olvida" el contexto anterior)

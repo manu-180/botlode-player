@@ -26,13 +26,12 @@ final pointerPositionProvider = StateProvider<Offset?>((ref) => null);
 //asdsad
 final isHoveredExternalProvider = StateProvider<bool>((ref) => false);
 
-// ⬅️ MEJORADO: Reload limpia el contexto (nuevo sessionId) pero NO borra mensajes de BD
+// ⬅️ MEJORADO: Reload inicia un NUEVO chat (nuevo sessionId + estado limpio)
 final chatResetProvider = Provider((ref) {
   return () {
-    // ⬅️ NUEVO: Limpiar contexto (crea nuevo sessionId, el bot "olvida" lo anterior)
-    ChatPersistenceService.clearContext();
-    // Invalidar el provider para que se recree con el nuevo sessionId
-    ref.invalidate(chatControllerProvider);
-    print("🔄 Chat reiniciado: nuevo contexto creado (mensajes de BD se mantienen)");
+    // ⬅️ Iniciar un chat completamente nuevo (nuevo sessionId = nuevo contexto)
+    final controller = ref.read(chatControllerProvider.notifier);
+    controller.clearChat();
+    print("🔄 Nuevo chat iniciado: sessionId nuevo, estado limpio, bot empieza desde cero");
   };
 });
