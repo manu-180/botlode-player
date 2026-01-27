@@ -1,7 +1,6 @@
 // ULTRA SIMPLE - Burbuja + Chat COMPLEJO (chat_panel_view) para testing
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/loader_provider.dart';
-import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
 import 'package:botlode_player/features/player/presentation/views/chat_panel_view.dart';
 import 'package:botlode_player/features/player/presentation/widgets/rive_avatar.dart';
 import 'package:flutter/material.dart';
@@ -25,31 +24,12 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
     final isOpen = ref.watch(isOpenSimpleProvider);
     
     // ⬅️ FIX: Fondo totalmente transparente
+    // ✅ TRACKING GLOBAL: Manejado por JavaScript nativo en main.dart
     return Scaffold(
       backgroundColor: Colors.transparent, 
-      body: Listener(
-        // ⬅️ TRACKING GLOBAL: Captura TODOS los eventos del mouse
-        behavior: HitTestBehavior.opaque,
-        onPointerMove: (event) {
-          ref.read(pointerPositionProvider.notifier).state = event.position;
-        },
-        onPointerHover: (event) {
-          ref.read(pointerPositionProvider.notifier).state = event.position;
-        },
-        child: MouseRegion(
-          // ⬅️ REDUNDANCIA: Para eventos que Listener no capture
-          onHover: (event) {
-            ref.read(pointerPositionProvider.notifier).state = event.position;
-          },
-          child: Stack(
-            fit: StackFit.expand,
-            children: [
-              // CAPA TRANSPARENTE DE CAPTURA (SIN IgnorePointer para que funcione)
-              Positioned.fill(
-                child: Container(
-                  color: Colors.transparent,
-                ),
-              ),
+      body: Stack(
+        fit: StackFit.expand,
+        children: [
             
             // CHAT COMPLEJO (Panel)
             Positioned(
@@ -144,9 +124,7 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
                 ),
               ),
             ),
-          ],
-        ),
-        ),
+        ],
       ),
     );
   }

@@ -1,6 +1,7 @@
 // Archivo: lib/main.dart
 import 'dart:async';
 import 'dart:html' as html;
+import 'dart:ui';
 import 'package:botlode_player/core/config/app_config.dart';
 import 'package:botlode_player/core/config/app_theme.dart';
 import 'package:botlode_player/core/config/configure_web.dart';
@@ -11,7 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String DEPLOY_VERSION = "PLAYER PROGRESIVO v5.6 - PASO 5.6 ";
+const String DEPLOY_VERSION = "PLAYER PROGRESIVO v5.7 - PASO 5.7 - Mouse Tracking Fix";
 
 void main() {
   runZonedGuarded(() async {
@@ -44,11 +45,18 @@ void main() {
 
     print("🤖 BOT ID CARGADO: $finalBotId");
     
+    final container = ProviderContainer(
+      overrides: [
+        currentBotIdProvider.overrideWithValue(finalBotId),
+      ],
+    );
+    
+    // ⬅️ Configurar tracking global DESPUÉS de tener el container
+    _setupGlobalMouseTrackingWithProvider(container);
+    
     runApp(
-      ProviderScope(
-        overrides: [
-          currentBotIdProvider.overrideWithValue(finalBotId),
-        ],
+      UncontrolledProviderScope(
+        container: container,
         child: const BotPlayerApp(),
       ),
     );
@@ -65,6 +73,23 @@ void _setupIframeListeners() {
   Future.delayed(const Duration(milliseconds: 500), () {
       _safePostMessage('CMD_READY');
   });
+}
+
+// ✅ LISTENER GLOBAL DE MOUSE (JavaScript nativo) + RIVERPOD
+void _setupGlobalMouseTrackingWithProvider(ProviderContainer container) {
+  try {
+    html.document.onMouseMove.listen((event) {
+      // Captura la posición del mouse en coordenadas de ventana
+      final x = event.client.x.toDouble();
+      final y = event.client.y.toDouble();
+      
+      // ⬅️ ACTUALIZAR PROVIDER DIRECTAMENTE
+      container.read(pointerPositionProvider.notifier).state = Offset(x, y);
+    });
+    print("✅ Global mouse tracking activado con Riverpod");
+  } catch (e) {
+    print("⚠️ Error al configurar mouse tracking: $e");
+  }
 }
 
 void _safePostMessage(String message) {
