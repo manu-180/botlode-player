@@ -406,6 +406,13 @@ FASE 3: CIERRE (Solo cuando ya entiendes el panorama completo)
   * "Perfecto, entonces necesitás [resumen breve]. ¿Querés que coordine una reunión o preferís dejarme tu contacto y te contactamos en cuanto podamos?"
   `}
 
+⚠️ REGLA CRÍTICA: SI EL USUARIO AGREGA UNA REUNIÓN
+- Si el usuario dice que quiere agendar una reunión (ej: "sí, agendemos", "mañana a las 15:00", "el lunes"):
+  DEBES pedirle su contacto INMEDIATAMENTE en el mismo mensaje o el siguiente
+- Ejemplo: "Perfecto, agendamos para mañana a las 15:00. Para concretar la reunión, necesito tu número de contacto o email para que ${vendorName ? vendorName : 'te'} pueda contactarte. ¿Me lo podés dejar?"
+- NO dejes que se vaya sin dejar su contacto si ya agendó una reunión
+- Es OBLIGATORIO obtener el contacto cuando hay una reunión agendada
+
 REGLAS IMPORTANTES:
 - MÁXIMO 1-2 FRASES por mensaje
 - NO ofrezcas reunión/contacto hasta que entiendas bien el proyecto (FASE 3)
@@ -510,7 +517,48 @@ FORMATO JSON OBLIGATORIO:
 
     const data = await fetchGeminiWithRetry(url, payload);
     
-    // 7. PARSEAR RESPUESTA DE GEMINI
+    // 7. EXTRAER CONTACTOS Y REUNIONES DEL MENSAJE DEL USUARIO
+    const extractedContacts = extractContactsRegex(message);
+    const meetingInfo = await extractMeetingWithAI(message, apiKey, vendorName);
+    
+    // Si se detecta una reunión en este mensaje, agregarla
+    if (meetingInfo.intent) {
+      extractedContacts.push({
+        type: 'meeting',
+        value: `Reunión agendada${meetingInfo.date ? ` - ${meetingInfo.date}` : ''}${meetingInfo.time ? ` a las ${meetingInfo.time}` : ''}`,
+        metadata: {
+          intent: 'meeting_scheduled',
+          date: meetingInfo.date,
+          time: meetingInfo.time,
+          full_message: message.substring(0, 200),
+        },
+      });
+    }
+    
+    // Verificar si hay reunión agendada previa sin contacto
+    let hasPreviousMeetingWithoutContact = false;
+    try {
+      const { data: previousContacts } = await supabaseAdmin
+        .from('extracted_contacts')
+        .select('contact_type')
+        .eq('session_id', sessionId)
+        .eq('bot_id', botId);
+      
+      const hasPreviousMeeting = previousContacts?.some((c: any) => c.contact_type === 'meeting') ?? false;
+      const hasPreviousContact = previousContacts?.some((c: any) => 
+        c.contact_type === 'email' || c.contact_type === 'phone' || c.contact_type === 'whatsapp'
+      ) ?? false;
+      
+      hasPreviousMeetingWithoutContact = hasPreviousMeeting && !hasPreviousContact;
+    } catch (e) {
+      // Ignorar error
+    }
+    
+    // ⬅️ NUEVO: Determinar si hay reunión (nueva o previa) y si hay contacto
+    const hasMeeting = meetingInfo.intent || hasPreviousMeetingWithoutContact;
+    const hasContact = extractedContacts.some(c => c.type === 'email' || c.type === 'phone' || c.type === 'whatsapp');
+    
+    // 8. PARSEAR RESPUESTA DE GEMINI
     let rawReply = data.candidates?.[0]?.content?.parts?.[0]?.text || '{"reply":"Error de análisis.","mood":"confused","intent_score":0}';
     rawReply = rawReply.replace(/```json|```/g, "").trim();
     
@@ -527,6 +575,17 @@ FORMATO JSON OBLIGATORIO:
       if (typeof parsedResponse.intent_score !== 'number' || parsedResponse.intent_score < 0 || parsedResponse.intent_score > 100) {
         parsedResponse.intent_score = Math.max(0, Math.min(100, parsedResponse.intent_score || 0));
       }
+      
+      // ⬅️ NUEVO: Si hay reunión agendada pero NO hay contacto, modificar respuesta para pedir contacto
+      if (hasMeeting && !hasContact) {
+        const contactRequest = vendorName 
+          ? ` Para concretar la reunión, necesito tu número de contacto o email para que ${vendorName} pueda contactarte. ¿Me lo podés dejar?`
+          : ` Para concretar la reunión, necesito tu número de contacto o email para que te podamos contactar. ¿Me lo podés dejar?`;
+        
+        // Agregar la solicitud de contacto al final de la respuesta
+        parsedResponse.reply = parsedResponse.reply.trim() + contactRequest;
+        log('info', 'Solicitando contacto después de reunión agendada');
+      }
     } catch (e: any) {
       log('warn', 'Error parseando respuesta de Gemini', { error: e.message, rawReply: rawReply.substring(0, 200) });
       parsedResponse = { 
@@ -536,26 +595,7 @@ FORMATO JSON OBLIGATORIO:
       };
     }
 
-    // 8. EXTRAER CONTACTOS Y REUNIONES (HÍBRIDO: Regex + IA)
-    const extractedContacts = extractContactsRegex(message);
-    
-    // Extraer reuniones con IA (más preciso)
-    const meetingInfo = await extractMeetingWithAI(message, apiKey, vendorName);
-    
-    if (meetingInfo.intent) {
-      extractedContacts.push({
-        type: 'meeting',
-        value: `Reunión agendada${meetingInfo.date ? ` - ${meetingInfo.date}` : ''}${meetingInfo.time ? ` a las ${meetingInfo.time}` : ''}`,
-        metadata: {
-          intent: 'meeting_scheduled',
-          date: meetingInfo.date,
-          time: meetingInfo.time,
-          full_message: message.substring(0, 200),
-        },
-      });
-    }
-
-    // 9. GUARDAR CONTACTOS Y REUNIONES
+    // 9. GUARDAR CONTACTOS Y REUNIONES (ANTES de guardar mensajes)
     if (extractedContacts.length > 0) {
       try {
         const contactInserts = extractedContacts.map(contact => ({
@@ -582,28 +622,130 @@ FORMATO JSON OBLIGATORIO:
     }
 
     // 10. GUARDAR MENSAJES EN LA BASE DE DATOS
+    // ⬅️ NUEVO: Solo guardar mensajes si hay contacto o reunión agendada
+    const hasContactNow = extractedContacts.some(c => c.type === 'email' || c.type === 'phone' || c.type === 'whatsapp');
+    const hasMeetingNow = extractedContacts.some(c => c.type === 'meeting');
+    
+    // Verificar si hay reunión o contacto en la base de datos (después de guardar los nuevos)
+    let hasAnyContactOrMeeting = false;
     try {
-      await supabaseAdmin.from('chat_logs').insert({
-        session_id: sessionId, 
-        role: 'user', 
-        content: message, 
-        bot_id: botId,
-        intent_score: 0 
-      });
+      const { data: allContacts } = await supabaseAdmin
+        .from('extracted_contacts')
+        .select('contact_type')
+        .eq('session_id', sessionId)
+        .eq('bot_id', botId);
       
-      await supabaseAdmin.from('chat_logs').insert({
-        session_id: sessionId, 
-        role: 'bot', 
-        content: parsedResponse.reply, 
-        bot_id: botId, 
-        intent_score: parsedResponse.intent_score || 0 
-      });
-    } catch (e: any) {
-      log('error', 'Error guardando mensajes', { error: e.message });
-      // Continuar aunque falle el guardado
+      hasAnyContactOrMeeting = (allContacts?.length ?? 0) > 0;
+    } catch (e) {
+      // Ignorar error
+    }
+    
+    // Guardar mensajes SOLO si hay contacto o reunión agendada
+    if (hasAnyContactOrMeeting) {
+      try {
+        await supabaseAdmin.from('chat_logs').insert({
+          session_id: sessionId, 
+          role: 'user', 
+          content: message, 
+          bot_id: botId,
+          intent_score: 0 
+        });
+        
+        await supabaseAdmin.from('chat_logs').insert({
+          session_id: sessionId, 
+          role: 'bot', 
+          content: parsedResponse.reply, 
+          bot_id: botId, 
+          intent_score: parsedResponse.intent_score || 0 
+        });
+        
+        log('info', 'Mensajes guardados (hay contacto/reunión)');
+      } catch (e: any) {
+        log('error', 'Error guardando mensajes', { error: e.message });
+        // Continuar aunque falle el guardado
+      }
+    } else {
+      log('info', 'Mensajes NO guardados (sin contacto ni reunión agendada)');
     }
 
-    // 11. ACTUALIZAR HEARTBEAT
+    // 11. VERIFICAR Y ENVIAR ALERTA DE LEAD (si el score supera el threshold)
+    const intentScore = parsedResponse.intent_score || 0;
+    if (intentScore >= 80) { // ⬅️ Threshold por defecto (se puede configurar)
+      try {
+        // Verificar configuración de notificaciones
+        const { data: botConfig } = await supabaseAdmin
+          .from('bot_notifications')
+          .select('notification_email, is_enabled, min_score_threshold')
+          .eq('bot_id', botId)
+          .maybeSingle();
+
+        if (botConfig && botConfig.is_enabled && botConfig.notification_email) {
+          const threshold = botConfig.min_score_threshold ?? 80;
+          
+          if (intentScore >= threshold) {
+            // Verificar si ya se envió un email para esta sesión
+            const { data: alreadySent } = await supabaseAdmin
+              .from('lead_alerts_sent')
+              .select('id')
+              .eq('session_id', sessionId)
+              .eq('bot_id', botId)
+              .maybeSingle();
+
+            if (!alreadySent) {
+              // Obtener últimos mensajes para contexto
+              const { data: lastMessages } = await supabaseAdmin
+                .from('chat_logs')
+                .select('role, content, created_at')
+                .eq('session_id', sessionId)
+                .order('created_at', { ascending: false })
+                .limit(10);
+
+              // Llamar a la Edge Function send-lead-alert
+              const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+              const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+              const alertUrl = `${supabaseUrl}/functions/v1/send-lead-alert`;
+              
+              try {
+                const alertResponse = await fetch(alertUrl, {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${serviceRoleKey}`,
+                    'apikey': serviceRoleKey,
+                  },
+                  body: JSON.stringify({
+                    sessionId,
+                    botId,
+                    intentScore,
+                    lastMessages: (lastMessages || []).reverse(),
+                  }),
+                });
+
+                if (alertResponse.ok) {
+                  log('info', '✅ Alerta de lead enviada', { sessionId, botId, intentScore });
+                } else {
+                  const errorText = await alertResponse.text();
+                  log('warn', '⚠️ Error enviando alerta de lead', { 
+                    status: alertResponse.status, 
+                    error: errorText.substring(0, 200) 
+                  });
+                }
+              } catch (alertError: any) {
+                log('error', '❌ Error llamando send-lead-alert', { error: alertError.message });
+                // No fallar la función principal si falla el envío de alerta
+              }
+            } else {
+              log('info', '📧 Email ya enviado para esta sesión', { sessionId });
+            }
+          }
+        }
+      } catch (e: any) {
+        log('warn', '⚠️ Error verificando/enviando alerta de lead', { error: e.message });
+        // No fallar la función principal si falla la verificación de alertas
+      }
+    }
+
+    // 12. ACTUALIZAR HEARTBEAT
     try {
       await supabaseAdmin.from('session_heartbeats').upsert({
         session_id: sessionId,
