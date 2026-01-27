@@ -6,13 +6,19 @@ class StatusIndicator extends StatelessWidget {
   final bool isLoading;
   final bool isOnline;
   final String mood;
-  final bool isDarkMode; 
+  final bool isDarkMode;
+  final bool isChatOpen; // ⬅️ Estado del chat (abierto/cerrado)
+  final String? currentSessionId; // ⬅️ NUEVO: SessionId del chat actual
+  final String? activeSessionId; // ⬅️ NUEVO: SessionId activo (el más reciente)
 
   const StatusIndicator({
     super.key,
     required this.isLoading,
     required this.isOnline,
     required this.mood,
+    required this.isChatOpen,
+    this.currentSessionId, // ⬅️ Opcional: si no se proporciona, siempre mostrará si está abierto
+    this.activeSessionId, // ⬅️ Opcional: si no se proporciona, siempre mostrará si está abierto
     this.isDarkMode = true, 
   });
 
@@ -35,7 +41,28 @@ class StatusIndicator extends StatelessWidget {
         case 'sales': text = "VENDEDOR"; color = const Color(0xFFFFC000); break;
         case 'confused': text = "CONFUNDIDO"; color = const Color(0xFF7B00FF); break;
         case 'tech': text = "TÉCNICO"; color = const Color(0xFF00F0FF); break;
-        case 'neutral': default: text = "EN LÍNEA"; color = const Color(0xFF00FF94); break;
+        case 'neutral':
+        case 'idle':
+        default: 
+          // ⬅️ "EN LÍNEA" se muestra como las otras emociones cuando el mood es neutral
+          // Pero solo si este es el chat activo (no el histórico) Y el chat está abierto
+          
+          // Determinar si este es el chat activo:
+          // - Si no hay activeSessionId establecido, considerar activo solo si hay currentSessionId
+          // - Si hay activeSessionId, solo es activo si coinciden
+          final isActiveChat = (activeSessionId == null && currentSessionId != null) ||
+                               (activeSessionId != null && currentSessionId != null && currentSessionId == activeSessionId);
+          
+          // Mostrar "EN LÍNEA" solo si es el chat activo Y el chat está abierto
+          if (isActiveChat && isChatOpen) {
+            text = "EN LÍNEA"; 
+            color = const Color(0xFF00FF94);
+          } else {
+            // Chat histórico, cerrado, o no activo: no mostrar "EN LÍNEA" (ocultar widget)
+            text = ""; 
+            color = const Color(0xFF00FF94);
+          }
+          break;
       }
     }
 
@@ -74,6 +101,11 @@ class StatusIndicator extends StatelessWidget {
               ],
       ),
     );
+
+    // ⬅️ Si el texto está vacío (chat cerrado + mood neutral), ocultar el widget
+    if (text.isEmpty) {
+      return const SizedBox.shrink();
+    }
 
     return Container(
       padding: const EdgeInsets.only(left: 6, right: 12, top: 6, bottom: 6),

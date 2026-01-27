@@ -43,6 +43,11 @@ class _SimpleChatTestState extends ConsumerState<SimpleChatTest> {
     final text = _textController.text;
     if (text.trim().isEmpty) return;
     _textController.clear();
+    
+    // ⬅️ Marcar este chat como activo cuando se envía un mensaje
+    final chatState = ref.read(chatControllerProvider);
+    ref.read(activeSessionIdProvider.notifier).state = chatState.sessionId;
+    
     ref.read(chatControllerProvider.notifier).sendMessage(text);
     
     // Auto-scroll después de enviar mensaje (esperar a que se renderice)
@@ -80,6 +85,14 @@ class _SimpleChatTestState extends ConsumerState<SimpleChatTest> {
     // ✅ CHAT STATE REAL
     final chatState = ref.watch(chatControllerProvider);
     final reversedMessages = chatState.messages.reversed.toList();
+    
+    // ⬅️ Inicializar activeSessionId si no está establecido (primera vez)
+    final activeSessionId = ref.watch(activeSessionIdProvider);
+    if (activeSessionId == null || activeSessionId.isEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        ref.read(activeSessionIdProvider.notifier).state = chatState.sessionId;
+      });
+    }
     
     // ✅ LISTENER: Sincronizar mood del avatar con el estado del chat
     ref.listen(chatControllerProvider, (prev, next) {
@@ -314,6 +327,9 @@ class _SimpleChatTestState extends ConsumerState<SimpleChatTest> {
                       isOnline: isOnline,
                       mood: chatState.currentMood,
                       isDarkMode: isDarkMode,
+                      isChatOpen: ref.watch(chatOpenProvider), // ⬅️ Estado del chat (abierto/cerrado)
+                      currentSessionId: chatState.sessionId, // ⬅️ SessionId del chat actual
+                      activeSessionId: ref.watch(activeSessionIdProvider), // ⬅️ SessionId activo (más reciente)
                     ),
                   ),
                 ],

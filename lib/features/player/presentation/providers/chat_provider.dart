@@ -18,7 +18,7 @@ class ChatState {
   ChatState({
     this.messages = const [],
     this.isLoading = false,
-    this.currentMood = 'idle',
+    this.currentMood = 'neutral', // ⬅️ Estado inicial: 'neutral' = "EN LÍNEA"
     required this.sessionId,
   });
 
@@ -103,6 +103,15 @@ class ChatController extends _$ChatController {
       messages: initialMessages,
     );
     
+    // ⬅️ Si no hay sessionId activo, establecer este como activo (primera vez)
+    // Esto se actualizará cuando se haga reload
+    try {
+      // No podemos acceder a activeSessionIdProvider aquí porque causaría dependencia circular
+      // Se manejará desde ui_provider cuando se inicialice
+    } catch (e) {
+      // Ignorar errores
+    }
+    
     print("🔵 [DEBUG] ChatController.build() - estado creado con ${state.messages.length} mensajes, mood: ${state.currentMood}, sessionId: ${state.sessionId}");
     print("🔵 [DEBUG] ChatController.build() - FIN");
     
@@ -114,6 +123,14 @@ class ChatController extends _$ChatController {
 
     final botId = ref.read(currentBotIdProvider);
     final repository = ref.read(chatRepositoryProvider);
+
+    // ⬅️ NUEVO: Marcar este chat como activo cuando se envía un mensaje
+    try {
+      // Importar ui_provider aquí causaría dependencia circular, así que lo haremos desde fuera
+      // El activeSessionId se actualizará desde simple_chat_test cuando se envía el mensaje
+    } catch (e) {
+      // Ignorar errores
+    }
 
     final userMsg = ChatMessage(
       id: _uuid.v4(),
@@ -187,13 +204,21 @@ class ChatController extends _$ChatController {
     final newState = ChatState(
       messages: [initialMessage],
       isLoading: false,
-      currentMood: 'idle', // ⬅️ Estado normal (idle)
+      currentMood: 'neutral', // ⬅️ Estado normal (neutral = "EN LÍNEA")
       sessionId: _sessionId, // ⬅️ NUEVO sessionId = nuevo contexto (bot olvida todo)
     );
     print("🟠 [DEBUG] clearChat() - PASO 4: nuevo estado creado con ${newState.messages.length} mensajes, mood: ${newState.currentMood}, sessionId: ${newState.sessionId}");
     
     state = newState;
     print("🟠 [DEBUG] clearChat() - PASO 4: estado actualizado. Estado actual: ${state.messages.length} mensajes, mood: ${state.currentMood}, sessionId: ${state.sessionId}");
+    
+    // ⬅️ PASO 4.5: Actualizar el sessionId activo (importar ui_provider)
+    try {
+      // Necesitamos acceder al provider de activeSessionId
+      // Esto se hará desde chatResetProvider para evitar dependencias circulares
+    } catch (e) {
+      print("🟠 [DEBUG] clearChat() - Error actualizando activeSessionId: $e");
+    }
     
     // ⬅️ PASO 5: Guardar el estado inicial del nuevo chat
     ChatPersistenceService.saveMessages([initialMessage]);

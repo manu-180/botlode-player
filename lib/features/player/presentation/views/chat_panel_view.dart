@@ -212,7 +212,15 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                               ),
                               Positioned(
                                 bottom: 12, left: 24,
-                                child: StatusIndicator(isLoading: chatState.isLoading, isOnline: isOnline, mood: chatState.currentMood, isDarkMode: isDarkMode),
+                                child: StatusIndicator(
+                                  isLoading: chatState.isLoading, 
+                                  isOnline: isOnline, 
+                                  mood: chatState.currentMood, 
+                                  isDarkMode: isDarkMode,
+                                  isChatOpen: ref.watch(chatOpenProvider), // ⬅️ Estado del chat (usar watch para reactividad)
+                                  currentSessionId: chatState.sessionId, // ⬅️ SessionId del chat actual
+                                  activeSessionId: ref.watch(activeSessionIdProvider), // ⬅️ SessionId activo (más reciente)
+                                ),
                               ),
                             ],
                           ),

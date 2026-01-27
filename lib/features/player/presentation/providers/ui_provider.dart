@@ -1,6 +1,5 @@
 // Archivo: lib/features/player/presentation/providers/ui_provider.dart
 import 'dart:ui';
-import 'package:botlode_player/core/services/chat_persistence_service.dart';
 import 'package:botlode_player/features/player/presentation/providers/chat_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -27,6 +26,10 @@ final pointerPositionProvider = StateProvider<Offset?>((ref) => null);
 //asdsad
 final isHoveredExternalProvider = StateProvider<bool>((ref) => false);
 
+// ⬅️ Provider para trackear el sessionId activo (el más reciente)
+// Solo el chat con este sessionId debe mostrar "EN LÍNEA"
+final activeSessionIdProvider = StateProvider<String?>((ref) => null);
+
 // ⬅️ MEJORADO: Reload limpia pantalla, resetea estado y olvida contexto (sin borrar historial BD)
 final chatResetProvider = Provider((ref) {
   return () {
@@ -51,29 +54,46 @@ final chatResetProvider = Provider((ref) {
       print("🟢 [DEBUG] chatResetProvider() - ERROR en clearChat(): $e");
     }
     
-    // ⬅️ PASO 1.5: Verificar estado DESPUÉS de clearChat
+    // ⬅️ PASO 1.5: Verificar estado DESPUÉS de clearChat y actualizar sessionId activo
     try {
       final stateAfterClear = ref.read(chatControllerProvider);
       print("🟢 [DEBUG] chatResetProvider() - ESTADO DESPUÉS de clearChat: ${stateAfterClear.messages.length} mensajes, sessionId: ${stateAfterClear.sessionId}, mood: ${stateAfterClear.currentMood}");
+      
+      // ⬅️ Actualizar el sessionId activo al nuevo (solo este chat mostrará "EN LÍNEA")
+      ref.read(activeSessionIdProvider.notifier).state = stateAfterClear.sessionId;
+      print("🟢 [DEBUG] chatResetProvider() - activeSessionId actualizado a: ${stateAfterClear.sessionId}");
     } catch (e) {
       print("🟢 [DEBUG] chatResetProvider() - Error leyendo estado después de clearChat: $e");
     }
     
-    // ⬅️ PASO 2: Resetear mood del bot a 'idle' (estado normal)
-    print("🟢 [DEBUG] chatResetProvider() - PASO 2: Reseteando mood a 0 (idle)");
+    // ⬅️ PASO 2: Resetear mood del bot a 'neutral' (estado normal = "EN LÍNEA")
+    print("🟢 [DEBUG] chatResetProvider() - PASO 2: Reseteando mood a 0 (neutral)");
     try {
       final moodBefore = ref.read(botMoodProvider);
       print("🟢 [DEBUG] chatResetProvider() - Mood ANTES: $moodBefore");
-      ref.read(botMoodProvider.notifier).state = 0; // 0 = idle
+      ref.read(botMoodProvider.notifier).state = 0; // 0 = neutral/idle
       final moodAfter = ref.read(botMoodProvider);
       print("🟢 [DEBUG] chatResetProvider() - Mood DESPUÉS: $moodAfter");
+      
+      // ⬅️ Asegurar que el estado del chat también esté en 'neutral'
+      // El estado ya se resetea a 'neutral' en clearChat(), no necesitamos hacerlo aquí
+      print("🟢 [DEBUG] chatResetProvider() - Estado del chat ya está en 'neutral' (reseteado en clearChat)");
     } catch (e) {
       print("🟢 [DEBUG] chatResetProvider() - ERROR reseteando mood: $e");
     }
     
-    // ⬅️ PASO 3: NO invalidar el provider (causa LateInitializationError)
+    // ⬅️ PASO 3: Cerrar el chat si está abierto (para que "EN LÍNEA" desaparezca)
+    print("🟢 [DEBUG] chatResetProvider() - PASO 3: Cerrando chat si está abierto");
+    try {
+      ref.read(chatOpenProvider.notifier).set(false);
+      print("🟢 [DEBUG] chatResetProvider() - Chat cerrado");
+    } catch (e) {
+      print("🟢 [DEBUG] chatResetProvider() - ERROR cerrando chat: $e");
+    }
+    
+    // ⬅️ PASO 3.5: NO invalidar el provider (causa LateInitializationError)
     // En su lugar, forzar un rebuild del estado directamente
-    print("🟢 [DEBUG] chatResetProvider() - PASO 3: Forzando actualización de estado (sin invalidar provider)");
+    print("🟢 [DEBUG] chatResetProvider() - PASO 3.5: Forzando actualización de estado (sin invalidar provider)");
     try {
       // El estado ya fue actualizado en clearChat(), solo necesitamos que la UI se actualice
       // No invalidamos para evitar el error de LateInitializationError

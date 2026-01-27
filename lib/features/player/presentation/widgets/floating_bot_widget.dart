@@ -2,7 +2,6 @@
 import 'dart:html' as html;
 import 'dart:math' as math;
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
-import 'package:botlode_player/features/player/presentation/providers/chat_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
 // import 'package:botlode_player/features/player/presentation/views/chat_panel_view.dart';
 import 'package:botlode_player/features/player/presentation/views/simple_chat_test.dart'; // ⬅️ TEST
@@ -31,19 +30,16 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     final botConfigAsync = ref.watch(botConfigProvider);
     final isHovered = ref.watch(isHoveredExternalProvider);
     
-    // ⬅️ LISTENER: Resetear mood cuando se cierra el chat
+    // ⬅️ LISTENER: Manejar estado cuando se abre/cierra el chat
     ref.listen(chatOpenProvider, (previous, next) {
       if (previous == true && next == false) {
-        // Chat se cerró, resetear mood
-        ref.read(botMoodProvider.notifier).state = 0; // 0 = idle/neutral
-        try {
-          final chatState = ref.read(chatControllerProvider);
-          if (chatState.currentMood != 'neutral' && chatState.currentMood != 'idle') {
-            ref.read(chatControllerProvider.notifier).state = chatState.copyWith(currentMood: 'neutral');
-          }
-        } catch (e) {
-          // Ignorar errores si el provider no está disponible
-        }
+        // Chat se cerró: NO resetear mood, solo dejar que "EN LÍNEA" desaparezca
+        // El mood se mantiene, pero StatusIndicator lo ocultará porque isChatOpen = false
+        // No hacer nada aquí, el StatusIndicator se encargará de ocultar "EN LÍNEA"
+      } else if (previous == false && next == true) {
+        // Chat se abrió: asegurar que si el mood es 'neutral', se muestre "EN LÍNEA"
+        // El StatusIndicator se encargará de mostrarlo automáticamente porque isChatOpen = true
+        // No necesitamos hacer nada aquí, el estado ya está correcto
       }
     });
 
@@ -69,7 +65,6 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
           // Chat ABIERTO: calcular respecto al avatar dentro del chat
           // El chat está en top con ancho máximo de 420px (o menos en móvil)
           final double chatWidth = isMobile ? screenSize.width : 420.0;
-          final double chatHeight = safeHeight;
           
           // Avatar está centrado horizontalmente en el chat y a ~100px del top del chat (80px appbar + 100px)
           final double avatarCenterX = isMobile ? screenSize.width / 2 : screenSize.width - (chatWidth / 2);
