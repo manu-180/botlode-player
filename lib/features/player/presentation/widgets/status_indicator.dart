@@ -49,10 +49,8 @@ class StatusIndicator extends ConsumerWidget {
     if (!isOnline) {
       text = "DESCONECTADO";
       color = const Color(0xFFFF003C); // Rojo Alerta
-    } else if (isLoading) {
-      text = "PROCESANDO...";
-      color = const Color(0xFF00FF94); 
     } else {
+      // ⬅️ Cuando isLoading es true, NO mostrar "PROCESANDO..." - mostrar estado normal ("EN LÍNEA", emociones, etc.)
       switch (mood.toLowerCase()) {
         case 'angry': text = "ENOJADO"; color = const Color(0xFFFF2A00); break;
         case 'happy': text = "FELIZ"; color = const Color(0xFFFF00D6); break;

@@ -26,6 +26,13 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
         ? Colors.white
         : Colors.black;
   }
+  
+  // ⬅️ Helper para formatear hora de Argentina (UTC-3) sin zona horaria
+  String _formatArgentinaTime() {
+    final nowLocal = DateTime.now().toLocal();
+    final nowArgentina = nowLocal.subtract(const Duration(hours: 3));
+    return '${nowArgentina.year}-${nowArgentina.month.toString().padLeft(2, '0')}-${nowArgentina.day.toString().padLeft(2, '0')}T${nowArgentina.hour.toString().padLeft(2, '0')}:${nowArgentina.minute.toString().padLeft(2, '0')}:${nowArgentina.second.toString().padLeft(2, '0')}.${nowArgentina.millisecond.toString().padLeft(3, '0')}';
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -100,35 +107,78 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
           ref.read(activeSessionIdProvider.notifier).state = currentSessionId;
           print("🟡 [FloatingBotWidget] Chat abierto - activeSessionId actualizado SÍNCRONAMENTE a: $currentSessionId");
           
-          // ⬅️ PASO 2: Reclamar sesión en BD (ASÍNCRONO)
+          // ⬅️ PASO 2: Reclamar sesión en BD (ASÍNCRONO pero PRIORITARIO)
           // Ordenamos al servidor imponer esta verdad y eliminar competidores (zombis).
           // Esto implementa el patrón "Mutex de Sesión" descrito en el documento técnico.
-          Future.microtask(() async {
+          // ⚠️ CRÍTICO: Ejecutar INMEDIATAMENTE sin esperar microtask para evitar condiciones de carrera
+          (() async {
             try {
-              // "Matar a los Zombis": Marcar todas las demás sesiones de este bot como offline
+              print("🟡 [FloatingBotWidget] Iniciando reclamación de sesión en BD...");
+              
+              // ⬅️ PASO 2.1: "Matar a TODOS los Zombis" - Marcar TODAS las sesiones de este bot como offline
+              // Esto incluye incluso la sesión actual, para luego marcarla como online de forma limpia
               await supabase
                   .from('session_heartbeats')
                   .update({'is_online': false})
-                  .eq('bot_id', botId)
-                  .neq('session_id', currentSessionId);
+                  .eq('bot_id', botId);
               
-              // "Reclamar el Trono": Insertar o Actualizar la sesión actual como activa
+              print("🟡 [FloatingBotWidget] ✅ TODAS las sesiones de este bot marcadas como offline (incluyendo la actual)");
+              
+              // ⬅️ PASO 2.2: "Reclamar el Trono" - Insertar o Actualizar SOLO la sesión actual como activa
+              await Future.delayed(const Duration(milliseconds: 100));
+              
               await supabase
                   .from('session_heartbeats')
                   .upsert({
                     'session_id': currentSessionId,
                     'bot_id': botId,
                     'is_online': true,
-                    'last_seen': DateTime.now().toUtc().toIso8601String(),
+                    'last_seen': _formatArgentinaTime(), // ⬅️ Hora de Argentina (UTC-3)
                     'chat_id': currentChatId,
                   }, onConflict: 'session_id');
               
-              print("🟡 [FloatingBotWidget] Chat abierto - Sesión reclamada en BD (todos los demás chats marcados como offline)");
+              print("🟡 [FloatingBotWidget] ✅✅✅ Sesión reclamada en BD - SOLO esta sesión está online ahora ✅✅✅");
+              
+              // ⬅️ PASO 2.3: Verificación final y limpieza agresiva
+              await Future.delayed(const Duration(milliseconds: 200));
+              
+              final verification = await supabase
+                  .from('session_heartbeats')
+                  .select('session_id, is_online')
+                  .eq('bot_id', botId)
+                  .eq('is_online', true);
+              
+              if (verification.length > 1 || (verification.length == 1 && verification.first['session_id'] != currentSessionId)) {
+                print("⚠️ [FloatingBotWidget] ADVERTENCIA: Hay ${verification.length} chats online, forzando limpieza agresiva...");
+                
+                // Forzar limpieza nuevamente - más agresiva
+                await supabase
+                    .from('session_heartbeats')
+                    .update({'is_online': false})
+                    .eq('bot_id', botId)
+                    .neq('session_id', currentSessionId);
+                
+                await Future.delayed(const Duration(milliseconds: 50));
+                
+                await supabase
+                    .from('session_heartbeats')
+                    .upsert({
+                      'session_id': currentSessionId,
+                      'bot_id': botId,
+                      'is_online': true,
+                      'last_seen': _formatArgentinaTime(), // ⬅️ Hora de Argentina (UTC-3)
+                      'chat_id': currentChatId,
+                    }, onConflict: 'session_id');
+                
+                print("🟡 [FloatingBotWidget] ✅ Limpieza agresiva completada");
+              } else if (verification.length == 1 && verification.first['session_id'] == currentSessionId) {
+                print("🟡 [FloatingBotWidget] ✅ Verificación OK: Solo el chat actual está online");
+              }
             } catch (e) {
               print("⚠️ [FloatingBotWidget] Error reclamando sesión en BD: $e");
               // No crashear la UI. La actualización optimista ya se hizo.
             }
-          });
+          })();
         } catch (e) {
           print("⚠️ [FloatingBotWidget] Error obteniendo sessionId al abrir chat: $e");
         }

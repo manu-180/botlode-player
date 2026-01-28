@@ -39,7 +39,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
           ref.read(presenceManagerProvider).setOnline();
         }
       } catch (e) {
-        print("⚠️ Error en initState postFrameCallback: $e");
+        // Error silenciado
       }
     });
   }
@@ -64,7 +64,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
         }
       }
     } catch (e) {
-      print("⚠️ Error en lifecycle state change: $e");
+      // Error silenciado
     }
   }
 
@@ -91,7 +91,6 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
     
     // ⬅️ Actualizar activeSessionId SÍNCRONAMENTE (no async)
     ref.read(activeSessionIdProvider.notifier).state = currentSessionId;
-    print("🟡 [ChatPanelView] _sendMessage() - activeSessionId actualizado a: $currentSessionId (este chat es ahora el activo)");
     
     if (_scrollController.hasClients) _scrollController.jumpTo(0.0);
     ref.read(chatControllerProvider.notifier).sendMessage(text);
@@ -104,9 +103,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
       
       // Si el sessionId cambió durante el envío (nuevo chat creado), actualizar activeSessionId
       if (stateAfterSend.sessionId != activeSessionId) {
-        print("🟡 [ChatPanelView] _sendMessage() - sessionId cambió durante envío: ${stateAfterSend.sessionId} != $activeSessionId");
         ref.read(activeSessionIdProvider.notifier).state = stateAfterSend.sessionId;
-        print("🟡 [ChatPanelView] _sendMessage() - activeSessionId actualizado al nuevo: ${stateAfterSend.sessionId}");
       }
     });
     
@@ -130,7 +127,10 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
     // ⬅️ NUEVO: Input con diseño profesional y elegante
     final Color inputFill = isDarkMode ? const Color(0xFF1F1F1F) : const Color(0xFFFFFFFF);
     final Color inputBorder = isDarkMode ? const Color(0xFF2D2D2D) : Colors.grey.shade300;
-    final Color inputBorderFocused = isDarkMode ? const Color(0xFF4A4A4A) : Colors.grey.shade500;
+    // ⬅️ Color neutro clásico para el borde enfocado (funciona bien en ambos modos)
+    final Color inputBorderFocused = isDarkMode 
+        ? Colors.grey.shade600  // Gris medio para dark mode
+        : Colors.grey.shade400;  // Gris claro para light mode
 
     final reversedMessages = chatState.messages.reversed.toList();
 
@@ -139,14 +139,12 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
       try {
         final manager = ref.read(presenceManagerProvider);
         if (isOpen) {
-          print("🟢 Chat Abierto -> Enviando ONLINE");
           manager.setOnline();
         } else {
-          print("🔴 Chat Cerrado -> Enviando OFFLINE");
           manager.setOffline();
         }
       } catch (e) {
-        print("⚠️ Error al acceder a PresenceManager (widget disposed): $e");
+        // Error silenciado
       }
     });
     // ----------------------------------
@@ -225,7 +223,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                                         try {
                                           ref.read(presenceManagerProvider).setOffline();
                                         } catch (e) {
-                                          print("⚠️ Error al setOffline en close button: $e");
+                                          // Error silenciado
                                         }
                                         ref.read(chatOpenProvider.notifier).set(false);
                                       },
@@ -270,7 +268,10 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                                         SizedBox(
                                           width: 12, 
                                           height: 12, 
-                                          child: CircularProgressIndicator(strokeWidth: 2, color: themeColor)
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2, 
+                                            color: isDarkMode ? Colors.white38 : Colors.black38,
+                                          )
                                         ), 
                                         const SizedBox(width: 8), 
                                         _ThinkingIndicator(isDarkMode: isDarkMode)
@@ -404,23 +405,30 @@ class _ProfessionalInputFieldState extends State<_ProfessionalInputField> {
     return AnimatedOpacity(
       duration: const Duration(milliseconds: 200),
       opacity: inputOpacity,
-      child: Container(
-        decoration: BoxDecoration(
-          color: widget.inputFill,
-          borderRadius: BorderRadius.circular(24),
-          border: Border.all(
-            color: borderColor,
-            width: 1.0,
-          ),
-          boxShadow: _isFocused ? [
-            BoxShadow(
-              color: widget.themeColor.withOpacity(0.1),
-              blurRadius: 12,
-              spreadRadius: 0,
+      child: ClipRRect(
+        // ⬅️ Forzar recorte del borderRadius para que el borde izquierdo se vea redondeado
+        borderRadius: BorderRadius.circular(50),
+        child: Container(
+          decoration: BoxDecoration(
+            color: widget.inputFill,
+            // ⬅️ Bordes completamente redondeados (pill shape)
+            borderRadius: BorderRadius.circular(50),
+            border: Border.all(
+              color: borderColor,
+              width: 1.0,
             ),
-          ] : null,
-        ),
-        child: Row(
+            boxShadow: _isFocused ? [
+              BoxShadow(
+                // ⬅️ Sombra neutra que funciona bien en ambos modos (no usa themeColor)
+                color: widget.isDarkMode 
+                    ? Colors.white.withOpacity(0.05)
+                    : Colors.black.withOpacity(0.08),
+                blurRadius: 12,
+                spreadRadius: 0,
+              ),
+            ] : null,
+          ),
+          child: Row(
           children: [
             const SizedBox(width: 20),
             Expanded(
@@ -436,7 +444,8 @@ class _ProfessionalInputFieldState extends State<_ProfessionalInputField> {
                   fontWeight: FontWeight.w400,
                   letterSpacing: 0.2,
                 ),
-                cursorColor: widget.themeColor,
+                // ⬅️ Cursor con color neutro (no usa themeColor amarillo)
+                cursorColor: widget.isDarkMode ? Colors.white70 : Colors.black87,
                 decoration: InputDecoration(
                   hintText: widget.isLoading 
                       ? "El bot está respondiendo..." 
@@ -447,6 +456,10 @@ class _ProfessionalInputFieldState extends State<_ProfessionalInputField> {
                     fontWeight: FontWeight.w400,
                   ),
                   border: InputBorder.none,
+                  // ⬅️ Asegurar que no haya bordes enfocados del tema global
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  disabledBorder: InputBorder.none,
                   contentPadding: const EdgeInsets.symmetric(vertical: 16),
                   isDense: true,
                 ),
@@ -488,26 +501,18 @@ class _ProfessionalInputFieldState extends State<_ProfessionalInputField> {
                   borderRadius: BorderRadius.circular(20),
                   onTap: (isInputEnabled && _hasText) ? widget.onSend : null,
                   child: Center(
-                    child: widget.isLoading
-                        ? SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              valueColor: AlwaysStoppedAnimation<Color>(Colors.grey.shade600),
-                            ),
-                          )
-                        : Icon(
-                            Icons.send_rounded,
-                            color: (isInputEnabled && _hasText) ? Colors.white : Colors.grey.shade600,
-                            size: 20,
-                          ),
+                    child: Icon(
+                      Icons.send_rounded,
+                      color: (isInputEnabled && _hasText) ? Colors.white : Colors.grey.shade600,
+                      size: 20,
+                    ),
                   ),
                 ),
               ),
             ),
             const SizedBox(width: 6),
           ],
+          ),
         ),
       ),
     );
@@ -593,9 +598,11 @@ class _ThinkingIndicator extends StatefulWidget {
   State<_ThinkingIndicator> createState() => _ThinkingIndicatorState();
 }
 
-class _ThinkingIndicatorState extends State<_ThinkingIndicator> {
+class _ThinkingIndicatorState extends State<_ThinkingIndicator> 
+    with SingleTickerProviderStateMixin {
   String _currentMessage = "Procesando...";
   DateTime? _startTime;
+  late AnimationController _shimmerController;
   
   // Mensajes progresivos con sentido
   final List<String> _messages = [
@@ -610,6 +617,18 @@ class _ThinkingIndicatorState extends State<_ThinkingIndicator> {
     super.initState();
     _startTime = DateTime.now();
     _updateMessage();
+    
+    // ⬅️ Animación shimmer (brillo que se mueve en loop)
+    _shimmerController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500),
+    )..repeat(); // Repetir infinitamente
+  }
+  
+  @override
+  void dispose() {
+    _shimmerController.dispose();
+    super.dispose();
   }
   
   void _updateMessage() {
@@ -618,14 +637,14 @@ class _ThinkingIndicatorState extends State<_ThinkingIndicator> {
     final elapsed = DateTime.now().difference(_startTime!);
     final seconds = elapsed.inSeconds;
     
-    // Cambiar mensaje cada 3 segundos
+    // Cambiar mensaje: "Escribiendo..." después de 2 segundos (1 segundo antes que antes)
     int messageIndex = 0;
     if (seconds >= 9) {
       messageIndex = 3; // "Casi listo..."
     } else if (seconds >= 6) {
       messageIndex = 2; // "Analizando..."
-    } else if (seconds >= 3) {
-      messageIndex = 1; // "Escribiendo..."
+    } else if (seconds >= 2) {
+      messageIndex = 1; // "Escribiendo..." (cambia después de 2 segundos en lugar de 3)
     } else {
       messageIndex = 0; // "Procesando..."
     }
@@ -644,22 +663,64 @@ class _ThinkingIndicatorState extends State<_ThinkingIndicator> {
   
   @override
   Widget build(BuildContext context) {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 300),
-      transitionBuilder: (child, animation) {
-        return FadeTransition(
-          opacity: animation,
-          child: child,
+    return AnimatedBuilder(
+      animation: _shimmerController,
+      builder: (context, child) {
+        return AnimatedSwitcher(
+          duration: const Duration(milliseconds: 300),
+          transitionBuilder: (switcherChild, animation) {
+            return FadeTransition(
+              opacity: animation,
+              child: switcherChild,
+            );
+          },
+          child: ShaderMask(
+            key: ValueKey(_currentMessage),
+            shaderCallback: (bounds) {
+              // ⬅️ Crear gradiente que se mueve de izquierda a derecha (efecto shimmer)
+              final shimmerPosition = _shimmerController.value * 3.0 - 1.0; // -1.0 a 2.0
+              
+              // ⬅️ Colores base y brillantes adaptativos
+              final baseColor = widget.isDarkMode 
+                  ? Colors.white38 
+                  : Colors.black38;
+              final brightColor = widget.isDarkMode 
+                  ? Colors.white 
+                  : Colors.black87;
+              
+              return LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: [
+                  baseColor,
+                  baseColor,
+                  brightColor,
+                  brightColor,
+                  baseColor,
+                  baseColor,
+                ],
+                stops: [
+                  0.0,
+                  (shimmerPosition - 0.3).clamp(0.0, 1.0),
+                  (shimmerPosition - 0.1).clamp(0.0, 1.0),
+                  (shimmerPosition + 0.1).clamp(0.0, 1.0),
+                  (shimmerPosition + 0.3).clamp(0.0, 1.0),
+                  1.0,
+                ],
+              ).createShader(bounds);
+            },
+            blendMode: BlendMode.srcATop,
+            child: Text(
+              _currentMessage,
+              style: TextStyle(
+                // ⬅️ Color base (será modificado por el shader)
+                color: widget.isDarkMode ? Colors.white : Colors.black,
+                fontSize: 11,
+              ),
+            ),
+          ),
         );
       },
-      child: Text(
-        _currentMessage,
-        key: ValueKey(_currentMessage),
-        style: TextStyle(
-          color: widget.isDarkMode ? Colors.white38 : Colors.black38, 
-          fontSize: 11,
-        ),
-      ),
     );
   }
 }

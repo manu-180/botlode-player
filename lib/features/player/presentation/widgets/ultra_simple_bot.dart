@@ -15,6 +15,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 // ⬅️ NOTA: isOpenSimpleProvider ahora es solo un alias para chatOpenProvider
 final isOpenSimpleProvider = StateProvider<bool>((ref) => false);
 
+// ⬅️ Helper para formatear hora de Argentina (UTC-3) sin zona horaria
+String _formatArgentinaTime() {
+  final nowLocal = DateTime.now().toLocal();
+  final nowArgentina = nowLocal.subtract(const Duration(hours: 3));
+  return '${nowArgentina.year}-${nowArgentina.month.toString().padLeft(2, '0')}-${nowArgentina.day.toString().padLeft(2, '0')}T${nowArgentina.hour.toString().padLeft(2, '0')}:${nowArgentina.minute.toString().padLeft(2, '0')}:${nowArgentina.second.toString().padLeft(2, '0')}.${nowArgentina.millisecond.toString().padLeft(3, '0')}';
+}
+
 class UltraSimpleBot extends ConsumerStatefulWidget {
   const UltraSimpleBot({super.key});
 
@@ -145,48 +152,107 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
           ref.read(activeSessionIdProvider.notifier).state = currentSessionId;
           print("🟡 [UltraSimpleBot] ✅✅✅ activeSessionId actualizado SÍNCRONAMENTE a: $currentSessionId ✅✅✅");
           
-          // ⬅️ PASO 2: Reclamar sesión en BD (ASÍNCRONO)
+          // ⬅️ PASO 2: Reclamar sesión en BD (ASÍNCRONO pero PRIORITARIO)
           // Ordenamos al servidor imponer esta verdad y eliminar competidores (zombis).
           // Esto implementa el patrón "Mutex de Sesión" descrito en el documento técnico.
-          Future.microtask(() async {
+          // ⚠️ CRÍTICO: Ejecutar INMEDIATAMENTE sin esperar microtask para evitar condiciones de carrera
+          (() async {
             try {
               print("🟡 [UltraSimpleBot] Iniciando reclamación de sesión en BD...");
-              // "Matar a los Zombis": Marcar todas las demás sesiones de este bot como offline
+              
+              // ⬅️ PASO 2.1: "Matar a TODOS los Zombis" - Marcar TODAS las sesiones de este bot como offline
+              // Esto incluye incluso la sesión actual, para luego marcarla como online de forma limpia
+              // ⚠️ CRÍTICO: Hacer esto PRIMERO antes de que PresenceManager.setOnline() se ejecute
               await supabase
                   .from('session_heartbeats')
                   .update({'is_online': false})
-                  .eq('bot_id', botId)
-                  .neq('session_id', currentSessionId);
+                  .eq('bot_id', botId);
               
-              print("🟡 [UltraSimpleBot] Todos los demás chats marcados como offline");
+              print("🟡 [UltraSimpleBot] ✅ TODAS las sesiones de este bot marcadas como offline (incluyendo la actual)");
               
-              // "Reclamar el Trono": Insertar o Actualizar la sesión actual como activa
+              // ⬅️ PASO 2.2: "Reclamar el Trono" - Insertar o Actualizar SOLO la sesión actual como activa
+              // Esperar un pequeño delay para asegurar que el UPDATE anterior se complete
+              await Future.delayed(const Duration(milliseconds: 100));
+              
               await supabase
                   .from('session_heartbeats')
                   .upsert({
                     'session_id': currentSessionId,
                     'bot_id': botId,
                     'is_online': true,
-                    'last_seen': DateTime.now().toUtc().toIso8601String(),
+                    'last_seen': _formatArgentinaTime(), // ⬅️ Hora de Argentina (UTC-3)
                     'chat_id': currentChatId,
                   }, onConflict: 'session_id');
               
-              print("🟡 [UltraSimpleBot] ✅✅✅ Sesión reclamada en BD (todos los demás chats marcados como offline) ✅✅✅");
+              print("🟡 [UltraSimpleBot] ✅✅✅ Sesión reclamada en BD - SOLO esta sesión está online ahora ✅✅✅");
+              
+              // ⬅️ PASO 2.3: Verificación final y limpieza agresiva - Asegurar que ningún otro chat esté online
+              await Future.delayed(const Duration(milliseconds: 200));
+              
+              final verification = await supabase
+                  .from('session_heartbeats')
+                  .select('session_id, is_online')
+                  .eq('bot_id', botId)
+                  .eq('is_online', true);
+              
+              if (verification.length > 1 || (verification.length == 1 && verification.first['session_id'] != currentSessionId)) {
+                print("⚠️ [UltraSimpleBot] ADVERTENCIA: Hay ${verification.length} chats online, forzando limpieza agresiva...");
+                for (var chat in verification) {
+                  final sid = chat['session_id'] as String;
+                  if (sid != currentSessionId) {
+                    print("⚠️ [UltraSimpleBot] Forzando offline para chat zombi: $sid");
+                  }
+                }
+                
+                // Forzar limpieza nuevamente - más agresiva
+                await supabase
+                    .from('session_heartbeats')
+                    .update({'is_online': false})
+                    .eq('bot_id', botId)
+                    .neq('session_id', currentSessionId);
+                
+                await Future.delayed(const Duration(milliseconds: 50));
+                
+                await supabase
+                    .from('session_heartbeats')
+                    .upsert({
+                      'session_id': currentSessionId,
+                      'bot_id': botId,
+                      'is_online': true,
+                      'last_seen': _formatArgentinaTime(), // ⬅️ Hora de Argentina (UTC-3)
+                      'chat_id': currentChatId,
+                    }, onConflict: 'session_id');
+                
+                print("🟡 [UltraSimpleBot] ✅ Limpieza agresiva completada - Solo chat actual debería estar online");
+              } else if (verification.length == 1 && verification.first['session_id'] == currentSessionId) {
+                print("🟡 [UltraSimpleBot] ✅ Verificación OK: Solo el chat actual está online");
+              } else {
+                print("🟡 [UltraSimpleBot] ✅ Verificación OK: ${verification.length} chat(s) online");
+              }
             } catch (e) {
               print("⚠️ [UltraSimpleBot] Error reclamando sesión en BD: $e");
               // No crashear la UI. La actualización optimista ya se hizo.
             }
-          });
+          })();
         } catch (e) {
           print("⚠️ [UltraSimpleBot] Error obteniendo sessionId al abrir chat: $e");
         }
         print("🚀🚀🚀 [UltraSimpleBot] FIN APERTURA DE CHAT - CÓDIGO NUEVO 🚀🚀🚀");
       }
       
-      Future.microtask(() {
+      // ⬅️ CRÍTICO: NO usar PresenceManager.setOnline() cuando se abre el chat
+      // La reclamación de sesión ya se hizo directamente en la BD en el bloque anterior.
+      // PresenceManager solo se usa para los heartbeats periódicos, no para activar/desactivar.
+      // Esto evita que múltiples PresenceManagers (de chats viejos) interfieran.
+      Future.microtask(() async {
         try {
           if (current) {
-            print("🟢 Chat Abierto (UltraSimple) -> Enviando ONLINE");
+            // ⬅️ NO llamar a setOnline() aquí - la reclamación de sesión ya se hizo
+            // Solo iniciar el heartbeat periódico DESPUÉS de que la reclamación se complete
+            await Future.delayed(const Duration(milliseconds: 500));
+            
+            print("🟢 Chat Abierto (UltraSimple) -> Iniciando heartbeat periódico (reclamación ya completada)");
+            // ⬅️ Solo iniciar el heartbeat, pero NO actualizar is_online (ya está actualizado por la reclamación)
             presenceManager.setOnline();
             _lastKnownOpenState = true;
           } else {
@@ -196,22 +262,6 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
           }
         } catch (e) {
           print("⚠️ Error al acceder a PresenceManager (UltraSimple): $e");
-          // ⬅️ Reintentar después de un breve delay
-          Future.delayed(const Duration(milliseconds: 200), () {
-            try {
-              if (current) {
-                presenceManager.setOnline();
-                _lastKnownOpenState = true;
-                print("✅ Reintento exitoso: ONLINE");
-              } else {
-                presenceManager.setOffline();
-                _lastKnownOpenState = false;
-                print("✅ Reintento exitoso: OFFLINE");
-              }
-            } catch (e2) {
-              print("⚠️ Reintento también falló: $e2");
-            }
-          });
         }
       });
     });
@@ -239,13 +289,13 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
     final double verticalPadding = isMobile ? 8.0 : 28.0;
     
     // ⬅️ MEJORADO: Altura más generosa aprovechando mejor el espacio
-    // - Usa 95% de la pantalla (antes 92%) para aprovechar más espacio
-    // - Máximo 900px (antes 800px) para pantallas grandes
+    // - Usa 97% de la pantalla para aprovechar más espacio vertical
+    // - Máximo 1000px para pantallas grandes (más alto que antes)
     // - Mínimo 400px para pantallas pequeñas
-    // - Margen superior mínimo de 40px para evitar tocar appbars
-    final double maxAvailableHeight = screenSize.height - 40.0; // Margen superior seguro
-    final double calculatedHeight = (maxAvailableHeight * 0.95) - (verticalPadding * 2);
-    final double chatHeight = calculatedHeight.clamp(400.0, 900.0);
+    // - Margen superior mínimo de 30px (reducido para más altura)
+    final double maxAvailableHeight = screenSize.height - 30.0; // Margen superior reducido
+    final double calculatedHeight = (maxAvailableHeight * 0.97) - (verticalPadding * 2);
+    final double chatHeight = calculatedHeight.clamp(400.0, 1000.0);
     
     // ⬅️ FIX: Fondo totalmente transparente
     // ✅ TRACKING GLOBAL: Manejado por JavaScript nativo en main.dart

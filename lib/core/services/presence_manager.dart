@@ -5,6 +5,12 @@ import 'dart:html' as html;
 import 'package:botlode_player/core/config/app_config.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+// ⬅️ Helper para formatear hora de Argentina (UTC-3) sin zona horaria
+// Función top-level para que se pueda usar en todos los archivos
+String _formatArgentinaTimestamp(DateTime dateTime) {
+  return '${dateTime.year}-${dateTime.month.toString().padLeft(2, '0')}-${dateTime.day.toString().padLeft(2, '0')}T${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}:${dateTime.second.toString().padLeft(2, '0')}.${dateTime.millisecond.toString().padLeft(3, '0')}';
+}
+
 class PresenceManager {
   final SupabaseClient _supabase;
   final String sessionId;
@@ -42,13 +48,15 @@ class PresenceManager {
       
       try {
         final url = '${AppConfig.supabaseUrl}/rest/v1/session_heartbeats?on_conflict=session_id';
-        // ⬅️ CRÍTICO: Usar UTC para evitar problemas de zona horaria
-        final nowUtc = DateTime.now().toUtc();
+        // ⬅️ Hora de Argentina (UTC-3): restar 3 horas y formatear sin zona horaria
+        final nowLocal = DateTime.now().toLocal();
+        final nowArgentina = nowLocal.subtract(const Duration(hours: 3));
+        final timestampString = _formatArgentinaTimestamp(nowArgentina);
         final body = jsonEncode({
           'session_id': sessionId,
           'bot_id': botId,
           'is_online': false,
-          'last_seen': nowUtc.toIso8601String(), // ⬅️ SIEMPRE UTC
+          'last_seen': timestampString, // ⬅️ Hora de Argentina (UTC-3) sin zona horaria
         });
         
         // ⬅️ ESTRATEGIA DUAL: Intentar sendBeacon primero, luego XHR síncrono como fallback
@@ -167,15 +175,33 @@ class PresenceManager {
 
   Future<void> _sendToSupabase(bool status) async {
     try {
-      // ⬅️ CRÍTICO: Usar UTC para evitar problemas de zona horaria (Argentina UTC-3 vs UTC)
-      final nowUtc = DateTime.now().toUtc();
-      print("📡 Enviando señal a Supabase: ${status ? 'ONLINE' : 'OFFLINE'} (UTC: ${nowUtc.toIso8601String()})");
-      await _supabase.from('session_heartbeats').upsert({
-        'session_id': sessionId,
-        'bot_id': botId,
-        'is_online': status,
-        'last_seen': nowUtc.toIso8601String(), // ⬅️ SIEMPRE UTC
-      }, onConflict: 'session_id');
+      // ⬅️ Hora de Argentina (UTC-3): restar 3 horas y asegurar que se guarde como hora local
+      final nowLocal = DateTime.now().toLocal();
+      final nowArgentina = nowLocal.subtract(const Duration(hours: 3));
+      // ⬅️ Formatear como string sin zona horaria para que Supabase lo interprete como hora local
+      final timestampString = _formatArgentinaTimestamp(nowArgentina);
+      print("📡 Enviando señal a Supabase: ${status ? 'ONLINE' : 'OFFLINE'} (Argentina: $timestampString)");
+      
+      // ⬅️ CRÍTICO: Si estamos marcando como online, NO actualizar is_online aquí
+      // La reclamación de sesión ya se encargó de eso. Solo actualizamos last_seen para el heartbeat.
+      // Si estamos marcando como offline, SÍ actualizamos is_online para desactivar.
+      if (status) {
+        // Solo actualizar last_seen, NO tocar is_online (la reclamación de sesión ya lo hizo)
+        await _supabase.from('session_heartbeats').upsert({
+          'session_id': sessionId,
+          'bot_id': botId,
+          'last_seen': timestampString, // ⬅️ Hora de Argentina (UTC-3) sin zona horaria
+          // ⬅️ NO actualizar is_online aquí - la reclamación de sesión ya lo hizo
+        }, onConflict: 'session_id');
+      } else {
+        // Si es offline, SÍ actualizar is_online para desactivar
+        await _supabase.from('session_heartbeats').upsert({
+          'session_id': sessionId,
+          'bot_id': botId,
+          'is_online': false,
+          'last_seen': timestampString, // ⬅️ Hora de Argentina (UTC-3) sin zona horaria
+        }, onConflict: 'session_id');
+      }
     } catch (e) {
       print("⚠️ Error de red ($e). Reintentando en 2s...");
       // REINTENTO RÁPIDO (Quick Retry Strategy)

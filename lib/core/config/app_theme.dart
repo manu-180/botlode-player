@@ -50,7 +50,9 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: primary, width: 1.5),
+          // ⬅️ Color neutro para el borde enfocado (no usa primary amarillo)
+          // Gris claro para dark mode que funciona bien con cualquier tema
+          borderSide: BorderSide(color: Colors.grey.shade600, width: 1.5),
         ),
         hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
       ),

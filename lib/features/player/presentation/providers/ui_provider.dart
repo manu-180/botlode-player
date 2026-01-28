@@ -1,5 +1,6 @@
 // Archivo: lib/features/player/presentation/providers/ui_provider.dart
 import 'dart:ui';
+import 'package:botlode_player/core/config/supabase_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/chat_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -30,6 +31,13 @@ final isHoveredExternalProvider = StateProvider<bool>((ref) => false);
 // Solo el chat con este sessionId debe mostrar "EN LÍNEA"
 final activeSessionIdProvider = StateProvider<String?>((ref) => null);
 
+// ⬅️ Helper para formatear hora de Argentina (UTC-3) sin zona horaria
+String _formatArgentinaTime() {
+  final nowLocal = DateTime.now().toLocal();
+  final nowArgentina = nowLocal.subtract(const Duration(hours: 3));
+  return '${nowArgentina.year}-${nowArgentina.month.toString().padLeft(2, '0')}-${nowArgentina.day.toString().padLeft(2, '0')}T${nowArgentina.hour.toString().padLeft(2, '0')}:${nowArgentina.minute.toString().padLeft(2, '0')}:${nowArgentina.second.toString().padLeft(2, '0')}.${nowArgentina.millisecond.toString().padLeft(3, '0')}';
+}
+
 // ⬅️ MEJORADO: Reload limpia pantalla, resetea estado y olvida contexto (sin borrar historial BD)
 final chatResetProvider = Provider((ref) {
   return () {
@@ -43,22 +51,13 @@ final chatResetProvider = Provider((ref) {
       print("🟢 [DEBUG] chatResetProvider() - Error leyendo estado antes: $e");
     }
     
-    // ⬅️ PASO 0.5: CERRAR EL CHAT PRIMERO para desmontar el widget inmediatamente
-    // ⚠️ CRÍTICO: Esto debe hacerse PRIMERO para que el widget se desmonte y no pueda mostrar "EN LÍNEA"
-    print("🟢 [DEBUG] chatResetProvider() - PASO 0.5: Cerrando chat PRIMERO (desmonta widget inmediatamente)");
-    try {
-      ref.read(chatOpenProvider.notifier).set(false);
-      print("🟢 [DEBUG] chatResetProvider() - Chat cerrado - widget se desmontará inmediatamente");
-    } catch (e) {
-      print("🟢 [DEBUG] chatResetProvider() - ERROR cerrando chat: $e");
-    }
-    
-    // ⬅️ PASO 0.6: INVALIDAR activeSessionId para asegurar que ningún chat muestre "EN LÍNEA"
-    // ⚠️ CRÍTICO: Esto debe hacerse DESPUÉS de cerrar el chat pero ANTES de clearChat()
-    print("🟢 [DEBUG] chatResetProvider() - PASO 0.6: Invalidando activeSessionId (ningún chat mostrará 'EN LÍNEA')");
+    // ⬅️ PASO 0.5: INVALIDAR activeSessionId para asegurar que ningún chat muestre "EN LÍNEA" temporalmente
+    // ⚠️ CRÍTICO: Esto debe hacerse ANTES de clearChat() para evitar que el chat viejo muestre "EN LÍNEA"
+    // ⬅️ NOTA: El chat NO se cierra - solo se vacía y se mantiene abierto
+    print("🟢 [DEBUG] chatResetProvider() - PASO 0.5: Invalidando activeSessionId temporalmente (ningún chat mostrará 'EN LÍNEA' durante el reload)");
     try {
       ref.read(activeSessionIdProvider.notifier).state = null;
-      print("🟢 [DEBUG] chatResetProvider() - activeSessionId invalidado (null)");
+      print("🟢 [DEBUG] chatResetProvider() - activeSessionId invalidado (null) - chat permanece abierto");
     } catch (e) {
       print("🟢 [DEBUG] chatResetProvider() - ERROR invalidando activeSessionId: $e");
     }
@@ -75,14 +74,90 @@ final chatResetProvider = Provider((ref) {
     }
     
     // ⬅️ PASO 1.5: Verificar estado DESPUÉS de clearChat y actualizar sessionId activo al NUEVO
-    // ⚠️ IMPORTANTE: Actualizar activeSessionId con el nuevo sessionId para que el nuevo chat pueda mostrar "EN LÍNEA" cuando se abra
+    // ⚠️ IMPORTANTE: Actualizar activeSessionId con el nuevo sessionId para que el nuevo chat pueda mostrar "EN LÍNEA"
+    // ⬅️ CRÍTICO: Como el chat permanece abierto después del reload, necesitamos reclamar la sesión en BD
     try {
       final stateAfterClear = ref.read(chatControllerProvider);
-      print("🟢 [DEBUG] chatResetProvider() - ESTADO DESPUÉS de clearChat: ${stateAfterClear.messages.length} mensajes, sessionId: ${stateAfterClear.sessionId}, mood: ${stateAfterClear.currentMood}");
+      final currentSessionId = stateAfterClear.sessionId;
+      final currentChatId = stateAfterClear.chatId;
+      final botId = ref.read(currentBotIdProvider);
+      final supabase = ref.read(supabaseClientProvider);
       
-      // ⬅️ Actualizar el sessionId activo al nuevo (solo este chat mostrará "EN LÍNEA" cuando se abra)
-      ref.read(activeSessionIdProvider.notifier).state = stateAfterClear.sessionId;
-      print("🟢 [DEBUG] chatResetProvider() - activeSessionId actualizado a: ${stateAfterClear.sessionId} (nuevo chat será el activo)");
+      print("🟢 [DEBUG] chatResetProvider() - ESTADO DESPUÉS de clearChat: ${stateAfterClear.messages.length} mensajes, sessionId: $currentSessionId, mood: ${stateAfterClear.currentMood}");
+      
+      // ⬅️ PASO 1.5.1: Actualizar el sessionId activo al nuevo (síncrono)
+      ref.read(activeSessionIdProvider.notifier).state = currentSessionId;
+      print("🟢 [DEBUG] chatResetProvider() - activeSessionId actualizado a: $currentSessionId (nuevo chat será el activo)");
+      
+      // ⬅️ PASO 1.5.2: Reclamar sesión en BD (asíncrono) - Como el chat permanece abierto, necesitamos reclamar la sesión
+      // Esto asegura que solo este chat esté "EN LÍNEA" en la BD
+      (() async {
+        try {
+          print("🟢 [DEBUG] chatResetProvider() - Iniciando reclamación de sesión en BD después del reload...");
+          
+          // Marcar TODAS las sesiones de este bot como offline
+          await supabase
+              .from('session_heartbeats')
+              .update({'is_online': false})
+              .eq('bot_id', botId);
+          
+          print("🟢 [DEBUG] chatResetProvider() - ✅ TODAS las sesiones de este bot marcadas como offline");
+          
+          // Esperar un pequeño delay para asegurar que el UPDATE anterior se complete
+          await Future.delayed(const Duration(milliseconds: 100));
+          
+          // Reclamar SOLO la sesión actual como activa
+          await supabase
+              .from('session_heartbeats')
+              .upsert({
+                'session_id': currentSessionId,
+                'bot_id': botId,
+                'is_online': true,
+                'last_seen': _formatArgentinaTime(), // ⬅️ Hora de Argentina (UTC-3)
+                'chat_id': currentChatId,
+              }, onConflict: 'session_id');
+          
+          print("🟢 [DEBUG] chatResetProvider() - ✅✅✅ Sesión reclamada en BD - SOLO esta sesión está online ahora ✅✅✅");
+          
+          // Verificación final y limpieza agresiva
+          await Future.delayed(const Duration(milliseconds: 200));
+          
+          final verification = await supabase
+              .from('session_heartbeats')
+              .select('session_id, is_online')
+              .eq('bot_id', botId)
+              .eq('is_online', true);
+          
+          if (verification.length > 1 || (verification.length == 1 && verification.first['session_id'] != currentSessionId)) {
+            print("⚠️ [DEBUG] chatResetProvider() - ADVERTENCIA: Hay ${verification.length} chats online, forzando limpieza agresiva...");
+            
+            // Forzar limpieza nuevamente
+            await supabase
+                .from('session_heartbeats')
+                .update({'is_online': false})
+                .eq('bot_id', botId)
+                .neq('session_id', currentSessionId);
+            
+            await Future.delayed(const Duration(milliseconds: 50));
+            
+            await supabase
+                .from('session_heartbeats')
+                .upsert({
+                  'session_id': currentSessionId,
+                  'bot_id': botId,
+                  'is_online': true,
+                  'last_seen': _formatArgentinaTime(), // ⬅️ Hora de Argentina (UTC-3)
+                  'chat_id': currentChatId,
+                }, onConflict: 'session_id');
+            
+            print("🟢 [DEBUG] chatResetProvider() - ✅ Limpieza agresiva completada - Solo chat actual debería estar online");
+          } else if (verification.length == 1 && verification.first['session_id'] == currentSessionId) {
+            print("🟢 [DEBUG] chatResetProvider() - ✅ Verificación OK: Solo el chat actual está online");
+          }
+        } catch (e) {
+          print("⚠️ [DEBUG] chatResetProvider() - Error reclamando sesión en BD: $e");
+        }
+      })();
     } catch (e) {
       print("🟢 [DEBUG] chatResetProvider() - Error leyendo estado después de clearChat: $e");
     }
