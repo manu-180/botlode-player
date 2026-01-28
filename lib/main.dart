@@ -12,7 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String DEPLOY_VERSION = "PLAYER PROGRESIVO v5.19 - PASO 5.19 - Connectivity Bottom AppBar HUD";
+const String DEPLOY_VERSION = "PLAYER PROGRESIVO v5.20 - PASO 5.20 - Connectivity HUD + No BackdropFilter";
 
 void main() {
   runZonedGuarded(() async {

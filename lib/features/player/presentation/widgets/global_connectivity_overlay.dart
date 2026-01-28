@@ -1,8 +1,8 @@
-import 'dart:ui';
-
 import 'package:botlode_player/core/network/connectivity_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
+import 'package:flutter/foundation.dart';
+import 'dart:html' as html;
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -25,6 +25,28 @@ class GlobalConnectivityOverlay extends ConsumerWidget {
     final isDarkMode = botConfig?.isDarkMode ?? true;
     final isOnline = ref.watch(connectivityProvider).asData?.value ?? true;
     final isChatOpen = ref.watch(chatOpenProvider);
+
+    // Logs + evento al HTML host (solo cuando cambia, sin spamear).
+    ref.listen<bool>(
+      connectivityProvider.select((v) => v.asData?.value ?? true),
+      (prev, next) {
+        if (prev == next) return;
+        try {
+          final payload = {
+            'type': 'CONNECTIVITY_STATE',
+            'source': 'botlode_player',
+            'online': next,
+            'chatOpen': isChatOpen,
+            'ts': DateTime.now().toIso8601String(),
+          };
+          html.window.parent?.postMessage(payload, '*');
+        } catch (_) {}
+        if (kDebugMode) {
+          // En producción puede no imprimir; en dev sí.
+          debugPrint('🛰️ [CONNECTIVITY_STATE] online=$next chatOpen=$isChatOpen');
+        }
+      },
+    );
 
     // Este widget debe ser hijo directo de un Stack (UltraSimpleBot / PlayerScreen).
     return IgnorePointer(
@@ -97,63 +119,72 @@ class _GlobalConnectivityBannerState extends State<_GlobalConnectivityBanner> {
     final IconData icon = showOffline ? Icons.wifi_off_rounded : Icons.wifi_rounded;
 
     // Banner estilo "snackbar" con diseño futurista.
+    // ⚠️ Importante: NO usamos BackdropFilter porque en HTML renderer puede romper (minified cast error).
     Widget banner = ClipRRect(
       borderRadius: BorderRadius.circular(999),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 20),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                bgGlow.withOpacity(0.95),
-                bgDeep,
-              ],
-            ),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: Colors.white.withOpacity(dark ? 0.22 : 0.30),
-              width: 1.2,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: bgGlow.withOpacity(dark ? 0.65 : 0.50),
-                blurRadius: 22,
-                spreadRadius: 2,
-              ),
-              BoxShadow(
-                color: Colors.black.withOpacity(dark ? 0.70 : 0.18),
-                blurRadius: 14,
-                offset: const Offset(0, 8),
-              ),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 18),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              bgGlow.withOpacity(dark ? 0.92 : 0.88),
+              bgDeep.withOpacity(0.98),
             ],
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Ícono dentro de un pequeño "chip" luminoso.
-              Container(
-                width: 26,
-                height: 26,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.black.withOpacity(dark ? 0.26 : 0.08),
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.4),
-                    width: 1,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: Colors.white.withOpacity(dark ? 0.22 : 0.30),
+            width: 1.2,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: bgGlow.withOpacity(dark ? 0.70 : 0.55),
+              blurRadius: 26,
+              spreadRadius: 2,
+            ),
+            BoxShadow(
+              color: Colors.black.withOpacity(dark ? 0.70 : 0.18),
+              blurRadius: 14,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Ícono dentro de un pequeño "chip" luminoso.
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.black.withOpacity(dark ? 0.28 : 0.10),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.45),
+                  width: 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(dark ? 0.35 : 0.15),
+                    blurRadius: 10,
+                    offset: const Offset(0, 6),
                   ),
-                ),
-                child: Icon(
-                  icon,
-                  color: Colors.white,
-                  size: 18,
-                ),
+                ],
               ),
-              const SizedBox(width: 12),
-              Text(
+              child: Icon(
+                icon,
+                color: Colors.white,
+                size: 18,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Flexible(
+              child: Text(
                 text,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w800,
@@ -161,10 +192,11 @@ class _GlobalConnectivityBannerState extends State<_GlobalConnectivityBanner> {
                   letterSpacing: 0.4,
                   decoration: TextDecoration.none,
                   fontFamily: 'Courier',
+                  height: 1.2,
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     )
