@@ -12,7 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String DEPLOY_VERSION = "PLAYER PROGRESIVO v5.18 - PASO 5.18 - Adaptive Close Button & Bubble Colors";
+const String DEPLOY_VERSION = "PLAYER PROGRESIVO v5.19 - PASO 5.19 - Connectivity Bottom AppBar HUD";
 
 void main() {
   runZonedGuarded(() async {
@@ -69,6 +69,15 @@ void _setupIframeListeners() {
   
   Future.delayed(const Duration(milliseconds: 500), () {
       _safePostMessage('CMD_READY');
+      try {
+        html.window.parent?.postMessage({
+          'type': 'DEPLOY_INFO',
+          'source': 'botlode_player',
+          'version': DEPLOY_VERSION,
+        }, '*');
+      } catch (e) {
+        // Error silenciado
+      }
   });
 }
 
