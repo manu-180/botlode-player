@@ -314,7 +314,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                         ),
                       ],
                     ),
-                    _ConnectivityBanner(isOnline: isOnline),
+                    // ⬅️ Banner interno eliminado: ahora la alerta es global (overlay full-screen).
                   ],
                 ),
         ),

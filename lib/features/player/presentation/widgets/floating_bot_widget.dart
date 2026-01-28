@@ -2,6 +2,7 @@
 import 'dart:html' as html;
 import 'dart:math' as math;
 import 'package:botlode_player/core/config/supabase_provider.dart';
+import 'package:botlode_player/core/network/connectivity_provider.dart';
 import 'package:botlode_player/core/services/presence_manager_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/chat_provider.dart'; // ⬅️ NUEVO: Para acceder a chatControllerProvider
@@ -20,6 +21,7 @@ class FloatingBotWidget extends ConsumerStatefulWidget {
 }
 
 class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
+  bool _wasNetworkOffline = false;
   
   Color _getContrastingTextColor(Color background) {
     return ThemeData.estimateBrightnessForColor(background) == Brightness.dark
@@ -39,6 +41,9 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     final isOpen = ref.watch(chatOpenProvider);
     final botConfigAsync = ref.watch(botConfigProvider);
     final isHovered = ref.watch(isHoveredExternalProvider);
+
+    final bool showOfflineAlert =
+        botConfigAsync.asData?.value.showOfflineAlert ?? true;
     
     // ⬅️ LISTENER: Manejar estado cuando se abre/cierra el chat
     ref.listen(chatOpenProvider, (previous, next) {
@@ -161,6 +166,42 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
           // Error silenciado
         }
       }
+    });
+
+    // ⬅️ LISTENER GLOBAL: Conectividad (se ejecuta incluso con chat cerrado).
+    // Propaga el estado hacia el HTML contenedor (parent) para que pueda reaccionar.
+    ref.listen(connectivityProvider, (prev, next) {
+      if (!showOfflineAlert) return;
+      next.whenData((online) {
+        if (!online) {
+          if (_wasNetworkOffline) return;
+          _wasNetworkOffline = true;
+
+          // Compatibilidad: mensaje string (contrato existente).
+          html.window.parent?.postMessage('NETWORK_OFFLINE', '*');
+
+          // Nuevo: payload estructurado para integraciones más ricas.
+          html.window.parent?.postMessage({
+            'source': 'botlode_player',
+            'type': 'connectivity',
+            'online': false,
+            'botId': ref.read(currentBotIdProvider),
+            'ts': DateTime.now().toIso8601String(),
+          }, '*');
+        } else {
+          if (!_wasNetworkOffline) return;
+          _wasNetworkOffline = false;
+
+          html.window.parent?.postMessage('NETWORK_ONLINE', '*');
+          html.window.parent?.postMessage({
+            'source': 'botlode_player',
+            'type': 'connectivity',
+            'online': true,
+            'botId': ref.read(currentBotIdProvider),
+            'ts': DateTime.now().toIso8601String(),
+          }, '*');
+        }
+      });
     });
 
     final screenSize = MediaQuery.of(context).size;

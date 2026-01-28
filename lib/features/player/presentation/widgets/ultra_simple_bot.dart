@@ -7,6 +7,7 @@ import 'package:botlode_player/features/player/presentation/providers/chat_provi
 import 'package:botlode_player/features/player/presentation/providers/loader_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
 import 'package:botlode_player/features/player/presentation/views/chat_panel_view.dart';
+import 'package:botlode_player/features/player/presentation/widgets/global_connectivity_overlay.dart';
 import 'package:botlode_player/features/player/presentation/widgets/rive_avatar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -275,9 +276,9 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
         },
         behavior: HitTestBehavior.translucent,
         child: Stack(
-          fit: StackFit.expand,
-          children: [
-            
+        fit: StackFit.expand,
+        children: [
+        
             // CHAT COMPLEJO (Panel)
             Positioned(
               bottom: 0,
@@ -404,6 +405,9 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
                 ),
               ),
             ),
+
+            // ⬅️ OVERLAY GLOBAL DE CONECTIVIDAD (full-screen, incluso con chat cerrado)
+            const GlobalConnectivityOverlay(),
         ],
         ),
       ),
