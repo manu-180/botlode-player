@@ -160,6 +160,57 @@ function extractContactsRegex(message: string): Array<{ type: string; value: str
   return contacts;
 }
 
+// ⬅️ NUEVA FUNCIÓN: Extraer resumen del proyecto de la respuesta del bot
+function extractProjectSummary(botReply: string): string | null {
+  if (!botReply || typeof botReply !== 'string') return null;
+  
+  const replyLower = botReply.toLowerCase();
+  
+  // Patrones que indican que el bot está haciendo un resumen (FASE 3)
+  const summaryPatterns = [
+    /entiendo[,:]?\s+quer[ée]s\s+(.+?)(?:\.|¿|$)/i,
+    /perfecto[,:]?\s+entonces\s+(.+?)(?:\.|¿|$)/i,
+    /claro[,:]?\s+necesit[áa]s\s+(.+?)(?:\.|¿|$)/i,
+    /resumiendo[,:]?\s+(.+?)(?:\.|¿|$)/i,
+    /entonces\s+quer[ée]s\s+(.+?)(?:\.|¿|$)/i,
+    /en\s+resumen[,:]?\s+(.+?)(?:\.|¿|$)/i,
+  ];
+  
+  // Buscar patrones de resumen
+  for (const pattern of summaryPatterns) {
+    const match = botReply.match(pattern);
+    if (match && match[1]) {
+      let summary = match[1].trim();
+      
+      // Limpiar el resumen: remover frases de cierre como "¿Agendamos una reunión?"
+      summary = summary
+        .replace(/\s*¿[^?]*\?.*$/i, '') // Remover preguntas al final
+        .replace(/\s*\.\s*$/, '') // Remover punto final
+        .trim();
+      
+      // Validar que el resumen tenga contenido sustancial (más de 10 caracteres)
+      if (summary.length > 10) {
+        return summary;
+      }
+    }
+  }
+  
+  // Si no se encontró patrón específico, buscar frases que indiquen resumen
+  // Ejemplo: "Entiendo, querés una página para mostrar tus servicios con formulario de contacto"
+  if (replyLower.includes('entiendo') && (replyLower.includes('querés') || replyLower.includes('necesitás'))) {
+    // Extraer todo después de "entiendo" hasta la primera pregunta o punto
+    const match = botReply.match(/entiendo[,:]?\s+(.+?)(?:[\.¿]|agendamos|reuni[óo]n)/i);
+    if (match && match[1]) {
+      let summary = match[1].trim();
+      if (summary.length > 10) {
+        return summary;
+      }
+    }
+  }
+  
+  return null;
+}
+
 // ⬅️ MEJORA 4: Extracción inteligente de reuniones usando IA (más preciso que regex)
 async function extractMeetingWithAI(
   message: string,
@@ -265,6 +316,200 @@ function extractVendorName(systemPrompt: string): string | null {
   }
   
   return null;
+}
+
+// ⬅️ NUEVA FUNCIÓN: Detección de negatividad y desinterés para ajustar intent_score
+function detectNegativityAndAdjustScore(message: string, currentScore: number): number {
+  if (!message || typeof message !== 'string') return currentScore;
+  
+  const messageLower = message.toLowerCase().trim();
+  
+  // Contador de señales de negatividad (múltiples señales = más agresivo)
+  let negativitySignals = 0;
+  
+  // 🔴 PATRONES DE RECHAZO TOTAL (bajar a 10-15)
+  const strongRejectionPatterns = [
+    /\bno\s+quiero\s+nada\b/gi,
+    /\bno\s+quiero\s+nada\s+de\s+nada\b/gi,
+    /\bno\s+me\s+interesa\s+nada\b/gi,
+    /\bno\s+necesito\s+nada\b/gi,
+    /\bno\s+quiero\s+comprar\b/gi,
+    /\bno\s+quiero\s+contratar\b/gi,
+    /\bno\s+quiero\s+nada\s+de\s+esto\b/gi,
+    /\bno\s+me\s+interesa\s+para\s+nada\b/gi,
+    /\bno\s+me\s+gusta\s+nada\b/gi,
+    /\bno\s+me\s+sirve\s+nada\b/gi,
+    /\bno\s+me\s+convence\s+nada\b/gi,
+    /\bno\s+me\s+llama\s+la\s+atenci[oó]n\s+nada\b/gi,
+    /\bno\s+es\s+para\s+m[íi]\s+nada\b/gi,
+    /\bno\s+me\s+funciona\s+nada\b/gi,
+    /\bno\s+me\s+conviene\s+nada\b/gi,
+    /\bno\s+quiero\s+nada\s+de\s+eso\b/gi,
+    /\bno\s+quiero\s+nada\s+de\s+eso\b/gi,
+    /\bno\s+me\s+interesa\s+eso\b/gi,
+    /\bno\s+me\s+interesa\s+eso\s+para\s+nada\b/gi,
+    /\bno\s+quiero\s+eso\b/gi,
+    /\bno\s+quiero\s+eso\s+para\s+nada\b/gi,
+  ];
+  
+  // 🔴 PATRONES DE RECHAZO MODERADO (bajar a 15-20)
+  const moderateRejectionPatterns = [
+    /\bno\s+me\s+interesa\b/gi,
+    /\bno\s+quiero\b/gi,
+    /\bno\s+necesito\b/gi,
+    /\bno\s+me\s+sirve\b/gi,
+    /\bno\s+me\s+convence\b/gi,
+    /\bno\s+me\s+gusta\b/gi,
+    /\bno\s+me\s+llama\s+la\s+atenci[oó]n\b/gi,
+    /\bno\s+es\s+para\s+m[íi]\b/gi,
+    /\bno\s+me\s+funciona\b/gi,
+    /\bno\s+me\s+conviene\b/gi,
+    /\bno\s+gracias\b/gi,
+    /\bno\s+estoy\s+interesado\b/gi,
+    /\bno\s+estoy\s+interesada\b/gi,
+  ];
+  
+  // 🔴 PATRONES DE PRECIO (bajar a 15-20)
+  const priceRejectionPatterns = [
+    /\bmuy\s+caro\b/gi,
+    /\bes\s+caro\b/gi,
+    /\bno\s+tengo\s+presupuesto\b/gi,
+    /\bno\s+puedo\s+pagar\s+eso\b/gi,
+    /\bes\s+muy\s+costoso\b/gi,
+    /\bno\s+me\s+alcanza\b/gi,
+    /\best[áa]\s+fuera\s+de\s+mi\s+alcance\b/gi,
+    /\bno\s+tengo\s+dinero\b/gi,
+    /\bes\s+demasiado\s+caro\b/gi,
+    /\bno\s+me\s+da\s+el\s+bolsillo\b/gi,
+  ];
+  
+  // 🔴 PATRONES DE DESINTERÉS (bajar 5-10 puntos)
+  const disinterestPatterns = [
+    /\bno\s+estoy\s+seguro\b/gi,
+    /\bno\s+estoy\s+segura\b/gi,
+    /\bno\s+sé\b/gi,
+    /\bno\s+lo\s+sé\b/gi,
+    /\bno\s+estoy\s+convencido\b/gi,
+    /\bno\s+estoy\s+convencida\b/gi,
+    /\bmejor\s+no\b/gi,
+    /\bmejor\s+lo\s+dejo\b/gi,
+    /\bmejor\s+despu[ée]s\b/gi,
+    /\bno\s+ahora\b/gi,
+    /\bdespu[ée]s\s+veo\b/gi,
+    /\bdespu[ée]s\s+hablamos\b/gi,
+    /\bno\s+me\s+convence\s+del\s+todo\b/gi,
+    /\bno\s+estoy\s+tan\s+seguro\b/gi,
+    /\bno\s+estoy\s+tan\s+segura\b/gi,
+    /\bno\s+me\s+termina\s+de\s+cerrar\b/gi,
+    /\bno\s+me\s+cierra\b/gi,
+    /\bno\s+me\s+cierra\s+del\s+todo\b/gi,
+    /\bno\s+estoy\s+100%\s+seguro\b/gi,
+    /\bno\s+estoy\s+100%\s+segura\b/gi,
+  ];
+  
+  // 🔴 PATRONES DE DESPEDIDA NEGATIVA (bajar a 10-15)
+  const negativeGoodbyePatterns = [
+    /\badios\b/gi,
+    /\bchau\b/gi,
+    /\bnos\s+vemos\b/gi,
+    /\bhasta\s+luego\b/gi,
+    /\bhasta\s+nunca\b/gi,
+    /\bchau\s+gracias\b/gi,
+    /\badios\s+gracias\b/gi,
+  ];
+  
+  // Función helper para verificar patrones sin problemas de estado de regex
+  const testPattern = (pattern: RegExp, text: string): boolean => {
+    // Crear una nueva instancia del regex para evitar problemas de estado
+    const newPattern = new RegExp(pattern.source, pattern.flags);
+    return newPattern.test(text);
+  };
+  
+  // Verificar rechazo total (máxima negatividad) - PRIORIDAD MÁXIMA
+  let hasStrongRejection = false;
+  for (const pattern of strongRejectionPatterns) {
+    if (testPattern(pattern, messageLower)) {
+      negativitySignals += 3; // Señal muy fuerte
+      hasStrongRejection = true;
+      break; // Si encontramos rechazo total, no necesitamos seguir con este grupo
+    }
+  }
+  
+  // Verificar rechazo moderado (solo si no hay rechazo total)
+  if (!hasStrongRejection) {
+    for (const pattern of moderateRejectionPatterns) {
+      if (testPattern(pattern, messageLower)) {
+        negativitySignals += 2; // Señal fuerte
+        break; // Solo necesitamos una señal de este tipo
+      }
+    }
+  }
+  
+  // Verificar rechazo por precio (solo si no hay rechazo total)
+  if (!hasStrongRejection) {
+    for (const pattern of priceRejectionPatterns) {
+      if (testPattern(pattern, messageLower)) {
+        negativitySignals += 2; // Señal fuerte
+        break; // Solo necesitamos una señal de este tipo
+      }
+    }
+  }
+  
+  // Verificar desinterés (señal más débil, pero acumulable solo si no hay rechazo fuerte)
+  if (negativitySignals === 0) {
+    for (const pattern of disinterestPatterns) {
+      if (testPattern(pattern, messageLower)) {
+        negativitySignals += 1; // Señal moderada
+        break; // Solo necesitamos una señal de este tipo
+      }
+    }
+  }
+  
+  // Verificar despedida negativa (máxima prioridad)
+  for (const pattern of negativeGoodbyePatterns) {
+    if (testPattern(pattern, messageLower)) {
+      negativitySignals += 3; // Señal muy fuerte
+      break; // Solo necesitamos una señal de este tipo
+    }
+  }
+  
+  // Aplicar ajuste basado en la cantidad de señales
+  if (negativitySignals >= 3) {
+    // Rechazo total o muy fuerte - bajar a 10-15
+    const newScore = Math.min(15, Math.max(10, currentScore - 50));
+    log('info', 'Rechazo total detectado - ajustando score drásticamente', { 
+      message: message.substring(0, 100),
+      originalScore: currentScore,
+      newScore,
+      signals: negativitySignals
+    });
+    return newScore;
+  } else if (negativitySignals >= 2) {
+    // Rechazo moderado - bajar a 15-20
+    const newScore = Math.min(20, Math.max(15, currentScore - 40));
+    log('info', 'Rechazo moderado detectado - ajustando score', { 
+      message: message.substring(0, 100),
+      originalScore: currentScore,
+      newScore,
+      signals: negativitySignals
+    });
+    return newScore;
+  } else if (negativitySignals >= 1) {
+    // Desinterés - bajar 5-10 puntos
+    const adjustment = Math.min(10, Math.max(5, Math.floor(currentScore * 0.1))); // 10% del score o mínimo 5 puntos
+    const newScore = Math.max(10, currentScore - adjustment);
+    log('info', 'Desinterés detectado - bajando score moderadamente', { 
+      message: message.substring(0, 100),
+      originalScore: currentScore,
+      adjustment,
+      newScore,
+      signals: negativitySignals
+    });
+    return newScore;
+  }
+  
+  // Si no se detecta negatividad, mantener el score original
+  return currentScore;
 }
 
 // ⬅️ MEJORA 6: Validación de entrada robusta
@@ -732,6 +977,9 @@ FORMATO JSON OBLIGATORIO:
       // log('info', 'Reunión confirmada PERO sin contacto - NO guardando reunión aún (esperando contacto)');
     }
     
+    // ⬅️ NUEVO: Guardar resumen del proyecto si se detectó y hay contacto o reunión
+    // El resumen se extraerá después de parsear la respuesta del bot
+    
     // ⬅️ MEJORADO: Verificar contactos y reuniones en la BD (no solo en el mensaje actual)
     let hasPreviousMeeting = false;
     let hasPreviousContact = false;
@@ -854,6 +1102,37 @@ FORMATO JSON OBLIGATORIO:
       }
       if (typeof parsedResponse.intent_score !== 'number' || parsedResponse.intent_score < 0 || parsedResponse.intent_score > 100) {
         parsedResponse.intent_score = Math.max(0, Math.min(100, parsedResponse.intent_score || 0));
+      }
+      
+      // ⬅️ CRÍTICO: Ajustar intent_score basado en detección de negatividad/desinterés
+      // Esto asegura que el score baje cuando el usuario muestra rechazo, incluso si Gemini no lo detectó
+      const originalScore = parsedResponse.intent_score;
+      parsedResponse.intent_score = detectNegativityAndAdjustScore(message, parsedResponse.intent_score);
+      
+      if (parsedResponse.intent_score !== originalScore) {
+        log('info', 'Score ajustado por detección de negatividad', {
+          originalScore,
+          adjustedScore: parsedResponse.intent_score,
+          messagePreview: message.substring(0, 100)
+        });
+      }
+      
+      // ⬅️ NUEVO: Extraer resumen del proyecto de la respuesta del bot
+      // También buscar en mensajes anteriores del bot si no se encuentra en la respuesta actual
+      let projectSummary = extractProjectSummary(parsedResponse.reply);
+      
+      // Si no se encontró en la respuesta actual, buscar en los últimos mensajes del bot
+      if (!projectSummary && history) {
+        const botMessages = history.filter((msg: any) => msg.role === 'assistant' || msg.role === 'bot');
+        for (const botMsg of botMessages) {
+          projectSummary = extractProjectSummary(botMsg.content);
+          if (projectSummary) {
+            log('info', 'Resumen encontrado en mensaje anterior del bot', {
+              summary: projectSummary.substring(0, 100),
+            });
+            break;
+          }
+        }
       }
       
       // ⬅️ MEJORADO: Manejo inteligente de contacto y reunión
@@ -989,6 +1268,35 @@ FORMATO JSON OBLIGATORIO:
     }
 
     // 9. GUARDAR CONTACTOS Y REUNIONES (ANTES de guardar mensajes)
+    // ⬅️ NUEVO: Agregar resumen del proyecto si se detectó y hay contacto/reunión
+    if (projectSummary && (hasContact || hasMeetingConfirmed)) {
+      // Buscar si ya existe una reunión para agregar el resumen al metadata
+      const meetingContact = extractedContacts.find(c => c.type === 'meeting');
+      if (meetingContact) {
+        // Agregar resumen al metadata de la reunión
+        meetingContact.metadata = {
+          ...meetingContact.metadata,
+          project_summary: projectSummary,
+        };
+      } else {
+        // Si no hay reunión pero hay contacto, guardar el resumen como contacto separado
+        extractedContacts.push({
+          type: 'project_summary',
+          value: projectSummary,
+          metadata: {
+            extracted_from: 'bot_reply',
+            timestamp: new Date().toISOString(),
+          },
+        });
+      }
+      
+      log('info', 'Resumen del proyecto detectado y agregado', {
+        summary: projectSummary.substring(0, 100),
+        hasMeeting: !!meetingContact,
+        hasContact,
+      });
+    }
+    
     if (extractedContacts.length > 0) {
       try {
         const contactInserts = extractedContacts.map(contact => ({
