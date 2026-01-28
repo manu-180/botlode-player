@@ -1,8 +1,6 @@
 import 'package:botlode_player/core/network/connectivity_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
-import 'package:flutter/foundation.dart';
-import 'dart:html' as html;
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -25,28 +23,6 @@ class GlobalConnectivityOverlay extends ConsumerWidget {
     final isDarkMode = botConfig?.isDarkMode ?? true;
     final isOnline = ref.watch(connectivityProvider).asData?.value ?? true;
     final isChatOpen = ref.watch(chatOpenProvider);
-
-    // Logs + evento al HTML host (solo cuando cambia, sin spamear).
-    ref.listen<bool>(
-      connectivityProvider.select((v) => v.asData?.value ?? true),
-      (prev, next) {
-        if (prev == next) return;
-        try {
-          final payload = {
-            'type': 'CONNECTIVITY_STATE',
-            'source': 'botlode_player',
-            'online': next,
-            'chatOpen': isChatOpen,
-            'ts': DateTime.now().toIso8601String(),
-          };
-          html.window.parent?.postMessage(payload, '*');
-        } catch (_) {}
-        if (kDebugMode) {
-          // En producción puede no imprimir; en dev sí.
-          debugPrint('🛰️ [CONNECTIVITY_STATE] online=$next chatOpen=$isChatOpen');
-        }
-      },
-    );
 
     // Este widget debe ser hijo directo de un Stack (UltraSimpleBot / PlayerScreen).
     return IgnorePointer(
