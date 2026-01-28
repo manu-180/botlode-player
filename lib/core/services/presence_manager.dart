@@ -36,7 +36,6 @@ class PresenceManager {
     _tabCloseSubscription?.cancel();
     _tabCloseSubscription = html.window.onBeforeUnload.listen((event) {
       // ⬅️ CRÍTICO: Marcar como offline al cerrar pestaña (síncrono y confiable)
-      print("🚪 Pestaña cerrada -> Marcando como OFFLINE");
       
       // ⬅️ Cancelar todos los timers para evitar actualizaciones posteriores
       _heartbeatTimer?.cancel();
@@ -71,11 +70,10 @@ class PresenceManager {
           );
           
           if (beaconSuccess) {
-            print("✅ Estado OFFLINE enviado con sendBeacon antes de cerrar pestaña");
             return; // Si sendBeacon funciona, no necesitamos XHR
           }
         } catch (beaconError) {
-          print("⚠️ sendBeacon falló: $beaconError, usando fallback XHR");
+          // Error silenciado, usar fallback XHR
         }
         
         // 2. Fallback: XHR SÍNCRONO (bloquea pero garantiza envío)
@@ -95,22 +93,13 @@ class PresenceManager {
           // ⬅️ Verificar respuesta (solo si la petición se completó)
           final status = xhr.status;
           if (xhr.readyState == html.HttpRequest.DONE && status != null) {
-            if (status >= 200 && status < 300) {
-              print("✅ Estado OFFLINE enviado con XHR síncrono (status: $status)");
-            } else {
-              print("⚠️ XHR síncrono completó pero con status: $status, response: ${xhr.responseText}");
-            }
-          } else {
-            print("⚠️ XHR síncrono no completó (readyState: ${xhr.readyState}, status: $status)");
+            // Estado enviado o error silenciado
           }
         } catch (xhrError) {
-          print("⚠️ XHR síncrono también falló: $xhrError");
-          // ⬅️ Último recurso: Intentar con fetch keepalive (si está disponible)
-          // Nota: fetch keepalive no está disponible en dart:html, así que esto es solo para logs
-          print("⚠️ No hay más métodos disponibles para enviar estado offline");
+          // Error silenciado
         }
       } catch (e) {
-        print("⚠️ Error general al marcar offline en cierre de pestaña: $e");
+        // Error silenciado
       }
     });
   }
@@ -137,7 +126,6 @@ class PresenceManager {
     _heartbeatTimer?.cancel();
     // Enviar inmediatamente sin debounce
     await _sendToSupabase(false);
-    print("🔴 [PresenceManager] setOfflineImmediate() - Estado OFFLINE enviado inmediatamente a BD");
   }
 
   /// Lógica de "Embudo" para evitar spam de peticiones
@@ -180,7 +168,6 @@ class PresenceManager {
       final nowArgentina = nowLocal.subtract(const Duration(hours: 3));
       // ⬅️ Formatear como string sin zona horaria para que Supabase lo interprete como hora local
       final timestampString = _formatArgentinaTimestamp(nowArgentina);
-      print("📡 Enviando señal a Supabase: ${status ? 'ONLINE' : 'OFFLINE'} (Argentina: $timestampString)");
       
       // ⬅️ CRÍTICO: Si estamos marcando como online, NO actualizar is_online aquí
       // La reclamación de sesión ya se encargó de eso. Solo actualizamos last_seen para el heartbeat.
@@ -203,7 +190,6 @@ class PresenceManager {
         }, onConflict: 'session_id');
       }
     } catch (e) {
-      print("⚠️ Error de red ($e). Reintentando en 2s...");
       // REINTENTO RÁPIDO (Quick Retry Strategy)
       if (_shouldBeOnline == status) {
         _retryTimer = Timer(const Duration(seconds: 2), () {

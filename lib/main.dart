@@ -32,7 +32,7 @@ void main() {
         ),
       );
     } catch (e) {
-      print("🔥 Supabase Init Error: $e");
+      // Error silenciado
     }
 
     _setupIframeListeners();
@@ -42,8 +42,6 @@ void main() {
     // Soporta tanto 'botId' como 'bot_id' para compatibilidad
     final urlBotId = uri.queryParameters['botId'] ?? uri.queryParameters['bot_id'];
     final finalBotId = urlBotId ?? AppConfig.fallbackBotId;
-
-    print("🤖 BOT ID CARGADO: $finalBotId");
     
     final container = ProviderContainer(
       overrides: [
@@ -62,13 +60,12 @@ void main() {
     );
 
   }, (error, stack) {
-    print("🔥 CRASH: $error");
+    // Error silenciado
   });
 }
 
 void _setupIframeListeners() {
   // Removida configuración de transparencia para que el chat tenga fondo sólido
-  print("🚀 DEPLOY VERSION: $DEPLOY_VERSION");
   
   Future.delayed(const Duration(milliseconds: 500), () {
       _safePostMessage('CMD_READY');
@@ -108,10 +105,8 @@ void _setupGlobalMouseTrackingWithProvider(ProviderContainer container) {
         // Ignorar mensajes mal formados
       }
     });
-    
-    print("✅ Global mouse tracking activado (LOCAL + PostMessage + MouseLeave)");
   } catch (e) {
-    print("⚠️ Error al configurar mouse tracking: $e");
+    // Error silenciado
   }
 }
 
@@ -119,7 +114,7 @@ void _safePostMessage(String message) {
   try {
     html.window.parent?.postMessage(message, '*');
   } catch (e) {
-    print("⚠️ PostMessage Error: $e");
+    // Error silenciado
   }
 }
 
@@ -134,12 +129,9 @@ void _setupColorScheme() {
         ..name = 'color-scheme'
         ..content = 'light dark';
       html.document.head?.append(metaColorScheme);
-      print("✅ Meta color-scheme agregado dinámicamente");
-    } else {
-      print("✅ Meta color-scheme ya existe");
     }
   } catch (e) {
-    print("⚠️ Error al configurar color-scheme: $e");
+    // Error silenciado
   }
 }
 

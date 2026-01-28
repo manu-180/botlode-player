@@ -42,7 +42,6 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
       try {
         // 1. Asegurar que chatControllerProvider esté inicializado (necesario para sessionId)
         ref.read(chatControllerProvider);
-        print("✅ Providers inicializados en UltraSimpleBot");
         
         // ⬅️ NUEVO: Si el chat ya está abierto al inicializar, marcar como online
         // Nota: El presenceManager se obtendrá en el build con ref.watch()
@@ -51,14 +50,13 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
             try {
               final manager = ref.read(presenceManagerProvider);
               manager.setOnline();
-              print("🟢 Chat ya estaba abierto -> Marcando ONLINE");
             } catch (e) {
-              print("⚠️ Error al marcar online en initState: $e");
+              // Error silenciado
             }
           });
         }
       } catch (e) {
-        print("⚠️ Error al inicializar providers: $e");
+        // Error silenciado
       }
     });
   }
@@ -90,16 +88,14 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
       if (previous == true && current == false) {
         // Chat se cerró: Invalidar activeSessionId SÍNCRONAMENTE y marcar TODOS los chats como offline en BD
         // ⚠️ CRÍTICO: Debe hacerse SÍNCRONAMENTE, no en un Future.microtask
-        print("🟡 [UltraSimpleBot] Chat cerrado - invalidando activeSessionId SÍNCRONAMENTE (ningún chat mostrará 'EN LÍNEA')");
         ref.read(activeSessionIdProvider.notifier).state = null;
         
         // ⬅️ CRÍTICO: Marcar como offline en BD INMEDIATAMENTE (sin debounce)
         // Esto evita que otros chats vean este chat como online cuando se consulta la BD
         try {
           presenceManager.setOfflineImmediate();
-          print("🟡 [UltraSimpleBot] Chat cerrado - estado OFFLINE enviado inmediatamente a BD para chat actual");
         } catch (e) {
-          print("⚠️ [UltraSimpleBot] Error marcando como offline inmediatamente: $e");
+          // Error silenciado
         }
         
         // ⬅️ NUEVO: Marcar TODOS los chats de este bot como offline en la BD
@@ -115,10 +111,8 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
                 .update({'is_online': false})
                 .eq('bot_id', botId)
                 .eq('is_online', true);
-            
-            print("🟡 [UltraSimpleBot] Chat cerrado - TODOS los chats de este bot marcados como offline en BD");
           } catch (e) {
-            print("⚠️ [UltraSimpleBot] Error marcando todos los chats como offline: $e");
+            // Error silenciado
           }
         });
         
@@ -127,7 +121,6 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
           // Verificar que se invalidó correctamente
           final verifyActiveSessionId = ref.read(activeSessionIdProvider);
           if (verifyActiveSessionId != null) {
-            print("⚠️ [UltraSimpleBot] ERROR: activeSessionId NO se invalidó correctamente, forzando invalidación");
             ref.read(activeSessionIdProvider.notifier).state = null;
           }
         });
@@ -135,7 +128,6 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
         // ⬅️ ESTRATEGIA DETERMINISTA: El chat actual es SIEMPRE el activo
         // No consultamos la BD para "adivinar" cuál es más reciente.
         // El chat que el usuario está viendo ES la fuente de verdad.
-        print("🚀🚀🚀 [UltraSimpleBot] INICIANDO APERTURA DE CHAT - CÓDIGO NUEVO 🚀🚀🚀");
         try {
           final chatState = ref.read(chatControllerProvider);
           final currentSessionId = chatState.sessionId;
@@ -143,14 +135,10 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
           final botId = ref.read(currentBotIdProvider);
           final supabase = ref.read(supabaseClientProvider);
           
-          print("🟡 [UltraSimpleBot] Chat abierto - sessionId: $currentSessionId, chatId: $currentChatId");
-          print("🟡 [UltraSimpleBot] Chat abierto - RECLAMANDO esta sesión como activa (patrón Mutex)");
-          
           // ⬅️ PASO 1: Actualización Optimista de UI (SÍNCRONA e INMEDIATA)
           // Le decimos a la UI: "Esta sesión es válida AHORA". No esperamos a la BD.
           // Esto elimina el lag percibido y previene condiciones de carrera.
           ref.read(activeSessionIdProvider.notifier).state = currentSessionId;
-          print("🟡 [UltraSimpleBot] ✅✅✅ activeSessionId actualizado SÍNCRONAMENTE a: $currentSessionId ✅✅✅");
           
           // ⬅️ PASO 2: Reclamar sesión en BD (ASÍNCRONO pero PRIORITARIO)
           // Ordenamos al servidor imponer esta verdad y eliminar competidores (zombis).
@@ -158,8 +146,6 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
           // ⚠️ CRÍTICO: Ejecutar INMEDIATAMENTE sin esperar microtask para evitar condiciones de carrera
           (() async {
             try {
-              print("🟡 [UltraSimpleBot] Iniciando reclamación de sesión en BD...");
-              
               // ⬅️ PASO 2.1: "Matar a TODOS los Zombis" - Marcar TODAS las sesiones de este bot como offline
               // Esto incluye incluso la sesión actual, para luego marcarla como online de forma limpia
               // ⚠️ CRÍTICO: Hacer esto PRIMERO antes de que PresenceManager.setOnline() se ejecute
@@ -167,8 +153,6 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
                   .from('session_heartbeats')
                   .update({'is_online': false})
                   .eq('bot_id', botId);
-              
-              print("🟡 [UltraSimpleBot] ✅ TODAS las sesiones de este bot marcadas como offline (incluyendo la actual)");
               
               // ⬅️ PASO 2.2: "Reclamar el Trono" - Insertar o Actualizar SOLO la sesión actual como activa
               // Esperar un pequeño delay para asegurar que el UPDATE anterior se complete
@@ -184,8 +168,6 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
                     'chat_id': currentChatId,
                   }, onConflict: 'session_id');
               
-              print("🟡 [UltraSimpleBot] ✅✅✅ Sesión reclamada en BD - SOLO esta sesión está online ahora ✅✅✅");
-              
               // ⬅️ PASO 2.3: Verificación final y limpieza agresiva - Asegurar que ningún otro chat esté online
               await Future.delayed(const Duration(milliseconds: 200));
               
@@ -196,14 +178,6 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
                   .eq('is_online', true);
               
               if (verification.length > 1 || (verification.length == 1 && verification.first['session_id'] != currentSessionId)) {
-                print("⚠️ [UltraSimpleBot] ADVERTENCIA: Hay ${verification.length} chats online, forzando limpieza agresiva...");
-                for (var chat in verification) {
-                  final sid = chat['session_id'] as String;
-                  if (sid != currentSessionId) {
-                    print("⚠️ [UltraSimpleBot] Forzando offline para chat zombi: $sid");
-                  }
-                }
-                
                 // Forzar limpieza nuevamente - más agresiva
                 await supabase
                     .from('session_heartbeats')
@@ -222,22 +196,14 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
                       'last_seen': _formatArgentinaTime(), // ⬅️ Hora de Argentina (UTC-3)
                       'chat_id': currentChatId,
                     }, onConflict: 'session_id');
-                
-                print("🟡 [UltraSimpleBot] ✅ Limpieza agresiva completada - Solo chat actual debería estar online");
-              } else if (verification.length == 1 && verification.first['session_id'] == currentSessionId) {
-                print("🟡 [UltraSimpleBot] ✅ Verificación OK: Solo el chat actual está online");
-              } else {
-                print("🟡 [UltraSimpleBot] ✅ Verificación OK: ${verification.length} chat(s) online");
               }
             } catch (e) {
-              print("⚠️ [UltraSimpleBot] Error reclamando sesión en BD: $e");
-              // No crashear la UI. La actualización optimista ya se hizo.
+              // Error silenciado
             }
           })();
         } catch (e) {
-          print("⚠️ [UltraSimpleBot] Error obteniendo sessionId al abrir chat: $e");
+          // Error silenciado
         }
-        print("🚀🚀🚀 [UltraSimpleBot] FIN APERTURA DE CHAT - CÓDIGO NUEVO 🚀🚀🚀");
       }
       
       // ⬅️ CRÍTICO: NO usar PresenceManager.setOnline() cuando se abre el chat
@@ -270,11 +236,10 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
     if (isOpen && !_lastKnownOpenState) {
       Future.microtask(() {
         try {
-          print("🟢 Chat abierto en build inicial -> Marcando ONLINE");
           presenceManager.setOnline();
           _lastKnownOpenState = true;
         } catch (e) {
-          print("⚠️ Error al marcar online en verificación inicial: $e");
+          // Error silenciado
         }
       });
     }

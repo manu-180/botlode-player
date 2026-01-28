@@ -30,7 +30,6 @@ class StatusIndicator extends ConsumerWidget {
     // ⬅️ PRIORIDAD MÁXIMA: Si el chat está cerrado, ocultar el widget COMPLETAMENTE
     // Esto evita cualquier condición de carrera o estado persistente
     if (!isChatOpen) {
-      print("🔵 [StatusIndicator] build() - Chat cerrado, ocultando widget completamente (isChatOpen=false)");
       return const SizedBox.shrink();
     }
     
@@ -38,12 +37,8 @@ class StatusIndicator extends ConsumerWidget {
     final effectiveCurrentSessionId = currentSessionId ?? 
         (ref.watch(chatControllerProvider).sessionId);
     
-    print("🔵 [StatusIndicator] build() - isChatOpen: $isChatOpen, currentSessionId: $effectiveCurrentSessionId, activeSessionId: $activeSessionId, mood: $mood");
     String text;
     Color color;
-
-    // DEBUG: Verificar valores recibidos
-    print("🔵 [StatusIndicator] isChatOpen: $isChatOpen, currentSessionId: $currentSessionId, activeSessionId: $activeSessionId, mood: $mood, isLoading: $isLoading");
 
     // LÓGICA DE ESTADOS
     if (!isOnline) {
@@ -77,23 +72,18 @@ class StatusIndicator extends ConsumerWidget {
           // ⬅️ PRIORIDAD 1: Si el chat está cerrado, NUNCA mostrar "EN LÍNEA" (sin importar nada más)
           if (!isChatOpen) {
             shouldShowOnline = false;
-            print("🔵 [StatusIndicator] ❌ NO mostrar 'EN LÍNEA' (chat cerrado: isChatOpen=false)");
           } else if (activeSessionId == null || activeSessionId.isEmpty) {
             // No hay chat activo definido (durante reload, inicialización, o chat cerrado)
             shouldShowOnline = false;
-            print("🔵 [StatusIndicator] ❌ NO mostrar 'EN LÍNEA' (activeSessionId es null o vacío)");
           } else if (effectiveCurrentSessionId.isEmpty) {
             // Este chat no tiene sessionId válido
             shouldShowOnline = false;
-            print("🔵 [StatusIndicator] ❌ NO mostrar 'EN LÍNEA' (currentSessionId está vacío)");
           } else if (activeSessionId != effectiveCurrentSessionId) {
             // Este NO es el chat activo (hay otro chat activo)
             shouldShowOnline = false;
-            print("🔵 [StatusIndicator] ❌ NO mostrar 'EN LÍNEA' (chat NO activo: currentSessionId='$effectiveCurrentSessionId' != activeSessionId='$activeSessionId')");
           } else {
             // ✅ TODAS las condiciones se cumplen: chat abierto + este es el chat activo
             shouldShowOnline = true;
-            print("🔵 [StatusIndicator] ✅ Mostrar 'EN LÍNEA' (chat activo y abierto: currentSessionId='$effectiveCurrentSessionId' == activeSessionId='$activeSessionId')");
           }
           
           if (shouldShowOnline) {
