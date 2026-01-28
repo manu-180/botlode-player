@@ -44,14 +44,32 @@ class _SimpleChatTestState extends ConsumerState<SimpleChatTest> {
     if (text.trim().isEmpty) return;
     _textController.clear();
     
-    // ⬅️ Marcar este chat como activo cuando se envía un mensaje
+    // ⬅️ CRÍTICO: Marcar este chat como activo INMEDIATAMENTE y de forma SÍNCRONA
+    // Esto debe hacerse ANTES de enviar el mensaje para que el chat viejo deje de mostrar "EN LÍNEA"
     final chatState = ref.read(chatControllerProvider);
-    ref.read(activeSessionIdProvider.notifier).state = chatState.sessionId;
+    final currentSessionId = chatState.sessionId;
     
+    // ⬅️ Actualizar activeSessionId SÍNCRONAMENTE (no async)
+    ref.read(activeSessionIdProvider.notifier).state = currentSessionId;
+    print("🟡 [SimpleChatTest] _sendMessage() - activeSessionId actualizado a: $currentSessionId (este chat es ahora el activo)");
+    
+    // ⬅️ Enviar mensaje (esto puede crear un nuevo chat si hay persistencia)
     ref.read(chatControllerProvider.notifier).sendMessage(text);
     
-    // Auto-scroll después de enviar mensaje (esperar a que se renderice)
+    // ⬅️ Verificar que el activeSessionId sigue siendo el correcto después de enviar
+    // (por si se creó un nuevo chat durante el envío)
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      final stateAfterSend = ref.read(chatControllerProvider);
+      final activeSessionId = ref.read(activeSessionIdProvider);
+      
+      // Si el sessionId cambió durante el envío (nuevo chat creado), actualizar activeSessionId
+      if (stateAfterSend.sessionId != activeSessionId) {
+        print("🟡 [SimpleChatTest] _sendMessage() - sessionId cambió durante envío: ${stateAfterSend.sessionId} != $activeSessionId");
+        ref.read(activeSessionIdProvider.notifier).state = stateAfterSend.sessionId;
+        print("🟡 [SimpleChatTest] _sendMessage() - activeSessionId actualizado al nuevo: ${stateAfterSend.sessionId}");
+      }
+      
+      // Auto-scroll después de enviar mensaje
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
           0.0,
@@ -87,10 +105,18 @@ class _SimpleChatTestState extends ConsumerState<SimpleChatTest> {
     final reversedMessages = chatState.messages.reversed.toList();
     
     // ⬅️ Inicializar activeSessionId si no está establecido (primera vez)
+    // ⚠️ IMPORTANTE: Solo inicializar si no hay un activeSessionId establecido
+    // Si hay un activeSessionId pero no coincide con el chat actual, NO cambiarlo
+    // (esto previene que chats viejos se vuelvan activos automáticamente)
     final activeSessionId = ref.watch(activeSessionIdProvider);
     if (activeSessionId == null || activeSessionId.isEmpty) {
+      // Solo inicializar si realmente no hay un chat activo
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        ref.read(activeSessionIdProvider.notifier).state = chatState.sessionId;
+        final currentActiveSessionId = ref.read(activeSessionIdProvider);
+        if (currentActiveSessionId == null || currentActiveSessionId.isEmpty) {
+          ref.read(activeSessionIdProvider.notifier).state = chatState.sessionId;
+          print("🟡 [SimpleChatTest] build() - activeSessionId inicializado a: ${chatState.sessionId}");
+        }
       });
     }
     
@@ -327,9 +353,8 @@ class _SimpleChatTestState extends ConsumerState<SimpleChatTest> {
                       isOnline: isOnline,
                       mood: chatState.currentMood,
                       isDarkMode: isDarkMode,
-                      isChatOpen: ref.watch(chatOpenProvider), // ⬅️ Estado del chat (abierto/cerrado)
-                      currentSessionId: chatState.sessionId, // ⬅️ SessionId del chat actual
-                      activeSessionId: ref.watch(activeSessionIdProvider), // ⬅️ SessionId activo (más reciente)
+                      currentSessionId: chatState.sessionId, // ⬅️ SessionId del chat actual (opcional, se puede obtener del provider)
+                      // ⬅️ isChatOpen y activeSessionId ahora se obtienen directamente de los providers en StatusIndicator
                     ),
                   ),
                 ],

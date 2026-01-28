@@ -1,7 +1,10 @@
 // Archivo: lib/features/player/presentation/widgets/floating_bot_widget.dart
 import 'dart:html' as html;
 import 'dart:math' as math;
+import 'package:botlode_player/core/config/supabase_provider.dart';
+import 'package:botlode_player/core/services/presence_manager_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
+import 'package:botlode_player/features/player/presentation/providers/chat_provider.dart'; // ⬅️ NUEVO: Para acceder a chatControllerProvider
 import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
 // import 'package:botlode_player/features/player/presentation/views/chat_panel_view.dart';
 import 'package:botlode_player/features/player/presentation/views/simple_chat_test.dart'; // ⬅️ TEST
@@ -33,13 +36,102 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     // ⬅️ LISTENER: Manejar estado cuando se abre/cierra el chat
     ref.listen(chatOpenProvider, (previous, next) {
       if (previous == true && next == false) {
-        // Chat se cerró: NO resetear mood, solo dejar que "EN LÍNEA" desaparezca
-        // El mood se mantiene, pero StatusIndicator lo ocultará porque isChatOpen = false
-        // No hacer nada aquí, el StatusIndicator se encargará de ocultar "EN LÍNEA"
+        // Chat se cerró: Invalidar activeSessionId SÍNCRONAMENTE y marcar TODOS los chats como offline en BD
+        // ⚠️ CRÍTICO: Debe hacerse SÍNCRONAMENTE, no en un Future.microtask
+        print("🟡 [FloatingBotWidget] Chat cerrado - invalidando activeSessionId SÍNCRONAMENTE (ningún chat mostrará 'EN LÍNEA')");
+        ref.read(activeSessionIdProvider.notifier).state = null;
+        
+        // ⬅️ CRÍTICO: Marcar como offline en BD INMEDIATAMENTE (sin debounce)
+        // Esto evita que otros chats vean este chat como online cuando se consulta la BD
+        try {
+          final presenceManager = ref.read(presenceManagerProvider);
+          presenceManager.setOfflineImmediate();
+          print("🟡 [FloatingBotWidget] Chat cerrado - estado OFFLINE enviado inmediatamente a BD para chat actual");
+        } catch (e) {
+          print("⚠️ [FloatingBotWidget] Error marcando como offline inmediatamente: $e");
+        }
+        
+        // ⬅️ NUEVO: Marcar TODOS los chats de este bot como offline en la BD
+        // Esto asegura que ningún chat viejo muestre "EN LÍNEA" cuando el chat está cerrado
+        Future.microtask(() async {
+          try {
+            final botId = ref.read(currentBotIdProvider);
+            final supabase = ref.read(supabaseClientProvider);
+            
+            // Actualizar TODOS los chats de este bot a offline
+            await supabase
+                .from('session_heartbeats')
+                .update({'is_online': false})
+                .eq('bot_id', botId)
+                .eq('is_online', true);
+            
+            print("🟡 [FloatingBotWidget] Chat cerrado - TODOS los chats de este bot marcados como offline en BD");
+          } catch (e) {
+            print("⚠️ [FloatingBotWidget] Error marcando todos los chats como offline: $e");
+          }
+        });
+        
+        // ⬅️ Forzar un rebuild inmediato para asegurar que el StatusIndicator se actualice
+        Future.microtask(() {
+          // Verificar que se invalidó correctamente
+          final verifyActiveSessionId = ref.read(activeSessionIdProvider);
+          if (verifyActiveSessionId != null) {
+            print("⚠️ [FloatingBotWidget] ERROR: activeSessionId NO se invalidó correctamente, forzando invalidación");
+            ref.read(activeSessionIdProvider.notifier).state = null;
+          }
+        });
       } else if (previous == false && next == true) {
-        // Chat se abrió: asegurar que si el mood es 'neutral', se muestre "EN LÍNEA"
-        // El StatusIndicator se encargará de mostrarlo automáticamente porque isChatOpen = true
-        // No necesitamos hacer nada aquí, el estado ya está correcto
+        // ⬅️ ESTRATEGIA DETERMINISTA: El chat actual es SIEMPRE el activo
+        // No consultamos la BD para "adivinar" cuál es más reciente.
+        // El chat que el usuario está viendo ES la fuente de verdad.
+        try {
+          final chatState = ref.read(chatControllerProvider);
+          final currentSessionId = chatState.sessionId;
+          final currentChatId = chatState.chatId;
+          final botId = ref.read(currentBotIdProvider);
+          final supabase = ref.read(supabaseClientProvider);
+          
+          print("🟡 [FloatingBotWidget] Chat abierto - sessionId: $currentSessionId, chatId: $currentChatId");
+          print("🟡 [FloatingBotWidget] Chat abierto - RECLAMANDO esta sesión como activa (patrón Mutex)");
+          
+          // ⬅️ PASO 1: Actualización Optimista de UI (SÍNCRONA e INMEDIATA)
+          // Le decimos a la UI: "Esta sesión es válida AHORA". No esperamos a la BD.
+          // Esto elimina el lag percibido y previene condiciones de carrera.
+          ref.read(activeSessionIdProvider.notifier).state = currentSessionId;
+          print("🟡 [FloatingBotWidget] Chat abierto - activeSessionId actualizado SÍNCRONAMENTE a: $currentSessionId");
+          
+          // ⬅️ PASO 2: Reclamar sesión en BD (ASÍNCRONO)
+          // Ordenamos al servidor imponer esta verdad y eliminar competidores (zombis).
+          // Esto implementa el patrón "Mutex de Sesión" descrito en el documento técnico.
+          Future.microtask(() async {
+            try {
+              // "Matar a los Zombis": Marcar todas las demás sesiones de este bot como offline
+              await supabase
+                  .from('session_heartbeats')
+                  .update({'is_online': false})
+                  .eq('bot_id', botId)
+                  .neq('session_id', currentSessionId);
+              
+              // "Reclamar el Trono": Insertar o Actualizar la sesión actual como activa
+              await supabase
+                  .from('session_heartbeats')
+                  .upsert({
+                    'session_id': currentSessionId,
+                    'bot_id': botId,
+                    'is_online': true,
+                    'last_seen': DateTime.now().toUtc().toIso8601String(),
+                    'chat_id': currentChatId,
+                  }, onConflict: 'session_id');
+              
+              print("🟡 [FloatingBotWidget] Chat abierto - Sesión reclamada en BD (todos los demás chats marcados como offline)");
+            } catch (e) {
+              print("⚠️ [FloatingBotWidget] Error reclamando sesión en BD: $e");
+              // No crashear la UI. La actualización optimista ya se hizo.
+            }
+          });
+        } catch (e) {
+          print("⚠️ [FloatingBotWidget] Error obteniendo sessionId al abrir chat: $e");
+        }
       }
     });
 
@@ -150,7 +242,6 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
               child: AnimatedScale(
                 scale: isOpen ? 0.0 : 1.0, 
                 duration: const Duration(milliseconds: 300),
-                curve: isOpen ? Curves.easeInBack : Curves.easeOutBack, 
                 alignment: Alignment.center,
                 child: botConfigAsync.when(
                   loading: () => _buildFloatingButton(isHovered: false, name: "...", color: Colors.grey, subtext: "...", isDarkMode: true),

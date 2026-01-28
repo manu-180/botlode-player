@@ -13,26 +13,34 @@ class ChatState {
   final List<ChatMessage> messages;
   final bool isLoading;
   final String currentMood;
-  final String sessionId; // <--- ESTO ES CRUCIAL
+  final String sessionId; // ⬅️ ID temporal del contexto (cambia con reloads)
+  final String chatId; // ⬅️ NUEVO: ID persistente del chat (NO cambia con reloads)
+  final DateTime createdAt; // ⬅️ NUEVO: Timestamp de creación del chat (para determinar prioridad)
 
   ChatState({
     this.messages = const [],
     this.isLoading = false,
     this.currentMood = 'neutral', // ⬅️ Estado inicial: 'neutral' = "EN LÍNEA"
     required this.sessionId,
-  });
+    required this.chatId, // ⬅️ NUEVO: Requerido
+    DateTime? createdAt, // ⬅️ NUEVO: Opcional, se crea automáticamente si no se proporciona
+  }) : createdAt = createdAt ?? DateTime.now().toUtc(); // ⬅️ CRÍTICO: SIEMPRE UTC para evitar problemas de zona horaria
 
   ChatState copyWith({
     List<ChatMessage>? messages,
     bool? isLoading,
     String? currentMood,
     String? sessionId,
+    String? chatId,
+    DateTime? createdAt,
   }) {
     return ChatState(
       messages: messages ?? this.messages,
       isLoading: isLoading ?? this.isLoading,
       currentMood: currentMood ?? this.currentMood,
       sessionId: sessionId ?? this.sessionId,
+      chatId: chatId ?? this.chatId,
+      createdAt: createdAt ?? this.createdAt,
     );
   }
 }
@@ -98,8 +106,21 @@ class ChatController extends _$ChatController {
     ChatPersistenceService.saveMessages(initialMessages);
     print("🔵 [DEBUG] ChatController.build() - mensajes guardados en localStorage");
     
+    // ⬅️ NUEVO: Obtener o crear chatId persistente (NO cambia con reloads)
+    // ⚠️ CRÍTICO: Asegurar que chatId siempre tenga un valor válido
+    String chatId = ChatPersistenceService.getOrCreateChatId();
+    
+    // Validación adicional: si está vacío, crear uno nuevo
+    if (chatId.isEmpty) {
+      print("⚠️ [DEBUG] ChatController.build() - chatId está vacío, forzando creación de uno nuevo");
+      chatId = ChatPersistenceService.resetChatId();
+    }
+    
+    print("🔵 [DEBUG] ChatController.build() - chatId final: '$chatId' (longitud: ${chatId.length}, persistente, no cambia con reloads)");
+    
     final state = ChatState(
       sessionId: _sessionId,
+      chatId: chatId, // ⬅️ NUEVO: ID persistente del chat (asegurado que no esté vacío)
       messages: initialMessages,
     );
     
@@ -148,9 +169,33 @@ class ChatController extends _$ChatController {
     // ⬅️ NUEVO: Guardar mensajes después de agregar el del usuario
     ChatPersistenceService.saveMessages(state.messages);
 
+    // ⬅️ CRÍTICO: Asegurar que chatId no sea null o vacío
+    // Si está vacío o es null, obtenerlo o crearlo desde el servicio de persistencia
+    String effectiveChatId = state.chatId;
+    
+    // Validación estricta: verificar que chatId tenga un valor válido
+    if (effectiveChatId.isEmpty || effectiveChatId.trim().isEmpty) {
+      print("⚠️ [ChatController] sendMessage() - chatId está vacío o inválido: '$effectiveChatId', obteniendo desde persistencia");
+      effectiveChatId = ChatPersistenceService.getOrCreateChatId();
+      
+      // Validación adicional: si sigue vacío, crear uno nuevo
+      if (effectiveChatId.isEmpty) {
+        print("⚠️ [ChatController] sendMessage() - chatId sigue vacío después de getOrCreateChatId(), forzando creación");
+        effectiveChatId = ChatPersistenceService.resetChatId();
+      }
+      
+      print("⚠️ [ChatController] sendMessage() - chatId obtenido/creado: '$effectiveChatId' (longitud: ${effectiveChatId.length})");
+      
+      // Actualizar el estado con el chatId correcto
+      state = state.copyWith(chatId: effectiveChatId);
+    }
+    
+    print("🟡 [ChatController] sendMessage() - Enviando mensaje con sessionId: '$_sessionId', chatId: '$effectiveChatId' (longitud: ${effectiveChatId.length}), botId: '$botId'");
+
     final response = await repository.sendMessage(
       message: text,
       sessionId: _sessionId,
+      chatId: effectiveChatId, // ⬅️ Asegurar que no sea null
       botId: botId, 
     );
 
@@ -175,10 +220,16 @@ class ChatController extends _$ChatController {
   // ⬅️ NUEVO: Método para iniciar un chat completamente nuevo (reload)
   void clearChat() {
     print("🟠 [DEBUG] clearChat() - INICIO");
-    print("🟠 [DEBUG] clearChat() - estado ANTES: ${state.messages.length} mensajes, sessionId: ${state.sessionId}, mood: ${state.currentMood}");
+    print("🟠 [DEBUG] clearChat() - estado ANTES: ${state.messages.length} mensajes, sessionId: ${state.sessionId}, chatId: ${state.chatId}, mood: ${state.currentMood}");
     print("🟠 [DEBUG] clearChat() - _sessionId ANTES: '$_sessionId'");
     
+    // ⬅️ IMPORTANTE: Mantener el mismo chatId (NO cambiar con reloads)
+    // El chatId identifica la conversación completa, mientras que sessionId identifica el contexto actual
+    final currentChatId = state.chatId;
+    print("🟠 [DEBUG] clearChat() - chatId se mantiene: $currentChatId (NO cambia con reload)");
+    
     // ⬅️ PASO 1: Crear un NUEVO sessionId (chat completamente nuevo - el bot olvida todo)
+    // PERO mantener el mismo chatId para que los heartbeats se agrupen correctamente
     final oldSessionId = _sessionId;
     _sessionId = ChatPersistenceService.createNewSessionId();
     print("🟠 [DEBUG] clearChat() - PASO 1: sessionId cambiado de '$oldSessionId' a '$_sessionId'");
@@ -201,11 +252,15 @@ class ChatController extends _$ChatController {
     print("🟠 [DEBUG] clearChat() - PASO 3: mensaje inicial creado: '${initialMessage.text}'");
     
     // ⬅️ PASO 4: Actualizar estado inmediatamente (pantalla en blanco + estado normal)
+    // ⚠️ IMPORTANTE: Mantener el mismo chatId (NO cambiar con reloads)
+    // ⬅️ NUEVO: Crear nuevo timestamp para que este chat sea el más nuevo
     final newState = ChatState(
       messages: [initialMessage],
       isLoading: false,
       currentMood: 'neutral', // ⬅️ Estado normal (neutral = "EN LÍNEA")
       sessionId: _sessionId, // ⬅️ NUEVO sessionId = nuevo contexto (bot olvida todo)
+      chatId: currentChatId, // ⬅️ MANTENER el mismo chatId (persistente)
+      createdAt: DateTime.now().toUtc(), // ⬅️ CRÍTICO: SIEMPRE UTC para evitar problemas de zona horaria
     );
     print("🟠 [DEBUG] clearChat() - PASO 4: nuevo estado creado con ${newState.messages.length} mensajes, mood: ${newState.currentMood}, sessionId: ${newState.sessionId}");
     

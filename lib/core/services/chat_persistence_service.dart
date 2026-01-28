@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 
 class ChatPersistenceService {
   static const String _sessionIdKey = 'botlode_chat_session_id';
+  static const String _chatIdKey = 'botlode_chat_id'; // ⬅️ NUEVO: ID persistente del chat (no cambia con reloads)
   static const String _messagesKey = 'botlode_chat_messages';
   static const String _lastResetKey = 'botlode_chat_last_reset';
   static const _uuid = Uuid();
@@ -144,6 +145,55 @@ class ChatPersistenceService {
     } catch (e) {
       print("⚠️ Error obteniendo último reset: $e");
       return null;
+    }
+  }
+
+  // ⬅️ NUEVO: Obtener o crear chatId persistente (NO cambia con reloads)
+  // Este ID identifica la conversación completa, mientras que sessionId identifica el contexto actual
+  static String getOrCreateChatId() {
+    try {
+      final stored = html.window.localStorage[_chatIdKey];
+      if (stored != null && stored.isNotEmpty) {
+        print("🟣 [DEBUG] getOrCreateChatId() - chatId existente: $stored");
+        return stored;
+      }
+      // Crear nuevo chatId (solo la primera vez)
+      final newChatId = _uuid.v4();
+      html.window.localStorage[_chatIdKey] = newChatId;
+      print("🟣 [DEBUG] getOrCreateChatId() - nuevo chatId creado: $newChatId");
+      return newChatId;
+    } catch (e) {
+      print("⚠️ Error obteniendo chatId: $e");
+      final fallbackId = _uuid.v4();
+      print("🟣 [DEBUG] getOrCreateChatId() - usando fallback: $fallbackId");
+      return fallbackId;
+    }
+  }
+
+  // ⬅️ NUEVO: Obtener chatId actual (sin crear uno nuevo)
+  static String? getChatId() {
+    try {
+      return html.window.localStorage[_chatIdKey];
+    } catch (e) {
+      print("⚠️ Error obteniendo chatId: $e");
+      return null;
+    }
+  }
+
+  // ⬅️ NUEVO: Resetear chatId (solo cuando se quiere iniciar una conversación completamente nueva)
+  // Normalmente NO se usa, ya que el chatId persiste a través de reloads
+  static String resetChatId() {
+    try {
+      final oldChatId = html.window.localStorage[_chatIdKey];
+      print("🟣 [DEBUG] resetChatId() - chatId anterior: $oldChatId");
+      
+      final newChatId = _uuid.v4();
+      html.window.localStorage[_chatIdKey] = newChatId;
+      print("🟣 [DEBUG] resetChatId() - nuevo chatId creado: $newChatId");
+      return newChatId;
+    } catch (e) {
+      print("⚠️ Error reseteando chatId: $e");
+      return _uuid.v4();
     }
   }
 

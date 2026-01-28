@@ -12,6 +12,7 @@ class ChatRepositoryImpl implements ChatRepository {
   Future<BotResponse> sendMessage({
     required String message,
     required String sessionId,
+    required String chatId, // ⬅️ NUEVO: ID persistente del chat
     required String botId,
   }) async {
     try {
@@ -28,6 +29,7 @@ class ChatRepositoryImpl implements ChatRepository {
         },
         body: jsonEncode({
           'sessionId': sessionId,
+          'chatId': chatId, // ⬅️ NUEVO: ID persistente del chat
           'botId': botId,
           'message': message,
         }),

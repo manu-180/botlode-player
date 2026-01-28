@@ -1,15 +1,18 @@
 // ULTRA SIMPLE - Burbuja + Chat COMPLEJO (chat_panel_view) para testing
+import 'package:botlode_player/core/config/supabase_provider.dart';
 import 'package:botlode_player/core/services/presence_manager.dart';
 import 'package:botlode_player/core/services/presence_manager_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/chat_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/loader_provider.dart';
+import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
 import 'package:botlode_player/features/player/presentation/views/chat_panel_view.dart';
 import 'package:botlode_player/features/player/presentation/widgets/rive_avatar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-// Provider simple
+// Provider simple - Usar directamente chatOpenProvider para evitar desincronización
+// ⬅️ NOTA: isOpenSimpleProvider ahora es solo un alias para chatOpenProvider
 final isOpenSimpleProvider = StateProvider<bool>((ref) => false);
 
 class UltraSimpleBot extends ConsumerStatefulWidget {
@@ -36,7 +39,7 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
         
         // ⬅️ NUEVO: Si el chat ya está abierto al inicializar, marcar como online
         // Nota: El presenceManager se obtendrá en el build con ref.watch()
-        if (ref.read(isOpenSimpleProvider)) {
+        if (ref.read(chatOpenProvider)) {
           Future.microtask(() {
             try {
               final manager = ref.read(presenceManagerProvider);
@@ -62,7 +65,8 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
 
   @override
   Widget build(BuildContext context) {
-    final isOpen = ref.watch(isOpenSimpleProvider);
+    // ⬅️ CRÍTICO: Usar chatOpenProvider directamente para que StatusIndicator funcione correctamente
+    final isOpen = ref.watch(chatOpenProvider);
     final screenSize = MediaQuery.of(context).size;
     
     // ⬅️ CRÍTICO: Usar ref.watch() para mantener el provider vivo mientras el widget esté montado
@@ -72,9 +76,112 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
     
     // ⬅️ NUEVO: Sincronizar estado online/offline con el historial
     // ⚠️ IMPORTANTE: Usar Future.microtask para asegurar que se ejecute después del build
-    ref.listen(isOpenSimpleProvider, (previous, current) {
+    ref.listen(chatOpenProvider, (previous, current) {
       // ⬅️ Solo procesar si el estado realmente cambió
       if (previous == current) return;
+      
+      if (previous == true && current == false) {
+        // Chat se cerró: Invalidar activeSessionId SÍNCRONAMENTE y marcar TODOS los chats como offline en BD
+        // ⚠️ CRÍTICO: Debe hacerse SÍNCRONAMENTE, no en un Future.microtask
+        print("🟡 [UltraSimpleBot] Chat cerrado - invalidando activeSessionId SÍNCRONAMENTE (ningún chat mostrará 'EN LÍNEA')");
+        ref.read(activeSessionIdProvider.notifier).state = null;
+        
+        // ⬅️ CRÍTICO: Marcar como offline en BD INMEDIATAMENTE (sin debounce)
+        // Esto evita que otros chats vean este chat como online cuando se consulta la BD
+        try {
+          presenceManager.setOfflineImmediate();
+          print("🟡 [UltraSimpleBot] Chat cerrado - estado OFFLINE enviado inmediatamente a BD para chat actual");
+        } catch (e) {
+          print("⚠️ [UltraSimpleBot] Error marcando como offline inmediatamente: $e");
+        }
+        
+        // ⬅️ NUEVO: Marcar TODOS los chats de este bot como offline en la BD
+        // Esto asegura que ningún chat viejo muestre "EN LÍNEA" cuando el chat está cerrado
+        Future.microtask(() async {
+          try {
+            final botId = ref.read(currentBotIdProvider);
+            final supabase = ref.read(supabaseClientProvider);
+            
+            // Actualizar TODOS los chats de este bot a offline
+            await supabase
+                .from('session_heartbeats')
+                .update({'is_online': false})
+                .eq('bot_id', botId)
+                .eq('is_online', true);
+            
+            print("🟡 [UltraSimpleBot] Chat cerrado - TODOS los chats de este bot marcados como offline en BD");
+          } catch (e) {
+            print("⚠️ [UltraSimpleBot] Error marcando todos los chats como offline: $e");
+          }
+        });
+        
+        // ⬅️ Forzar un rebuild inmediato para asegurar que el StatusIndicator se actualice
+        Future.microtask(() {
+          // Verificar que se invalidó correctamente
+          final verifyActiveSessionId = ref.read(activeSessionIdProvider);
+          if (verifyActiveSessionId != null) {
+            print("⚠️ [UltraSimpleBot] ERROR: activeSessionId NO se invalidó correctamente, forzando invalidación");
+            ref.read(activeSessionIdProvider.notifier).state = null;
+          }
+        });
+      } else if (previous == false && current == true) {
+        // ⬅️ ESTRATEGIA DETERMINISTA: El chat actual es SIEMPRE el activo
+        // No consultamos la BD para "adivinar" cuál es más reciente.
+        // El chat que el usuario está viendo ES la fuente de verdad.
+        print("🚀🚀🚀 [UltraSimpleBot] INICIANDO APERTURA DE CHAT - CÓDIGO NUEVO 🚀🚀🚀");
+        try {
+          final chatState = ref.read(chatControllerProvider);
+          final currentSessionId = chatState.sessionId;
+          final currentChatId = chatState.chatId;
+          final botId = ref.read(currentBotIdProvider);
+          final supabase = ref.read(supabaseClientProvider);
+          
+          print("🟡 [UltraSimpleBot] Chat abierto - sessionId: $currentSessionId, chatId: $currentChatId");
+          print("🟡 [UltraSimpleBot] Chat abierto - RECLAMANDO esta sesión como activa (patrón Mutex)");
+          
+          // ⬅️ PASO 1: Actualización Optimista de UI (SÍNCRONA e INMEDIATA)
+          // Le decimos a la UI: "Esta sesión es válida AHORA". No esperamos a la BD.
+          // Esto elimina el lag percibido y previene condiciones de carrera.
+          ref.read(activeSessionIdProvider.notifier).state = currentSessionId;
+          print("🟡 [UltraSimpleBot] ✅✅✅ activeSessionId actualizado SÍNCRONAMENTE a: $currentSessionId ✅✅✅");
+          
+          // ⬅️ PASO 2: Reclamar sesión en BD (ASÍNCRONO)
+          // Ordenamos al servidor imponer esta verdad y eliminar competidores (zombis).
+          // Esto implementa el patrón "Mutex de Sesión" descrito en el documento técnico.
+          Future.microtask(() async {
+            try {
+              print("🟡 [UltraSimpleBot] Iniciando reclamación de sesión en BD...");
+              // "Matar a los Zombis": Marcar todas las demás sesiones de este bot como offline
+              await supabase
+                  .from('session_heartbeats')
+                  .update({'is_online': false})
+                  .eq('bot_id', botId)
+                  .neq('session_id', currentSessionId);
+              
+              print("🟡 [UltraSimpleBot] Todos los demás chats marcados como offline");
+              
+              // "Reclamar el Trono": Insertar o Actualizar la sesión actual como activa
+              await supabase
+                  .from('session_heartbeats')
+                  .upsert({
+                    'session_id': currentSessionId,
+                    'bot_id': botId,
+                    'is_online': true,
+                    'last_seen': DateTime.now().toUtc().toIso8601String(),
+                    'chat_id': currentChatId,
+                  }, onConflict: 'session_id');
+              
+              print("🟡 [UltraSimpleBot] ✅✅✅ Sesión reclamada en BD (todos los demás chats marcados como offline) ✅✅✅");
+            } catch (e) {
+              print("⚠️ [UltraSimpleBot] Error reclamando sesión en BD: $e");
+              // No crashear la UI. La actualización optimista ya se hizo.
+            }
+          });
+        } catch (e) {
+          print("⚠️ [UltraSimpleBot] Error obteniendo sessionId al abrir chat: $e");
+        }
+        print("🚀🚀🚀 [UltraSimpleBot] FIN APERTURA DE CHAT - CÓDIGO NUEVO 🚀🚀🚀");
+      }
       
       Future.microtask(() {
         try {
@@ -148,7 +255,7 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
         // ⬅️ NUEVO: Cerrar chat al hacer clic fuera
         onTap: () {
           if (isOpen) {
-            ref.read(isOpenSimpleProvider.notifier).state = false;
+            ref.read(chatOpenProvider.notifier).set(false);
           }
         },
         behavior: HitTestBehavior.translucent,
@@ -223,7 +330,7 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
                                       color: Colors.transparent,
                                       child: IconButton(
                                         icon: Icon(Icons.close_rounded, color: iconColor),
-                                        onPressed: () => ref.read(isOpenSimpleProvider.notifier).state = false,
+                                        onPressed: () => ref.read(chatOpenProvider.notifier).set(false),
                                         tooltip: 'Cerrar chat',
                                         style: IconButton.styleFrom(
                                           backgroundColor: isDarkMode 
@@ -325,7 +432,7 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
         final subtextColor = Colors.white.withOpacity(0.85); // Subtexto con opacidad sutil
         
         return GestureDetector(
-          onTap: () => ref.read(isOpenSimpleProvider.notifier).state = true,
+          onTap: () => ref.read(chatOpenProvider.notifier).set(true),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 350),
             curve: Curves.easeOutCubic,
@@ -351,7 +458,7 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
               borderRadius: BorderRadius.circular(closedSize / 2),
               child: InkWell(
                 borderRadius: BorderRadius.circular(closedSize / 2),
-                onTap: () => ref.read(isOpenSimpleProvider.notifier).state = true,
+                onTap: () => ref.read(chatOpenProvider.notifier).set(true),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [

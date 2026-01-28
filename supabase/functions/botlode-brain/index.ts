@@ -302,11 +302,31 @@ serve(async (req) => {
 
     const body = await req.json();
     sessionId = body.sessionId;
+    let chatId = body.chatId; // ⬅️ NUEVO: ID persistente del chat (no cambia con reloads)
     botId = body.botId;
     const message = body.message;
 
     // Validación de entrada
     validateInput(sessionId, botId, message);
+    
+    // ⬅️ CRÍTICO: Validar y usar fallback para chatId
+    if (!chatId || typeof chatId !== 'string' || chatId.trim().length === 0) {
+      log('warn', 'chatId no proporcionado o inválido, usando sessionId como fallback', { 
+        sessionId, 
+        chatIdReceived: chatId,
+        bodyKeys: Object.keys(body)
+      });
+      // Si no hay chatId, usar sessionId como fallback (compatibilidad hacia atrás)
+      chatId = sessionId;
+    }
+    
+    log('info', 'Request recibido', { 
+      sessionId, 
+      chatId, 
+      botId, 
+      messageLength: message.length,
+      chatIdIsFallback: chatId === sessionId
+    });
 
     // Log inicial solo en modo debug (no en producción para reducir BigQuery)
     // log('info', 'Processing bot request', { sessionId, botId, messageLength: message.length });
@@ -956,16 +976,78 @@ FORMATO JSON OBLIGATORIO:
     }
 
     // 14. ACTUALIZAR HEARTBEAT (en background también)
+    // ⬅️ NUEVA LÓGICA: Usar chatId para identificar la conversación completa
+    // Solo el heartbeat más reciente por chatId estará online
     (async () => {
       try {
-        await supabaseAdmin.from('session_heartbeats').upsert({
+        // ⚠️ CRÍTICO: chatId ya está validado arriba (tiene fallback a sessionId si es null)
+        // Usar chatId directamente (ya no puede ser null/undefined)
+        
+        log('info', 'Actualizando heartbeat', { 
+          sessionId, 
+          chatId, 
+          botId,
+          chatIdType: typeof chatId,
+          chatIdLength: chatId?.length || 0
+        });
+        
+        // PASO 1: Marcar TODAS las sesiones anteriores del mismo chatId como offline
+        // Esto asegura que solo el heartbeat más reciente por chatId esté online
+        const updateResult = await supabaseAdmin
+          .from('session_heartbeats')
+          .update({ 
+            is_online: false,
+            last_seen: new Date().toISOString()
+          })
+          .eq('chat_id', chatId) // ⬅️ Usar chatId (ya validado)
+          .neq('session_id', sessionId); // Excluir la sesión actual
+        
+        if (updateResult.error) {
+          log('warn', 'Error marcando sesiones anteriores como offline', { 
+            error: updateResult.error.message,
+            chatId 
+          });
+        } else {
+          log('info', 'Sesiones anteriores marcadas como offline', { 
+            chatId,
+            count: updateResult.data?.length || 0
+          });
+        }
+        
+        // PASO 2: Crear/actualizar el heartbeat de la sesión actual como online
+        // ⚠️ IMPORTANTE: Usar chatId para agrupar sesiones de la misma conversación
+        const upsertResult = await supabaseAdmin.from('session_heartbeats').upsert({
           session_id: sessionId,
+          chat_id: chatId, // ⬅️ NUEVO: ID persistente del chat (ya validado)
           bot_id: botId,
           is_online: true,
-          last_seen: new Date().toISOString()
+          last_seen: new Date().toISOString(),
+          created_at: new Date().toISOString() // ⬅️ Timestamp para comparar cuál es más reciente
         }, { onConflict: 'session_id' });
+        
+        if (upsertResult.error) {
+          log('error', 'Error creando/actualizando heartbeat', { 
+            error: upsertResult.error.message,
+            sessionId,
+            chatId,
+            botId
+          });
+        } else {
+          log('info', 'Heartbeat actualizado exitosamente', { 
+            sessionId, 
+            chatId, 
+            botId,
+            isOnline: true 
+          });
+        }
       } catch (e: any) {
-        log('warn', 'Error actualizando heartbeat', { error: e.message });
+        log('error', 'Error actualizando heartbeat (excepción)', { 
+          error: e.message,
+          stack: e.stack,
+          sessionId,
+          chatId,
+          botId
+        });
       }
     })();
 

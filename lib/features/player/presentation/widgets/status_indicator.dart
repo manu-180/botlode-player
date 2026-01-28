@@ -1,31 +1,49 @@
 // Archivo: lib/features/player/presentation/widgets/status_indicator.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
+import 'package:botlode_player/features/player/presentation/providers/chat_provider.dart';
 
-class StatusIndicator extends StatelessWidget {
+class StatusIndicator extends ConsumerWidget {
   final bool isLoading;
   final bool isOnline;
   final String mood;
   final bool isDarkMode;
-  final bool isChatOpen; // ⬅️ Estado del chat (abierto/cerrado)
-  final String? currentSessionId; // ⬅️ NUEVO: SessionId del chat actual
-  final String? activeSessionId; // ⬅️ NUEVO: SessionId activo (el más reciente)
+  final String? currentSessionId; // ⬅️ SessionId del chat actual (opcional, se puede obtener del provider)
 
   const StatusIndicator({
     super.key,
     required this.isLoading,
     required this.isOnline,
     required this.mood,
-    required this.isChatOpen,
-    this.currentSessionId, // ⬅️ Opcional: si no se proporciona, siempre mostrará si está abierto
-    this.activeSessionId, // ⬅️ Opcional: si no se proporciona, siempre mostrará si está abierto
+    this.currentSessionId, // ⬅️ Opcional: si no se proporciona, se obtiene del provider
     this.isDarkMode = true, 
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    // ⬅️ Obtener valores directamente de los providers para máxima reactividad
+    final isChatOpen = ref.watch(chatOpenProvider);
+    final activeSessionId = ref.watch(activeSessionIdProvider);
+    
+    // ⬅️ PRIORIDAD MÁXIMA: Si el chat está cerrado, ocultar el widget COMPLETAMENTE
+    // Esto evita cualquier condición de carrera o estado persistente
+    if (!isChatOpen) {
+      print("🔵 [StatusIndicator] build() - Chat cerrado, ocultando widget completamente (isChatOpen=false)");
+      return const SizedBox.shrink();
+    }
+    
+    // ⬅️ Si no se proporciona currentSessionId, obtenerlo del chatControllerProvider
+    final effectiveCurrentSessionId = currentSessionId ?? 
+        (ref.watch(chatControllerProvider).sessionId);
+    
+    print("🔵 [StatusIndicator] build() - isChatOpen: $isChatOpen, currentSessionId: $effectiveCurrentSessionId, activeSessionId: $activeSessionId, mood: $mood");
     String text;
     Color color;
+
+    // DEBUG: Verificar valores recibidos
+    print("🔵 [StatusIndicator] isChatOpen: $isChatOpen, currentSessionId: $currentSessionId, activeSessionId: $activeSessionId, mood: $mood, isLoading: $isLoading");
 
     // LÓGICA DE ESTADOS
     if (!isOnline) {
@@ -47,18 +65,43 @@ class StatusIndicator extends StatelessWidget {
           // ⬅️ "EN LÍNEA" se muestra como las otras emociones cuando el mood es neutral
           // Pero solo si este es el chat activo (no el histórico) Y el chat está abierto
           
-          // Determinar si este es el chat activo:
-          // - Si no hay activeSessionId establecido, considerar activo solo si hay currentSessionId
-          // - Si hay activeSessionId, solo es activo si coinciden
-          final isActiveChat = (activeSessionId == null && currentSessionId != null) ||
-                               (activeSessionId != null && currentSessionId != null && currentSessionId == activeSessionId);
+          // ⬅️ LÓGICA REFACTORIZADA: Determinar si este chat debe mostrar "EN LÍNEA"
+          // REGLA FUNDAMENTAL: Solo UN chat puede mostrar "EN LÍNEA" a la vez
+          // Condiciones ESTRICTAS (TODAS deben cumplirse):
+          // 1. isChatOpen DEBE ser true (el chat está abierto) - PRIORIDAD MÁXIMA
+          // 2. activeSessionId NO debe ser null (hay un chat activo definido)
+          // 3. currentSessionId NO debe ser null (este chat tiene un sessionId válido)
+          // 4. activeSessionId DEBE coincidir EXACTAMENTE con currentSessionId (este ES el chat activo)
+          // Si CUALQUIERA de estas condiciones falla, NO mostrar "EN LÍNEA"
           
-          // Mostrar "EN LÍNEA" solo si es el chat activo Y el chat está abierto
-          if (isActiveChat && isChatOpen) {
+          final bool shouldShowOnline;
+          
+          // ⬅️ PRIORIDAD 1: Si el chat está cerrado, NUNCA mostrar "EN LÍNEA" (sin importar nada más)
+          if (!isChatOpen) {
+            shouldShowOnline = false;
+            print("🔵 [StatusIndicator] ❌ NO mostrar 'EN LÍNEA' (chat cerrado: isChatOpen=false)");
+          } else if (activeSessionId == null || activeSessionId.isEmpty) {
+            // No hay chat activo definido (durante reload, inicialización, o chat cerrado)
+            shouldShowOnline = false;
+            print("🔵 [StatusIndicator] ❌ NO mostrar 'EN LÍNEA' (activeSessionId es null o vacío)");
+          } else if (effectiveCurrentSessionId.isEmpty) {
+            // Este chat no tiene sessionId válido
+            shouldShowOnline = false;
+            print("🔵 [StatusIndicator] ❌ NO mostrar 'EN LÍNEA' (currentSessionId está vacío)");
+          } else if (activeSessionId != effectiveCurrentSessionId) {
+            // Este NO es el chat activo (hay otro chat activo)
+            shouldShowOnline = false;
+            print("🔵 [StatusIndicator] ❌ NO mostrar 'EN LÍNEA' (chat NO activo: currentSessionId='$effectiveCurrentSessionId' != activeSessionId='$activeSessionId')");
+          } else {
+            // ✅ TODAS las condiciones se cumplen: chat abierto + este es el chat activo
+            shouldShowOnline = true;
+            print("🔵 [StatusIndicator] ✅ Mostrar 'EN LÍNEA' (chat activo y abierto: currentSessionId='$effectiveCurrentSessionId' == activeSessionId='$activeSessionId')");
+          }
+          
+          if (shouldShowOnline) {
             text = "EN LÍNEA"; 
             color = const Color(0xFF00FF94);
           } else {
-            // Chat histórico, cerrado, o no activo: no mostrar "EN LÍNEA" (ocultar widget)
             text = ""; 
             color = const Color(0xFF00FF94);
           }

@@ -83,8 +83,33 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
     final text = _textController.text;
     if (text.trim().isEmpty) return;
     _textController.clear();
+    
+    // ⬅️ CRÍTICO: Marcar este chat como activo INMEDIATAMENTE y de forma SÍNCRONA
+    // Esto debe hacerse ANTES de enviar el mensaje para que el chat viejo deje de mostrar "EN LÍNEA"
+    final chatState = ref.read(chatControllerProvider);
+    final currentSessionId = chatState.sessionId;
+    
+    // ⬅️ Actualizar activeSessionId SÍNCRONAMENTE (no async)
+    ref.read(activeSessionIdProvider.notifier).state = currentSessionId;
+    print("🟡 [ChatPanelView] _sendMessage() - activeSessionId actualizado a: $currentSessionId (este chat es ahora el activo)");
+    
     if (_scrollController.hasClients) _scrollController.jumpTo(0.0);
     ref.read(chatControllerProvider.notifier).sendMessage(text);
+    
+    // ⬅️ Verificar que el activeSessionId sigue siendo el correcto después de enviar
+    // (por si se creó un nuevo chat durante el envío)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final stateAfterSend = ref.read(chatControllerProvider);
+      final activeSessionId = ref.read(activeSessionIdProvider);
+      
+      // Si el sessionId cambió durante el envío (nuevo chat creado), actualizar activeSessionId
+      if (stateAfterSend.sessionId != activeSessionId) {
+        print("🟡 [ChatPanelView] _sendMessage() - sessionId cambió durante envío: ${stateAfterSend.sessionId} != $activeSessionId");
+        ref.read(activeSessionIdProvider.notifier).state = stateAfterSend.sessionId;
+        print("🟡 [ChatPanelView] _sendMessage() - activeSessionId actualizado al nuevo: ${stateAfterSend.sessionId}");
+      }
+    });
+    
     // ⬅️ NUEVO: El input se bloqueará automáticamente porque isLoading será true
     // Y se desbloqueará y enfocará automáticamente cuando isLoading vuelva a false
   }
@@ -217,9 +242,8 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                                   isOnline: isOnline, 
                                   mood: chatState.currentMood, 
                                   isDarkMode: isDarkMode,
-                                  isChatOpen: ref.watch(chatOpenProvider), // ⬅️ Estado del chat (usar watch para reactividad)
-                                  currentSessionId: chatState.sessionId, // ⬅️ SessionId del chat actual
-                                  activeSessionId: ref.watch(activeSessionIdProvider), // ⬅️ SessionId activo (más reciente)
+                                  currentSessionId: chatState.sessionId, // ⬅️ SessionId del chat actual (opcional)
+                                  // ⬅️ isChatOpen y activeSessionId ahora se obtienen directamente de los providers en StatusIndicator
                                 ),
                               ),
                             ],

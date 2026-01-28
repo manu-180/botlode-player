@@ -42,11 +42,13 @@ class PresenceManager {
       
       try {
         final url = '${AppConfig.supabaseUrl}/rest/v1/session_heartbeats?on_conflict=session_id';
+        // ⬅️ CRÍTICO: Usar UTC para evitar problemas de zona horaria
+        final nowUtc = DateTime.now().toUtc();
         final body = jsonEncode({
           'session_id': sessionId,
           'bot_id': botId,
           'is_online': false,
-          'last_seen': DateTime.now().toIso8601String(),
+          'last_seen': nowUtc.toIso8601String(), // ⬅️ SIEMPRE UTC
         });
         
         // ⬅️ ESTRATEGIA DUAL: Intentar sendBeacon primero, luego XHR síncrono como fallback
@@ -117,6 +119,19 @@ class PresenceManager {
     _scheduleUpdate(false);
   }
 
+  /// 🔴 SALE DE LÍNEA INMEDIATAMENTE (Sin Debounce) - Para cuando se cierra el chat
+  /// ⚠️ CRÍTICO: Usar este método cuando se cierra el chat para evitar condiciones de carrera
+  Future<void> setOfflineImmediate() async {
+    _shouldBeOnline = false;
+    // Cancelar todos los timers
+    _debounceTimer?.cancel();
+    _retryTimer?.cancel();
+    _heartbeatTimer?.cancel();
+    // Enviar inmediatamente sin debounce
+    await _sendToSupabase(false);
+    print("🔴 [PresenceManager] setOfflineImmediate() - Estado OFFLINE enviado inmediatamente a BD");
+  }
+
   /// Lógica de "Embudo" para evitar spam de peticiones
   void _scheduleUpdate(bool targetStatus) {
     // 1. Cancelamos cualquier envío pendiente anterior
@@ -152,12 +167,14 @@ class PresenceManager {
 
   Future<void> _sendToSupabase(bool status) async {
     try {
-      print("📡 Enviando señal a Supabase: ${status ? 'ONLINE' : 'OFFLINE'}");
+      // ⬅️ CRÍTICO: Usar UTC para evitar problemas de zona horaria (Argentina UTC-3 vs UTC)
+      final nowUtc = DateTime.now().toUtc();
+      print("📡 Enviando señal a Supabase: ${status ? 'ONLINE' : 'OFFLINE'} (UTC: ${nowUtc.toIso8601String()})");
       await _supabase.from('session_heartbeats').upsert({
         'session_id': sessionId,
         'bot_id': botId,
         'is_online': status,
-        'last_seen': DateTime.now().toIso8601String(),
+        'last_seen': nowUtc.toIso8601String(), // ⬅️ SIEMPRE UTC
       }, onConflict: 'session_id');
     } catch (e) {
       print("⚠️ Error de red ($e). Reintentando en 2s...");

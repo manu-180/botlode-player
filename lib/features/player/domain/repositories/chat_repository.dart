@@ -6,6 +6,7 @@ abstract class ChatRepository {
   Future<BotResponse> sendMessage({
     required String message,
     required String sessionId,
+    required String chatId, // ⬅️ NUEVO: ID persistente del chat (no cambia con reloads)
     required String botId,
   });
 }

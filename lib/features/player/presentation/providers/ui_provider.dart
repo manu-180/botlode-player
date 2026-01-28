@@ -43,6 +43,26 @@ final chatResetProvider = Provider((ref) {
       print("🟢 [DEBUG] chatResetProvider() - Error leyendo estado antes: $e");
     }
     
+    // ⬅️ PASO 0.5: CERRAR EL CHAT PRIMERO para desmontar el widget inmediatamente
+    // ⚠️ CRÍTICO: Esto debe hacerse PRIMERO para que el widget se desmonte y no pueda mostrar "EN LÍNEA"
+    print("🟢 [DEBUG] chatResetProvider() - PASO 0.5: Cerrando chat PRIMERO (desmonta widget inmediatamente)");
+    try {
+      ref.read(chatOpenProvider.notifier).set(false);
+      print("🟢 [DEBUG] chatResetProvider() - Chat cerrado - widget se desmontará inmediatamente");
+    } catch (e) {
+      print("🟢 [DEBUG] chatResetProvider() - ERROR cerrando chat: $e");
+    }
+    
+    // ⬅️ PASO 0.6: INVALIDAR activeSessionId para asegurar que ningún chat muestre "EN LÍNEA"
+    // ⚠️ CRÍTICO: Esto debe hacerse DESPUÉS de cerrar el chat pero ANTES de clearChat()
+    print("🟢 [DEBUG] chatResetProvider() - PASO 0.6: Invalidando activeSessionId (ningún chat mostrará 'EN LÍNEA')");
+    try {
+      ref.read(activeSessionIdProvider.notifier).state = null;
+      print("🟢 [DEBUG] chatResetProvider() - activeSessionId invalidado (null)");
+    } catch (e) {
+      print("🟢 [DEBUG] chatResetProvider() - ERROR invalidando activeSessionId: $e");
+    }
+    
     // ⬅️ PASO 1: Limpiar chat (pantalla en blanco, nuevo sessionId, estado idle)
     print("🟢 [DEBUG] chatResetProvider() - PASO 1: Llamando a clearChat()");
     try {
@@ -54,14 +74,15 @@ final chatResetProvider = Provider((ref) {
       print("🟢 [DEBUG] chatResetProvider() - ERROR en clearChat(): $e");
     }
     
-    // ⬅️ PASO 1.5: Verificar estado DESPUÉS de clearChat y actualizar sessionId activo
+    // ⬅️ PASO 1.5: Verificar estado DESPUÉS de clearChat y actualizar sessionId activo al NUEVO
+    // ⚠️ IMPORTANTE: Actualizar activeSessionId con el nuevo sessionId para que el nuevo chat pueda mostrar "EN LÍNEA" cuando se abra
     try {
       final stateAfterClear = ref.read(chatControllerProvider);
       print("🟢 [DEBUG] chatResetProvider() - ESTADO DESPUÉS de clearChat: ${stateAfterClear.messages.length} mensajes, sessionId: ${stateAfterClear.sessionId}, mood: ${stateAfterClear.currentMood}");
       
-      // ⬅️ Actualizar el sessionId activo al nuevo (solo este chat mostrará "EN LÍNEA")
+      // ⬅️ Actualizar el sessionId activo al nuevo (solo este chat mostrará "EN LÍNEA" cuando se abra)
       ref.read(activeSessionIdProvider.notifier).state = stateAfterClear.sessionId;
-      print("🟢 [DEBUG] chatResetProvider() - activeSessionId actualizado a: ${stateAfterClear.sessionId}");
+      print("🟢 [DEBUG] chatResetProvider() - activeSessionId actualizado a: ${stateAfterClear.sessionId} (nuevo chat será el activo)");
     } catch (e) {
       print("🟢 [DEBUG] chatResetProvider() - Error leyendo estado después de clearChat: $e");
     }
@@ -80,15 +101,6 @@ final chatResetProvider = Provider((ref) {
       print("🟢 [DEBUG] chatResetProvider() - Estado del chat ya está en 'neutral' (reseteado en clearChat)");
     } catch (e) {
       print("🟢 [DEBUG] chatResetProvider() - ERROR reseteando mood: $e");
-    }
-    
-    // ⬅️ PASO 3: Cerrar el chat si está abierto (para que "EN LÍNEA" desaparezca)
-    print("🟢 [DEBUG] chatResetProvider() - PASO 3: Cerrando chat si está abierto");
-    try {
-      ref.read(chatOpenProvider.notifier).set(false);
-      print("🟢 [DEBUG] chatResetProvider() - Chat cerrado");
-    } catch (e) {
-      print("🟢 [DEBUG] chatResetProvider() - ERROR cerrando chat: $e");
     }
     
     // ⬅️ PASO 3.5: NO invalidar el provider (causa LateInitializationError)
