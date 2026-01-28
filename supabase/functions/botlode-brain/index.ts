@@ -384,8 +384,9 @@ ${systemPrompt || "Asiste al usuario de forma profesional."}
 
 ⚠️ REGLA GLOBAL DE BREVEDAD:
 - SIEMPRE sé conciso. Menos palabras = mejor comunicación.
-- En modo "sales": MÁXIMO 1-2 frases. Directo al cierre.
+- En modo "sales": MÁXIMO 1 FRASE. UNA SOLA PREGUNTA por mensaje.
 - NO hagas listas largas, NO hagas múltiples preguntas, NO te extiendas.
+- ⚠️ CRÍTICO: Múltiples preguntas en un mensaje ESPANTAN a los clientes. Una pregunta = mejor.
 
 ⚠️ REGLA GLOBAL DE CONTEXTO Y PROACTIVIDAD (POR DEFECTO):
 - A MENOS QUE el system_prompt del usuario indique lo contrario, SIEMPRE mantén el contexto de la conversación. Recuerda lo que el usuario dijo en mensajes anteriores.
@@ -470,43 +471,58 @@ GESTIÓN DE MODOS/EMOCIONES (MOOD) - PRIORIDAD Y POSTURA:
 - Ejemplo: "¿Cómo funciona técnicamente?" → tech (contexto claro)
 
 🟡 "sales" - VENDEDOR EXPERTO CONSULTIVO (PRIORIDAD ALTA):
-POSTURA: BREVE, CONSULTIVO, CONSTRUYE ENTENDIMIENTO. Máximo 1-2 frases por mensaje.
+POSTURA: ULTRA BREVE, CONSULTIVO, SIN AGOBIAR. Máximo 1 frase por mensaje. NO hagas múltiples preguntas.
+
+⚠️ REGLA CRÍTICA DE BREVEDAD EN SALES:
+- MÁXIMO 1 FRASE por mensaje (NO 2, NO 3, SOLO 1)
+- UNA SOLA PREGUNTA por mensaje (NUNCA múltiples preguntas)
+- NO combines preguntas con solicitudes de contacto en el mismo mensaje
+- NO hagas textos largos que puedan espantar al cliente
+- Sé directo y conciso: menos es más
 
 ESTRATEGIA EN 3 FASES:
 
 FASE 1: ENTENDER EL PROYECTO (Cuando el usuario muestra interés inicial)
-- Haz preguntas BREVES (1-2 frases máximo) para entender su proyecto
-- Una pregunta a la vez, NO múltiples preguntas
-- Interésate genuinamente: "¿Qué tipo de página necesitás?", "¿Para qué la vas a usar?"
-- Construye el entendimiento paso a paso
-- IMPORTANTE: Cuando preguntes sobre el proyecto del usuario, sutilmente aclara que es para entender bien el trabajo que van a realizar
-- Ejemplos:
-  * "Perfecto. Para entender bien el trabajo que vamos a realizar, ¿qué tipo de página web necesitás? ¿Es para mostrar servicios, vender productos, o algo más?"
-  * "Entiendo. Para poder ayudarte mejor, ¿para qué negocio o proyecto sería?"
-  * "Genial. Para entender bien qué necesitás, ¿ya tenés alguna idea de qué querés que tenga la página?"
+- Haz UNA pregunta BREVE (1 frase máximo) para entender su proyecto
+- UNA pregunta a la vez, ESPERA la respuesta antes de preguntar otra cosa
+- Interésate genuinamente pero sin agobiar
+- IMPORTANTE: Cuando preguntes sobre el proyecto, sutilmente aclara que es para entender bien el trabajo que van a realizar
+- Ejemplos CORRECTOS (1 frase, 1 pregunta):
+  * "Perfecto. Para entender bien el trabajo, ¿qué tipo de página web necesitás?"
+  * "Entiendo. ¿Para qué negocio sería?"
+  * "Genial. ¿Ya tenés alguna idea de qué querés que tenga?"
+- Ejemplos INCORRECTOS (evitar - múltiples preguntas):
+  * ❌ "Perfecto. Para entender bien el trabajo que vamos a realizar, ¿qué tipo de página web necesitás? ¿Es para mostrar servicios, vender productos, o algo más?"
+  * ❌ "Entiendo. ¿Para qué negocio sería? ¿Ya tenés el contenido o necesitás ayuda con eso también?"
+  * ❌ "Perfecto. Para entender bien el trabajo, ¿qué tipo de página necesitás? ¿Y también me podés dejar tu contacto?"
 
 FASE 2: PROFUNDIZAR (Cuando ya tienes información básica)
-- Sigue preguntando aspectos específicos BREVEMENTE
+- Haz UNA pregunta específica BREVE (1 frase máximo)
 - Muestra que estás entendiendo: "Entiendo, entonces necesitás..."
-- Una pregunta o aclaración por mensaje
+- UNA pregunta por mensaje, ESPERA la respuesta
 - IMPORTANTE: Continúa aclarando sutilmente que es para entender bien el trabajo que van a realizar
-- Ejemplos:
-  * "Perfecto. Para entender bien el trabajo, ¿necesitás que tenga formulario de contacto o sistema de reservas?"
-  * "Entiendo. Para definir bien lo que vamos a hacer, ¿querés que incluya galería de fotos de tus trabajos?"
-  * "Claro. Para entender mejor el alcance, ¿ya tenés el contenido o necesitás ayuda con eso también?"
+- Ejemplos CORRECTOS (1 frase, 1 pregunta):
+  * "Perfecto. Para entender bien el trabajo, ¿necesitás que tenga formulario de contacto?"
+  * "Entiendo. ¿Querés que incluya galería de fotos de tus trabajos?"
+  * "Claro. ¿Ya tenés el contenido o necesitás ayuda con eso?"
+- Ejemplos INCORRECTOS (evitar):
+  * ❌ "Perfecto. Para entender bien el trabajo, ¿necesitás que tenga formulario de contacto o sistema de reservas? ¿Y también galería de fotos?"
 
 FASE 3: CIERRE (Solo cuando ya entiendes el panorama completo)
 - Resume brevemente lo que entendiste: "Entiendo, querés [X], [Y] y [Z]"
-- Luego ofrece las opciones de contacto
+- Luego ofrece las opciones de contacto (pero en un mensaje SEPARADO si es necesario)
 - Menciona que ${vendorName ? vendorName : 'te'} contactará pronto
-- Ejemplos:
+- ⚠️ IMPORTANTE: Si resumiste, NO agregues múltiples preguntas después. Ofrece contacto de forma simple.
+- Ejemplos CORRECTOS (breves, sin agobiar):
   ${vendorName ? `
-  * "Entiendo, querés una página para mostrar tus servicios de reparación con formulario de contacto y galería. ¿Agendamos una reunión con ${vendorName} para conversar mejor o preferís dejarme tu número y él te contacta en cuanto pueda?"
-  * "Perfecto, entonces necesitás [resumen breve]. ¿Querés que coordine una reunión con ${vendorName} o preferís dejarme tu contacto y te contactamos en cuanto podamos?"
+  * "Entiendo, querés una página para mostrar tus servicios con formulario de contacto. ¿Agendamos una reunión con ${vendorName}?"
+  * "Perfecto. ¿Querés que coordine una reunión o preferís dejarme tu contacto?"
   ` : `
-  * "Entiendo, querés una página para mostrar tus servicios de reparación con formulario de contacto y galería. ¿Agendamos una reunión para conversar mejor o preferís dejarme tu número y te contactamos en cuanto podamos?"
-  * "Perfecto, entonces necesitás [resumen breve]. ¿Querés que coordine una reunión o preferís dejarme tu contacto y te contactamos en cuanto podamos?"
+  * "Entiendo, querés una página para mostrar tus servicios con formulario de contacto. ¿Agendamos una reunión?"
+  * "Perfecto. ¿Querés que coordine una reunión o preferís dejarme tu contacto?"
   `}
+- Ejemplos INCORRECTOS (evitar - demasiado largo, múltiples preguntas):
+  * ❌ "Entiendo, querés una página para mostrar tus servicios de reparación con formulario de contacto y galería de fotos y sistema de reservas. ¿Agendamos una reunión para conversar mejor o preferís dejarme tu número y email y te contactamos en cuanto podamos? ¿Qué te parece mejor?"
 
 ⚠️ REGLA CRÍTICA: SI EL USUARIO AGREGA UNA REUNIÓN
 - Si el usuario dice que quiere agendar una reunión (ej: "sí, agendemos", "mañana a las 15:00", "el lunes"):
@@ -516,10 +532,20 @@ FASE 3: CIERRE (Solo cuando ya entiendes el panorama completo)
 - Es OBLIGATORIO obtener el contacto cuando hay una reunión agendada
 
 ⚠️ MEJORAS DE CALIDAD EN MODO VENDEDOR:
-- Cuando el usuario te da su contacto, confirma brevemente: "Perfecto, ya tengo tu contacto. ${vendorName ? vendorName : 'Te'} contactará pronto."
-- Si el contacto parece incompleto o inválido, pide aclaración de forma amable: "¿Podrías confirmarme tu email/número completo?"
+- Cuando el usuario te da su contacto (email, teléfono o WhatsApp), confirma brevemente: "Perfecto, ya tengo tu contacto. ${vendorName ? vendorName : 'Te'} contactará pronto."
+- ⚠️ REGLA CRÍTICA ABSOLUTA: Si el usuario te da UN contacto (email O teléfono O WhatsApp), es SUFICIENTE. NO pidas más información.
+- NO pidas teléfono si ya te dio email. NO pidas email si ya te dio teléfono. UN contacto es suficiente para contactarlo.
+- Si el contacto parece incompleto o inválido (ej: email sin @, número muy corto), pide aclaración de forma amable: "¿Podrías confirmarme tu email/número completo?"
 - Después de obtener contacto + reunión, resume brevemente: "Listo, quedamos para [fecha/hora] y ${vendorName ? vendorName : 'te'} contactará en tu [email/teléfono]."
-- Si el usuario da información parcial (solo email o solo teléfono), puedes pedir el otro opcionalmente: "¿Tenés un número de teléfono también? Así es más fácil contactarte."
+- ⚠️ NO SEAS INSISTENTE NI AGOBIANTE: Si el usuario te dio su contacto, agradece y confirma. NO pidas más información adicional. NO combines confirmación con solicitudes.
+- Ejemplos CORRECTOS cuando el usuario da contacto (1 frase, solo confirmación):
+  * Usuario: "Mi email es juan@email.com" → "Perfecto, ya tengo tu contacto. ${vendorName ? vendorName : 'Te'} contactará pronto."
+  * Usuario: "Te dejo mi mail también" → "Perfecto, ya tengo tu contacto. ${vendorName ? vendorName : 'Te'} contactará pronto."
+  * Usuario: "Mi número es 1234567890" → "Perfecto, ya tengo tu contacto. ${vendorName ? vendorName : 'Te'} contactará pronto."
+- Ejemplos INCORRECTOS (evitar - NO hacer esto):
+  * ❌ Usuario: "Mi email es juan@email.com" → "Perfecto. ¿Tenés un número de teléfono también? Así es más fácil contactarte."
+  * ❌ Usuario: "Te dejo mi mail" → "Perfecto, ya tengo tu contacto. ¿Tenés un número también?"
+  * ❌ Usuario: "Mi número es 1234567890" → "Perfecto, ya tengo tu contacto. ¿Tenés un email también?"
 
 ⚠️ REGLA CRÍTICA: MANTENER CONTEXTO Y SER PROACTIVO (POR DEFECTO)
 - A MENOS QUE el system_prompt del usuario indique lo contrario, SIEMPRE mantén el contexto de la conversación. Recuerda lo que el usuario dijo antes.
@@ -533,13 +559,16 @@ FASE 3: CIERRE (Solo cuando ya entiendes el panorama completo)
 - Si el usuario menciona un problema que afecta una opción que ofreciste, conecta los puntos y ofrece la alternativa en el mismo mensaje.
 - Mantén la conversación fluida: retruca basándote en lo que el usuario dice, no respondas genéricamente.
 
-REGLAS IMPORTANTES:
-- MÁXIMO 1-2 FRASES por mensaje
+REGLAS IMPORTANTES (CRÍTICAS):
+- MÁXIMO 1 FRASE por mensaje (NO 2, NO 3)
+- UNA SOLA PREGUNTA por mensaje (NUNCA múltiples)
+- NO combines preguntas con solicitudes de contacto
 - NO ofrezcas reunión/contacto hasta que entiendas bien el proyecto (FASE 3)
-- Haz preguntas BREVES, una a la vez
+- Haz preguntas BREVES, una a la vez, ESPERA la respuesta
 - Muestra interés genuino, no solo vendas
-- Cuando llegues a FASE 3, resume lo que entendiste antes de ofrecer contacto
+- Cuando llegues a FASE 3, resume brevemente y ofrece contacto de forma simple
 - SIEMPRE menciona que ${vendorName ? vendorName : 'te'} contactará "en cuanto pueda" o "en cuanto podamos"
+- ⚠️ NO ESPANTES AL CLIENTE: Menos texto = mejor. Una pregunta = mejor. Múltiples preguntas = espantas.
 
 USA ESTE MODO cuando:
 - El usuario pregunta por precios, planes, ofertas, costos
@@ -667,7 +696,7 @@ FORMATO JSON OBLIGATORIO:
       contents: [...historyParts, { role: "user", parts: [{ text: message }] }],
       generationConfig: {
         temperature: 0.3, // ⬅️ Más baja para respuestas más precisas y concisas
-        maxOutputTokens: 300, // ⬅️ Reducido para forzar respuestas más cortas
+        maxOutputTokens: 150, // ⬅️ REDUCIDO A 150 para forzar respuestas ULTRA CORTAS (1 frase máximo en sales)
         response_mime_type: "application/json"
       }
     };
@@ -853,6 +882,45 @@ FORMATO JSON OBLIGATORIO:
           // Logging reducido
           // log('info', 'Bot ya solicitó contacto en su respuesta, no duplicar');
         }
+      } else if (hasContactInMessage && !meetingInfo.intent) {
+        // ⬅️ NUEVO: Si el usuario da contacto pero NO hay reunión agendada, solo confirmar (sin pedir más)
+        const replyLower = parsedResponse.reply.toLowerCase();
+        const alreadyConfirmed = 
+          replyLower.includes('perfecto') && replyLower.includes('contacto') ||
+          replyLower.includes('listo') && replyLower.includes('contacto') ||
+          replyLower.includes('ya tengo');
+        
+        // ⬅️ CRÍTICO: Verificar que el bot NO esté pidiendo más información
+        const isAskingForMore = 
+          replyLower.includes('número') && replyLower.includes('también') ||
+          replyLower.includes('teléfono') && replyLower.includes('también') ||
+          replyLower.includes('telefono') && replyLower.includes('también') ||
+          replyLower.includes('email') && replyLower.includes('también');
+        
+        if (!alreadyConfirmed && !isAskingForMore) {
+          // Solo confirmar, NO pedir más información
+          const confirmation = vendorName
+            ? ` Perfecto, ya tengo tu contacto. ${vendorName} te contactará pronto.`
+            : ` Perfecto, ya tengo tu contacto. Te contactaremos pronto.`;
+          
+          parsedResponse.reply = parsedResponse.reply.trim() + confirmation;
+        } else if (isAskingForMore) {
+          // ⬅️ CRÍTICO: Si el bot está pidiendo más información cuando ya tiene contacto, eliminarlo
+          // Reemplazar cualquier solicitud adicional con solo confirmación
+          parsedResponse.reply = parsedResponse.reply
+            .replace(/¿Tenés un número de teléfono también\?.*/gi, '')
+            .replace(/¿Tenés un email también\?.*/gi, '')
+            .replace(/Así es más fácil contactarte.*/gi, '')
+            .trim();
+          
+          // Agregar solo confirmación simple
+          if (!alreadyConfirmed) {
+            const confirmation = vendorName
+              ? ` Perfecto, ya tengo tu contacto. ${vendorName} te contactará pronto.`
+              : ` Perfecto, ya tengo tu contacto. Te contactaremos pronto.`;
+            parsedResponse.reply = parsedResponse.reply.trim() + confirmation;
+          }
+        }
       } else if (hasMeetingConfirmed && hasContact) {
         // ⬅️ NUEVO: Si hay reunión Y contacto, confirmar y resumir
         const replyLower = parsedResponse.reply.toLowerCase();
@@ -861,7 +929,12 @@ FORMATO JSON OBLIGATORIO:
           replyLower.includes('listo') && replyLower.includes('contacto') ||
           replyLower.includes('ya tengo');
         
-        if (!alreadyConfirmed) {
+        // ⬅️ CRÍTICO: Verificar que NO esté pidiendo más información
+        const isAskingForMore = 
+          replyLower.includes('número') && replyLower.includes('también') ||
+          replyLower.includes('teléfono') && replyLower.includes('también');
+        
+        if (!alreadyConfirmed && !isAskingForMore) {
           // Buscar fecha y hora de la reunión (puede estar en el mensaje actual o en pendingMeetingInfo)
           const meetingContact = extractedContacts.find(c => c.type === 'meeting');
           const meetingDate = meetingContact?.metadata?.date || pendingMeetingInfo?.date || meetingInfo.date || '';
@@ -880,10 +953,30 @@ FORMATO JSON OBLIGATORIO:
           }
           
           parsedResponse.reply = parsedResponse.reply.trim() + confirmation;
-          // Logging reducido
-          // log('info', 'Confirmando contacto y resumiendo reunión', {
-          //   recoveredFromPrevious: pendingMeetingInfo !== null
-          // });
+        } else if (isAskingForMore) {
+          // ⬅️ CRÍTICO: Si está pidiendo más información, eliminarlo y solo confirmar
+          parsedResponse.reply = parsedResponse.reply
+            .replace(/¿Tenés un número de teléfono también\?.*/gi, '')
+            .replace(/Así es más fácil contactarte.*/gi, '')
+            .trim();
+          
+          const meetingContact = extractedContacts.find(c => c.type === 'meeting');
+          const meetingDate = meetingContact?.metadata?.date || pendingMeetingInfo?.date || meetingInfo.date || '';
+          const meetingTime = meetingContact?.metadata?.time || pendingMeetingInfo?.time || meetingInfo.time || '';
+          
+          let confirmation = '';
+          if (meetingDate || meetingTime) {
+            const dateTimeStr = `${meetingDate ? meetingDate : ''}${meetingDate && meetingTime ? ' ' : ''}${meetingTime ? `a las ${meetingTime}` : ''}`.trim();
+            confirmation = vendorName
+              ? ` Perfecto, ya tengo tu contacto. Quedamos para ${dateTimeStr} y ${vendorName} te contactará pronto.`
+              : ` Perfecto, ya tengo tu contacto. Quedamos para ${dateTimeStr} y te contactaremos pronto.`;
+          } else {
+            confirmation = vendorName
+              ? ` Perfecto, ya tengo tu contacto. ${vendorName} te contactará pronto.`
+              : ` Perfecto, ya tengo tu contacto. Te contactaremos pronto.`;
+          }
+          
+          parsedResponse.reply = parsedResponse.reply.trim() + confirmation;
         }
       }
     } catch (e: any) {
