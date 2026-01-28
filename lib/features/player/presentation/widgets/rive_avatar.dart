@@ -50,10 +50,8 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
   void _onTick(Duration elapsed) {
     if (_lookXInput == null || _lookYInput == null) return;
     
-    // ⬅️ MEJORADO: Tracking más preciso y directo
-    // Cuando está tracking, usar interpolación más agresiva (0.5) para seguir el mouse con precisión
-    // Cuando no está tracking, suavizar para volver al centro (0.05)
-    final double smoothFactor = _isTracking ? 0.5 : 0.05; // ⬅️ Aumentado a 0.5 para tracking más preciso y directo
+    // LÓGICA PURA: Tracking sin lag, reposo suave.
+    final double smoothFactor = _isTracking ? 1.0 : 0.05;
     
     _currentX = lerpDouble(_currentX, _targetX, smoothFactor) ?? 50;
     _currentY = lerpDouble(_currentY, _targetY, smoothFactor) ?? 50;
@@ -120,8 +118,8 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       // Margen derecho total: 40 (screen) + 7 (margin container) + 29 (mitad avatar) ≈ 76px
       // Margen inferior total: 40 (screen) + 7 (margin container) + 29 (mitad avatar) ≈ 76px
       myCenter = Offset(screenSize.width - 76, screenSize.height - 76);
-      sensitivity = 150.0; // ⬅️ MEJORADO: Sensibilidad más baja = seguimiento más preciso y directo
-      maxDistance = 1000.0; // ⬅️ MEJORADO: Rango aumentado para mejor seguimiento
+      sensitivity = 350.0; // Rango medio para la burbuja
+      maxDistance = 500.0; // ⬅️ BURBUJA: Rango ajustado (500px)
     } else {
       // --- MODO CHAT PANEL ---
       // Ancho Panel: 380px. Padding right: 28px.
@@ -133,8 +131,8 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       final double chatAvatarCenterY = screenSize.height - 28 - 90;
       
       myCenter = Offset(chatCenterX, chatAvatarCenterY);
-      sensitivity = 180.0; // ⬅️ MEJORADO: Sensibilidad más baja = seguimiento más preciso y directo
-      maxDistance = 1200.0; // ⬅️ MEJORADO: Rango aumentado para mejor seguimiento en chat
+      sensitivity = 600.0; // ⬅️ Sensibilidad ajustada
+      maxDistance = 600.0; // ⬅️ CHAT: Rango ajustado (600px)
     }
 
     // 3. DELEGAR CÁLCULO AL CONTROLLER

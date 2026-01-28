@@ -7,6 +7,7 @@ class BotConfig {
   final String systemPrompt;
   final bool isDarkMode; 
   final bool showOfflineAlert; 
+  final String? initialMessage; // ⬅️ Mensaje inicial del bot
 
   BotConfig({
     required this.name,
@@ -14,6 +15,7 @@ class BotConfig {
     required this.systemPrompt,
     required this.isDarkMode,
     required this.showOfflineAlert,
+    this.initialMessage,
   });
 
   factory BotConfig.fromJson(Map<String, dynamic> json) {
@@ -25,6 +27,8 @@ class BotConfig {
       isDarkMode: (json['theme_mode'] ?? 'dark') == 'dark',
       // Mapeo seguro: Si es null, muestra alerta por defecto.
       showOfflineAlert: json['show_offline_alert'] ?? true,
+      // ⬅️ Mensaje inicial: si no existe, usar el por defecto
+      initialMessage: json['initial_message'] as String?,
     );
   }
 

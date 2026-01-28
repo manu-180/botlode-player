@@ -76,13 +76,25 @@ class ChatController extends _$ChatController {
     // ⬅️ NUEVO: Cargar mensajes guardados si existen
     final storedMessages = ChatPersistenceService.getStoredMessages();
     
-    // Si hay mensajes guardados, usarlos; si no, mensaje inicial
+    // ⬅️ NUEVO: Obtener mensaje inicial del bot (si está disponible)
+    String defaultInitialMessage = 'Sistema en línea. ¿En qué puedo ayudarte hoy?';
+    try {
+      final botConfigAsync = ref.watch(botConfigProvider);
+      final botConfig = botConfigAsync.asData?.value;
+      if (botConfig?.initialMessage != null && botConfig!.initialMessage!.trim().isNotEmpty) {
+        defaultInitialMessage = botConfig.initialMessage!;
+      }
+    } catch (e) {
+      // Si hay error, usar el mensaje por defecto
+    }
+    
+    // Si hay mensajes guardados, usarlos; si no, mensaje inicial del bot
     final initialMessages = storedMessages.isNotEmpty
         ? storedMessages
         : [
             ChatMessage(
               id: 'init',
-              text: 'Sistema en línea. ¿En qué puedo ayudarte hoy?',
+              text: defaultInitialMessage,
               role: MessageRole.bot,
               timestamp: DateTime.now().subtract(const Duration(hours: 3)), // ⬅️ Hora de Argentina (UTC-3)
             )

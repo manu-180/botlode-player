@@ -19,6 +19,7 @@ class BotRepositoryImpl implements BotRepository {
       systemPrompt: "",
       isDarkMode: true,
       showOfflineAlert: true,
+      initialMessage: null,
     );
 
     if (botId.isEmpty) {

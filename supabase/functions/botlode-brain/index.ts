@@ -168,7 +168,9 @@ function extractProjectSummary(botReply: string): string | null {
   
   // Patrones que indican que el bot está haciendo un resumen (FASE 3)
   const summaryPatterns = [
+    /perfecto[,:]?\s+quer[ée]s\s+(.+?)(?:\.|¿|$)/i,
     /entiendo[,:]?\s+quer[ée]s\s+(.+?)(?:\.|¿|$)/i,
+    /claro[,:]?\s+quer[ée]s\s+(.+?)(?:\.|¿|$)/i,
     /perfecto[,:]?\s+entonces\s+(.+?)(?:\.|¿|$)/i,
     /claro[,:]?\s+necesit[áa]s\s+(.+?)(?:\.|¿|$)/i,
     /resumiendo[,:]?\s+(.+?)(?:\.|¿|$)/i,
@@ -186,6 +188,7 @@ function extractProjectSummary(botReply: string): string | null {
       summary = summary
         .replace(/\s*¿[^?]*\?.*$/i, '') // Remover preguntas al final
         .replace(/\s*\.\s*$/, '') // Remover punto final
+        .replace(/\s*(?:agendamos|reuni[óo]n|contacto|contactar).*$/i, '') // Remover referencias a reunión/contacto
         .trim();
       
       // Validar que el resumen tenga contenido sustancial (más de 10 caracteres)
@@ -199,11 +202,131 @@ function extractProjectSummary(botReply: string): string | null {
   // Ejemplo: "Entiendo, querés una página para mostrar tus servicios con formulario de contacto"
   if (replyLower.includes('entiendo') && (replyLower.includes('querés') || replyLower.includes('necesitás'))) {
     // Extraer todo después de "entiendo" hasta la primera pregunta o punto
-    const match = botReply.match(/entiendo[,:]?\s+(.+?)(?:[\.¿]|agendamos|reuni[óo]n)/i);
+    const match = botReply.match(/entiendo[,:]?\s+(.+?)(?:[\.¿]|agendamos|reuni[óo]n|contacto)/i);
     if (match && match[1]) {
       let summary = match[1].trim();
+      // Limpiar referencias a reunión/contacto
+      summary = summary.replace(/\s*(?:agendamos|reuni[óo]n|contacto|contactar).*$/i, '').trim();
       if (summary.length > 10) {
         return summary;
+      }
+    }
+  }
+  
+  // ⬅️ NUEVO: Buscar también patrones con "perfecto" al inicio
+  if (replyLower.includes('perfecto') && (replyLower.includes('querés') || replyLower.includes('necesitás'))) {
+    const match = botReply.match(/perfecto[,:]?\s+(.+?)(?:[\.¿]|agendamos|reuni[óo]n|contacto)/i);
+    if (match && match[1]) {
+      let summary = match[1].trim();
+      summary = summary.replace(/\s*(?:agendamos|reuni[óo]n|contacto|contactar).*$/i, '').trim();
+      if (summary.length > 10) {
+        return summary;
+      }
+    }
+  }
+  
+  return null;
+}
+
+// ⬅️ NUEVA FUNCIÓN: Extraer resumen del proyecto de los mensajes del USUARIO
+function extractProjectSummaryFromUserMessages(history: any[]): string | null {
+  if (!history || history.length === 0) return null;
+  
+  // Palabras clave que indican que el usuario está describiendo su proyecto
+  const projectKeywords = [
+    'quiero', 'necesito', 'busco', 'me interesa', 'quiero hacer', 'necesito hacer',
+    'página', 'web', 'sitio', 'productos', 'servicios', 'negocio', 'empresa',
+    'vender', 'mostrar', 'promocionar', 'publicar', 'catálogo', 'tienda', 'ecommerce'
+  ];
+  
+  // Buscar en los mensajes del usuario (más recientes primero)
+  const userMessages = history
+    .filter((msg: any) => msg.role === 'user')
+    .slice(0, 5); // Solo últimos 5 mensajes del usuario
+  
+  for (const msg of userMessages) {
+    const content = msg.content || '';
+    const contentLower = content.toLowerCase();
+    
+    // Verificar si el mensaje contiene palabras clave de proyecto
+    const hasProjectKeywords = projectKeywords.some(keyword => contentLower.includes(keyword));
+    
+    if (hasProjectKeywords && content.length > 15) {
+      // Extraer la parte relevante del mensaje
+      // Buscar frases que describan el proyecto
+      const projectPatterns = [
+        // "Quiero una página para vender productos"
+        /(?:quiero|necesito|busco|me interesa)\s+(?:una|un|hacer|crear|tener)\s+(?:página|web|sitio)\s+(?:para|de)\s+(.+?)(?:\.|,|$|para|con|y)/i,
+        // "Quiero una página web"
+        /(?:quiero|necesito|busco|me interesa)\s+(?:una|un|hacer|crear|tener)\s+(.+?)(?:página|web|sitio)/i,
+        // "Página para vender productos"
+        /(?:página|web|sitio)\s+(?:para|de)\s+(.+?)(?:\.|,|$|con|y)/i,
+        // "Quiero vender productos"
+        /(?:quiero|necesito)\s+(?:vender|mostrar|promocionar|publicar)\s+(.+?)(?:\.|,|$|en|con|y)/i,
+        // "Necesito mostrar mis servicios"
+        /(?:quiero|necesito|busco)\s+(?:mostrar|promocionar|publicar)\s+(?:mis|mi|sus|su)\s+(.+?)(?:\.|,|$|en|con|y)/i,
+      ];
+      
+      for (const pattern of projectPatterns) {
+        const match = content.match(pattern);
+        if (match && match[1]) {
+          let summary = match[1].trim();
+          // Limpiar y formatear
+          summary = summary
+            .replace(/^(?:una|un|el|la|las|los|mis|mi|sus|su)\s+/i, '') // Remover artículos/posesivos al inicio
+            .replace(/\s*\.\s*$/, '') // Remover punto final
+            .replace(/\s*(?:para|con|y|en).*$/, '') // Remover preposiciones y conectores al final
+            .trim();
+          
+          if (summary.length > 10 && summary.length < 200) {
+            // Formatear como resumen completo
+            // Si ya menciona "página" o "web", no agregarlo
+            if (contentLower.includes('página') || contentLower.includes('web') || contentLower.includes('sitio')) {
+              return summary.charAt(0).toUpperCase() + summary.slice(1);
+            } else {
+              return `Página web para ${summary}`;
+            }
+          }
+        }
+      }
+      
+      // ⬅️ NUEVO: Patrón más simple - capturar frases completas que describan el proyecto
+      // Ejemplo: "Quiero una página para vender productos"
+      const simplePattern = /(?:quiero|necesito|busco|me interesa)\s+(?:una|un|hacer|crear|tener)?\s*(?:página|web|sitio)?\s*(?:para|de)?\s*(.+?)(?:\.|,|$|para|con|y|agendar|reuni[óo]n|contacto)/i;
+      const simpleMatch = content.match(simplePattern);
+      if (simpleMatch && simpleMatch[1]) {
+        let summary = simpleMatch[1].trim();
+        summary = summary
+          .replace(/^(?:una|un|el|la|las|los|mis|mi|sus|su)\s+/i, '')
+          .replace(/\s*\.\s*$/, '')
+          .replace(/\s*(?:para|con|y|en|agendar|reuni[óo]n|contacto).*$/, '')
+          .trim();
+        
+        if (summary.length > 10 && summary.length < 200) {
+          // Si el mensaje ya menciona "página/web", usar el resumen tal cual
+          if (contentLower.includes('página') || contentLower.includes('web') || contentLower.includes('sitio')) {
+            // Construir resumen completo
+            const pageMatch = content.match(/(?:página|web|sitio)/i);
+            if (pageMatch) {
+              return `${pageMatch[0]} para ${summary}`;
+            }
+          }
+          return `Página web para ${summary}`;
+        }
+      }
+      
+      // Si no se encontró patrón específico pero tiene palabras clave, usar una parte del mensaje
+      if (content.length > 20 && content.length < 150) {
+        // Tomar las primeras palabras relevantes (hasta 100 caracteres)
+        let summary = content.substring(0, 100).trim();
+        // Remover signos de interrogación, puntos y referencias a contacto/reunión al final
+        summary = summary
+          .replace(/[\.\?]+$/, '')
+          .replace(/\s*(?:agendar|reuni[óo]n|contacto|contactar|número|email|teléfono).*$/i, '')
+          .trim();
+        if (summary.length > 15) {
+          return summary;
+        }
       }
     }
   }
@@ -725,49 +848,60 @@ POSTURA: ULTRA BREVE, CONSULTIVO, SIN AGOBIAR. Máximo 1 frase por mensaje. NO h
 - NO hagas textos largos que puedan espantar al cliente
 - Sé directo y conciso: menos es más
 
-ESTRATEGIA EN 3 FASES:
+ESTRATEGIA EN 3 FASES (SIMPLIFICADA - NO PREGUNTAR DETALLES INNECESARIOS):
 
-FASE 1: ENTENDER EL PROYECTO (Cuando el usuario muestra interés inicial)
-- Haz UNA pregunta BREVE (1 frase máximo) para entender su proyecto
-- UNA pregunta a la vez, ESPERA la respuesta antes de preguntar otra cosa
-- Interésate genuinamente pero sin agobiar
-- IMPORTANTE: Cuando preguntes sobre el proyecto, sutilmente aclara que es para entender bien el trabajo que van a realizar
-- Ejemplos CORRECTOS (1 frase, 1 pregunta):
-  * "Perfecto. Para entender bien el trabajo, ¿qué tipo de página web necesitás?"
+⚠️ REGLA CRÍTICA: NO NECESITAS TODOS LOS DETALLES
+- El objetivo es entender el proyecto A GRANDES RASGOS, no todos los detalles específicos
+- Con saber "página web para vender productos" es SUFICIENTE. NO preguntes "¿ya tenés el catálogo hecho?", "¿cuántos productos?", etc.
+- Los detalles los resolverá el asesor en la reunión. TÚ solo necesitas el contexto general.
+
+FASE 1: ENTENDER EL PROYECTO (1-2 preguntas máximo)
+- Haz UNA pregunta BREVE (1 frase máximo) para entender QUÉ tipo de proyecto quiere
+- UNA pregunta a la vez, ESPERA la respuesta
+- Ejemplos CORRECTOS:
+  * "Perfecto. ¿Qué tipo de página web necesitás?"
   * "Entiendo. ¿Para qué negocio sería?"
-  * "Genial. ¿Ya tenés alguna idea de qué querés que tenga?"
-- Ejemplos INCORRECTOS (evitar - múltiples preguntas):
-  * ❌ "Perfecto. Para entender bien el trabajo que vamos a realizar, ¿qué tipo de página web necesitás? ¿Es para mostrar servicios, vender productos, o algo más?"
-  * ❌ "Entiendo. ¿Para qué negocio sería? ¿Ya tenés el contenido o necesitás ayuda con eso también?"
-  * ❌ "Perfecto. Para entender bien el trabajo, ¿qué tipo de página necesitás? ¿Y también me podés dejar tu contacto?"
+  * "Genial. ¿Es para mostrar servicios o vender productos?"
+- ⚠️ CRÍTICO: Si el usuario ya te dijo "quiero una página para vender productos", NO sigas preguntando detalles. Pasa a FASE 3.
 
-FASE 2: PROFUNDIZAR (Cuando ya tienes información básica)
-- Haz UNA pregunta específica BREVE (1 frase máximo)
-- Muestra que estás entendiendo: "Entiendo, entonces necesitás..."
-- UNA pregunta por mensaje, ESPERA la respuesta
-- IMPORTANTE: Continúa aclarando sutilmente que es para entender bien el trabajo que van a realizar
-- Ejemplos CORRECTOS (1 frase, 1 pregunta):
-  * "Perfecto. Para entender bien el trabajo, ¿necesitás que tenga formulario de contacto?"
-  * "Entiendo. ¿Querés que incluya galería de fotos de tus trabajos?"
-  * "Claro. ¿Ya tenés el contenido o necesitás ayuda con eso?"
-- Ejemplos INCORRECTOS (evitar):
-  * ❌ "Perfecto. Para entender bien el trabajo, ¿necesitás que tenga formulario de contacto o sistema de reservas? ¿Y también galería de fotos?"
+FASE 2: PROFUNDIZAR (SOLO SI ES NECESARIO - MÁXIMO 1 PREGUNTA)
+- ⚠️ IMPORTANTE: Esta fase es OPCIONAL. Solo haz UNA pregunta adicional si realmente no tienes suficiente información general.
+- Si ya sabes "página web para vender productos", NO necesitas preguntar más. Pasa directo a FASE 3.
+- Solo pregunta si el proyecto es muy ambiguo o no entendiste nada.
+- Ejemplo de cuándo SÍ preguntar:
+  * Usuario: "Necesito una página" → "Perfecto. ¿Es para mostrar servicios o vender productos?"
+- Ejemplo de cuándo NO preguntar (pasar directo a FASE 3):
+  * Usuario: "Quiero una página para vender productos" → Ya tienes suficiente. Pasa a FASE 3.
 
-FASE 3: CIERRE (Solo cuando ya entiendes el panorama completo)
-- Resume brevemente lo que entendiste: "Entiendo, querés [X], [Y] y [Z]"
-- Luego ofrece las opciones de contacto (pero en un mensaje SEPARADO si es necesario)
-- Menciona que ${vendorName ? vendorName : 'te'} contactará pronto
-- ⚠️ IMPORTANTE: Si resumiste, NO agregues múltiples preguntas después. Ofrece contacto de forma simple.
-- Ejemplos CORRECTOS (breves, sin agobiar):
+FASE 3: CIERRE (ACTIVARSE RÁPIDO - NO ESPERAR TODOS LOS DETALLES)
+- ⚠️ CRÍTICO: Activa esta fase cuando tengas información GENERAL del proyecto, NO cuando tengas todos los detalles.
+- Resume BREVEMENTE lo que entendiste (solo lo esencial):
+  * "Perfecto, querés una página web para vender productos."
+  * "Entiendo, necesitás una página para mostrar tus servicios."
+  * "Claro, querés una página para tu negocio."
+- Luego ofrece INMEDIATAMENTE las opciones de contacto/reunión:
   ${vendorName ? `
-  * "Entiendo, querés una página para mostrar tus servicios con formulario de contacto. ¿Agendamos una reunión con ${vendorName}?"
-  * "Perfecto. ¿Querés que coordine una reunión o preferís dejarme tu contacto?"
+  * "¿Querés que agendemos una reunión con ${vendorName} o preferís dejarme tu número/email para que te contacte?"
+  * "Perfecto. ¿Agendamos una reunión o preferís que ${vendorName} te contacte?"
   ` : `
-  * "Entiendo, querés una página para mostrar tus servicios con formulario de contacto. ¿Agendamos una reunión?"
-  * "Perfecto. ¿Querés que coordine una reunión o preferís dejarme tu contacto?"
+  * "¿Querés que agendemos una reunión o preferís dejarme tu número/email para que te contactemos?"
+  * "Perfecto. ¿Agendamos una reunión o preferís que te contactemos?"
   `}
-- Ejemplos INCORRECTOS (evitar - demasiado largo, múltiples preguntas):
-  * ❌ "Entiendo, querés una página para mostrar tus servicios de reparación con formulario de contacto y galería de fotos y sistema de reservas. ¿Agendamos una reunión para conversar mejor o preferís dejarme tu número y email y te contactamos en cuanto podamos? ¿Qué te parece mejor?"
+- ⚠️ IMPORTANTE: El resumen debe ser BREVE y GENERAL. NO incluyas detalles específicos que no mencionó el usuario.
+- Ejemplos CORRECTOS (resumen breve + oferta directa):
+  ${vendorName ? `
+  * Usuario: "Quiero una página para vender productos" → "Perfecto, querés una página para vender productos. ¿Agendamos una reunión con ${vendorName} o preferís dejarme tu contacto?"
+  * Usuario: "Necesito una página para mi negocio" → "Entiendo, necesitás una página para tu negocio. ¿Querés que coordine una reunión o preferís que ${vendorName} te contacte?"
+  * Usuario: "Quiero mostrar mis servicios" → "Perfecto, querés una página para mostrar tus servicios. ¿Agendamos una reunión con ${vendorName} o preferís dejarme tu número/email?"
+  ` : `
+  * Usuario: "Quiero una página para vender productos" → "Perfecto, querés una página para vender productos. ¿Agendamos una reunión o preferís dejarme tu contacto?"
+  * Usuario: "Necesito una página para mi negocio" → "Entiendo, necesitás una página para tu negocio. ¿Querés que coordine una reunión o preferís que te contactemos?"
+  * Usuario: "Quiero mostrar mis servicios" → "Perfecto, querés una página para mostrar tus servicios. ¿Agendamos una reunión o preferís dejarme tu número/email?"
+  `}
+- Ejemplos INCORRECTOS (evitar - demasiado detallado o preguntas adicionales):
+  * ❌ Usuario: "Quiero una página para vender productos" → "Entiendo, querés una página para vender productos. ¿Ya tenés el catálogo hecho? ¿Cuántos productos son? ¿Agendamos una reunión?"
+  * ❌ Usuario: "Quiero una página para vender productos" → "Perfecto, querés una página para vender productos con formulario de contacto y galería de fotos y sistema de reservas. ¿Agendamos una reunión?"
+  * ❌ Usuario: "Quiero una página para vender productos" → "Entiendo. ¿Qué tipo de productos? ¿Ya tenés el contenido? ¿Necesitás ayuda con el diseño? ¿Agendamos una reunión?"
 
 ⚠️ REGLA CRÍTICA: SI EL USUARIO AGREGA UNA REUNIÓN
 - Si el usuario dice que quiere agendar una reunión (ej: "sí, agendemos", "mañana a las 15:00", "el lunes"):
@@ -808,12 +942,14 @@ REGLAS IMPORTANTES (CRÍTICAS):
 - MÁXIMO 1 FRASE por mensaje (NO 2, NO 3)
 - UNA SOLA PREGUNTA por mensaje (NUNCA múltiples)
 - NO combines preguntas con solicitudes de contacto
-- NO ofrezcas reunión/contacto hasta que entiendas bien el proyecto (FASE 3)
+- ⚠️ CRÍTICO: NO ofrezcas reunión/contacto hasta que tengas información GENERAL del proyecto (FASE 3)
+- ⚠️ CRÍTICO: NO necesitas TODOS los detalles. Con saber "página web para vender productos" es SUFICIENTE para pasar a FASE 3.
 - Haz preguntas BREVES, una a la vez, ESPERA la respuesta
-- Muestra interés genuino, no solo vendas
-- Cuando llegues a FASE 3, resume brevemente y ofrece contacto de forma simple
+- Muestra interés genuino, pero NO te extiendas en detalles innecesarios
+- Cuando llegues a FASE 3, resume BREVEMENTE (solo lo esencial) y ofrece contacto de forma simple
 - SIEMPRE menciona que ${vendorName ? vendorName : 'te'} contactará "en cuanto pueda" o "en cuanto podamos"
 - ⚠️ NO ESPANTES AL CLIENTE: Menos texto = mejor. Una pregunta = mejor. Múltiples preguntas = espantas.
+- ⚠️ NO PREGUNTES DETALLES INNECESARIOS: Si ya sabes "página para vender productos", NO preguntes "¿ya tenés el catálogo?", "¿cuántos productos?", etc. Pasa directo a ofrecer reunión/contacto.
 
 USA ESTE MODO cuando:
 - El usuario pregunta por precios, planes, ofertas, costos
@@ -824,8 +960,9 @@ USA ESTE MODO cuando:
 
 ⚠️ RECUERDA: 
 - En modo sales, MENOS ES MÁS. 1-2 frases máximo por mensaje.
-- Construye entendimiento ANTES de ofrecer contacto.
-- Solo cierra (FASE 3) cuando ya entiendas bien el proyecto del usuario.
+- Construye entendimiento GENERAL (no detallado) ANTES de ofrecer contacto.
+- Solo cierra (FASE 3) cuando tengas información GENERAL del proyecto, NO necesitas todos los detalles.
+- Los detalles los resolverá el asesor en la reunión. TÚ solo necesitas el contexto general para que el asesor sepa de qué hablar.
 
 🔵 "tech" - MODO TÉCNICO:
 POSTURA: Sé MUY CORRECTO y PRECISO. Explica de forma técnica y detallada.
@@ -1090,6 +1227,9 @@ FORMATO JSON OBLIGATORIO:
     let rawReply = data.candidates?.[0]?.content?.parts?.[0]?.text || '{"reply":"Error de análisis.","mood":"confused","intent_score":0}';
     rawReply = rawReply.replace(/```json|```/g, "").trim();
     
+    // ⬅️ CRÍTICO: Declarar projectSummary fuera del try para que esté disponible en todo el scope
+    let projectSummary: string | null = null;
+    
     let parsedResponse;
     try {
       parsedResponse = JSON.parse(rawReply);
@@ -1119,7 +1259,7 @@ FORMATO JSON OBLIGATORIO:
       
       // ⬅️ NUEVO: Extraer resumen del proyecto de la respuesta del bot
       // También buscar en mensajes anteriores del bot si no se encuentra en la respuesta actual
-      let projectSummary = extractProjectSummary(parsedResponse.reply);
+      projectSummary = extractProjectSummary(parsedResponse.reply);
       
       // Si no se encontró en la respuesta actual, buscar en los últimos mensajes del bot
       if (!projectSummary && history) {
@@ -1132,6 +1272,28 @@ FORMATO JSON OBLIGATORIO:
             });
             break;
           }
+        }
+      }
+      
+      // ⬅️ NUEVO: Si no se encontró en las respuestas del bot, buscar en los mensajes del USUARIO
+      // Esto captura casos donde el usuario dijo "quiero una página para vender productos" pero el bot no hizo resumen explícito
+      if (!projectSummary && history) {
+        projectSummary = extractProjectSummaryFromUserMessages(history);
+        if (projectSummary) {
+          log('info', 'Resumen extraído de mensajes del usuario', {
+            summary: projectSummary.substring(0, 100),
+          });
+        }
+      }
+      
+      // ⬅️ NUEVO: También buscar en el mensaje actual del usuario si no se encontró antes
+      if (!projectSummary) {
+        const userMessageSummary = extractProjectSummaryFromUserMessages([{ role: 'user', content: message }]);
+        if (userMessageSummary) {
+          projectSummary = userMessageSummary;
+          log('info', 'Resumen extraído del mensaje actual del usuario', {
+            summary: projectSummary.substring(0, 100),
+          });
         }
       }
       
@@ -1268,8 +1430,9 @@ FORMATO JSON OBLIGATORIO:
     }
 
     // 9. GUARDAR CONTACTOS Y REUNIONES (ANTES de guardar mensajes)
-    // ⬅️ NUEVO: Agregar resumen del proyecto si se detectó y hay contacto/reunión
-    if (projectSummary && (hasContact || hasMeetingConfirmed)) {
+    // ⬅️ NUEVO: Agregar resumen del proyecto si se detectó (guardar siempre, no solo cuando hay contacto)
+    // Esto permite que el resumen esté disponible cuando se obtenga el contacto más adelante
+    if (projectSummary) {
       // Buscar si ya existe una reunión para agregar el resumen al metadata
       const meetingContact = extractedContacts.find(c => c.type === 'meeting');
       if (meetingContact) {
@@ -1279,21 +1442,34 @@ FORMATO JSON OBLIGATORIO:
           project_summary: projectSummary,
         };
       } else {
-        // Si no hay reunión pero hay contacto, guardar el resumen como contacto separado
-        extractedContacts.push({
-          type: 'project_summary',
-          value: projectSummary,
-          metadata: {
-            extracted_from: 'bot_reply',
-            timestamp: new Date().toISOString(),
-          },
-        });
+        // Guardar el resumen como contacto separado (se guardará siempre que se detecte)
+        // Si ya existe un resumen previo, actualizarlo con el más reciente
+        const existingSummary = extractedContacts.find(c => c.type === 'project_summary');
+        if (existingSummary) {
+          // Actualizar el resumen existente
+          existingSummary.value = projectSummary;
+          existingSummary.metadata = {
+            ...existingSummary.metadata,
+            updated_at: new Date().toISOString(),
+          };
+        } else {
+          // Crear nuevo resumen
+          extractedContacts.push({
+            type: 'project_summary',
+            value: projectSummary,
+            metadata: {
+              extracted_from: history ? 'conversation_history' : 'current_message',
+              timestamp: new Date().toISOString(),
+            },
+          });
+        }
       }
       
       log('info', 'Resumen del proyecto detectado y agregado', {
         summary: projectSummary.substring(0, 100),
         hasMeeting: !!meetingContact,
         hasContact,
+        willSave: true,
       });
     }
     
