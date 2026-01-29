@@ -4,10 +4,18 @@ import 'package:botlode_player/features/player/presentation/providers/ui_provide
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+void _logOverlay(String message) {
+  // Logs de diagnóstico para entender cuándo se dibuja el HUD y con qué estado.
+  // Se ven en consola como:
+  // 🛰 [GlobalConnectivityOverlay] <mensaje>
+  // ignore: avoid_print
+  print('🛰 [GlobalConnectivityOverlay] $message');
+}
+
 /// Overlay global de conectividad.
 ///
 /// - Siempre está montado (en el `Stack` raíz) pero solo muestra un
-///   banner tipo "snackbar" en la parte superior.
+///   banner tipo "snackbar" en la parte inferior izquierda.
 /// - No bloquea la navegación ni la interacción con la página.
 /// - Mensajes:
 ///   - Offline: "Sin conexión a internet" (persistente).
@@ -25,6 +33,10 @@ class GlobalConnectivityOverlay extends ConsumerWidget {
       connectivityProvider.select((async) => async.valueOrNull ?? true),
     );
     final isChatOpen = ref.watch(chatOpenProvider);
+
+    _logOverlay(
+      'build() → isOnline=$isOnline, isDarkMode=$isDarkMode, isChatOpen=$isChatOpen',
+    );
 
     // Este widget debe ser hijo directo de un Stack (UltraSimpleBot / PlayerScreen).
     return IgnorePointer(
@@ -58,14 +70,30 @@ class _GlobalConnectivityBannerState extends State<_GlobalConnectivityBanner> {
   bool _showSuccess = false;
 
   @override
+  void initState() {
+    super.initState();
+    _logOverlay(
+      'initState() → isOnline=${widget.isOnline}, isDarkMode=${widget.isDarkMode}, isChatOpen=${widget.isChatOpen}',
+    );
+  }
+
+  @override
   void didUpdateWidget(covariant _GlobalConnectivityBanner oldWidget) {
     super.didUpdateWidget(oldWidget);
 
+    _logOverlay(
+      'didUpdateWidget() → old.isOnline=${oldWidget.isOnline}, new.isOnline=${widget.isOnline}, '
+      'old.isChatOpen=${oldWidget.isChatOpen}, new.isChatOpen=${widget.isChatOpen}',
+    );
+
     // Mostrar banner de reconexión solo cuando pasamos de offline -> online.
     if (!oldWidget.isOnline && widget.isOnline) {
+      _logOverlay('Transición OFFLINE → ONLINE → mostrando banner de éxito');
       setState(() => _showSuccess = true);
       Future.delayed(const Duration(seconds: 3), () {
-        if (mounted) setState(() => _showSuccess = false);
+        if (!mounted) return;
+        _logOverlay('Ocultando banner de éxito tras 3s');
+        setState(() => _showSuccess = false);
       });
     }
   }
@@ -74,6 +102,11 @@ class _GlobalConnectivityBannerState extends State<_GlobalConnectivityBanner> {
   Widget build(BuildContext context) {
     final bool showOffline = !widget.isOnline;
     final bool isVisible = showOffline || _showSuccess;
+
+    _logOverlay(
+      'build(_GlobalConnectivityBanner) → isOnline=${widget.isOnline}, '
+      'showOffline=$showOffline, showSuccess=$_showSuccess, isVisible=$isVisible',
+    );
 
     if (!isVisible) {
       return const SizedBox.shrink();
