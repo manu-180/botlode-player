@@ -30,44 +30,40 @@ final connectivityProvider = StreamProvider<bool>((ref) {
   return controller.stream;
 });
 
-/// Provider que trackea si hubo una transición de online->offline (no solo estado inicial).
-/// Útil para ocultar "DESCONECTADO" al refrescar sin internet.
-final connectivityTransitionProvider = StateNotifierProvider<_ConnectivityTransitionNotifier, bool>((ref) {
-  final notifier = _ConnectivityTransitionNotifier();
-  
+/// Provider que indica si **alguna vez** hubo conectividad real en esta sesión
+/// (hasEverBeenOnline). Es MONOTÓNICO: pasa de false -> true y nunca vuelve a false.
+///
+/// Objetivo: distinguir entre:
+/// - Estado inicial offline (refresh sin internet)  → hasEverBeenOnline = false
+/// - App que ya estuvo online al menos una vez     → hasEverBeenOnline = true
+final hasEverBeenOnlineProvider =
+    StateNotifierProvider<_HasEverBeenOnlineNotifier, bool>((ref) {
+  final notifier = _HasEverBeenOnlineNotifier();
+
   // Leer estado inicial
-  final initialValue = ref.read(connectivityProvider).valueOrNull ?? true;
-  notifier._update(initialValue);
-  
-  // Escuchar cambios futuros
+  final initial = ref.read(connectivityProvider).valueOrNull ?? true;
+  if (initial) {
+    notifier.markOnline();
+  }
+
+  // Escuchar cambios futuros y marcar cuando haya alguna vez online=true
   ref.listen(connectivityProvider, (prev, next) {
     next.whenData((isOnline) {
-      notifier._update(isOnline);
+      if (isOnline) {
+        notifier.markOnline();
+      }
     });
   });
-  
+
   return notifier;
 });
 
-class _ConnectivityTransitionNotifier extends StateNotifier<bool> {
-  bool? _previousValue;
-  bool _hasSeenOnline = false;
+class _HasEverBeenOnlineNotifier extends StateNotifier<bool> {
+  _HasEverBeenOnlineNotifier() : super(false);
 
-  _ConnectivityTransitionNotifier() : super(false);
-
-  void _update(bool isOnline) {
-    // Si alguna vez vimos online=true, marcamos que hemos visto online
-    if (isOnline) {
-      _hasSeenOnline = true;
+  void markOnline() {
+    if (!state) {
+      state = true;
     }
-    
-    // Solo marcamos transición si: ya vimos online Y ahora está offline
-    if (_hasSeenOnline && !isOnline && _previousValue == true) {
-      state = true; // Hubo transición online->offline
-    } else {
-      state = false; // No hubo transición (o es estado inicial)
-    }
-    
-    _previousValue = isOnline;
   }
 }
