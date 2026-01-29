@@ -1,6 +1,5 @@
 import 'package:botlode_player/core/network/connectivity_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
-import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,13 +11,9 @@ void _logOverlay(String message) {
   }
 }
 
-/// Overlay de conectividad refactorizado.
-///
-/// - **Cuando el usuario desconecta WiFi:** no se muestra ningún rectángulo,
-///   banner ni cartel. Cero UI de offline.
-/// - **Cuando se restablece la conexión:** se muestra un breve mensaje
-///   "Conexión restablecida" (1,5 s) y desaparece.
-/// - No bloquea la interacción. Respeta tema claro/oscuro.
+/// Overlay de conectividad: sin UI cuando está offline.
+/// Al restablecerse la conexión muestra un **SnackBar** flotante (poco invasivo)
+/// con la misma estética sci‑fi: gradiente verde, icono, tipografía Courier.
 class GlobalConnectivityOverlay extends ConsumerWidget {
   const GlobalConnectivityOverlay({super.key});
 
@@ -27,79 +22,95 @@ class GlobalConnectivityOverlay extends ConsumerWidget {
     final botConfig = ref.watch(botConfigProvider).asData?.value;
     final isDarkMode = botConfig?.isDarkMode ?? true;
     final isOnline = ref.watch(connectivityProvider);
-    final isChatOpen = ref.watch(chatOpenProvider);
 
-    _logOverlay('build → isOnline=$isOnline, isChatOpen=$isChatOpen');
+    _logOverlay('build → isOnline=$isOnline');
 
     return IgnorePointer(
       ignoring: true,
-      child: _GlobalConnectivityBanner(
+      child: _ConnectivitySnackBarTrigger(
         isOnline: isOnline,
         isDarkMode: isDarkMode,
-        isChatOpen: isChatOpen,
       ),
     );
   }
 }
 
-class _GlobalConnectivityBanner extends StatefulWidget {
+class _ConnectivitySnackBarTrigger extends StatefulWidget {
   final bool isOnline;
   final bool isDarkMode;
-  final bool isChatOpen;
 
-  const _GlobalConnectivityBanner({
+  const _ConnectivitySnackBarTrigger({
     required this.isOnline,
     required this.isDarkMode,
-    required this.isChatOpen,
   });
 
   @override
-  State<_GlobalConnectivityBanner> createState() =>
-      _GlobalConnectivityBannerState();
+  State<_ConnectivitySnackBarTrigger> createState() =>
+      _ConnectivitySnackBarTriggerState();
 }
 
-class _GlobalConnectivityBannerState extends State<_GlobalConnectivityBanner> {
-  bool _showReconnected = false;
-
+class _ConnectivitySnackBarTriggerState
+    extends State<_ConnectivitySnackBarTrigger> {
   @override
-  void didUpdateWidget(covariant _GlobalConnectivityBanner oldWidget) {
+  void didUpdateWidget(covariant _ConnectivitySnackBarTrigger oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (!oldWidget.isOnline && widget.isOnline) {
-      _logOverlay('Transición offline → online: mostrando banner breve');
-      setState(() => _showReconnected = true);
-      Future.delayed(const Duration(milliseconds: 1500), () {
-        if (!mounted) return;
-        setState(() => _showReconnected = false);
-      });
+      _logOverlay('Transición offline → online: mostrando SnackBar');
+      _showReconnectedSnackBar();
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    // Nada cuando está offline. Solo mostrar banner al volver online.
-    final isVisible = widget.isOnline && _showReconnected;
-
-    if (!isVisible) {
-      return const SizedBox.shrink();
-    }
-
-    final bool dark = widget.isDarkMode;
+  void _showReconnectedSnackBar() {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    final dark = widget.isDarkMode;
     final Color onlineDeep =
         dark ? const Color(0xFF0B4F29) : const Color(0xFF1B5E20);
     final Color onlineGlow =
         dark ? const Color(0xFF00E676) : const Color(0xFF69F0AE);
 
-    final String text =
-        "Conexión restablecida · El asistente vuelve a estar en línea.";
-    final size = MediaQuery.of(context).size;
-    final bool isMobile = size.width < 600;
-    const double desktopChatWidth = 380.0;
-    const double desktopChatPadding = 28.0;
-    final double rightInset = (!isMobile && widget.isChatOpen)
-        ? (desktopChatWidth + desktopChatPadding + 16.0)
-        : 16.0;
+    messenger.clearSnackBars();
+    messenger.showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        margin: const EdgeInsets.only(bottom: 24, left: 16, right: 16),
+        duration: const Duration(seconds: 2),
+        content: _ReconnectedSnackContent(
+          isDarkMode: dark,
+          onlineDeep: onlineDeep,
+          onlineGlow: onlineGlow,
+        ),
+      ),
+    );
+  }
 
-    final Widget banner = ClipRRect(
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox.shrink();
+  }
+}
+
+/// Contenido del SnackBar "Conexión restablecida" con estética sci‑fi.
+class _ReconnectedSnackContent extends StatelessWidget {
+  final bool isDarkMode;
+  final Color onlineDeep;
+  final Color onlineGlow;
+
+  const _ReconnectedSnackContent({
+    required this.isDarkMode,
+    required this.onlineDeep,
+    required this.onlineGlow,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const String text =
+        "Conexión restablecida · El asistente vuelve a estar en línea.";
+    final dark = isDarkMode;
+
+    return ClipRRect(
       borderRadius: BorderRadius.circular(999),
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 18),
@@ -159,7 +170,7 @@ class _GlobalConnectivityBannerState extends State<_GlobalConnectivityBanner> {
                 text,
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
+                style: const TextStyle(
                   color: Colors.white,
                   fontWeight: FontWeight.w800,
                   fontSize: 12.5,
@@ -171,32 +182,6 @@ class _GlobalConnectivityBannerState extends State<_GlobalConnectivityBanner> {
               ),
             ),
           ],
-        ),
-      ),
-    );
-
-    return Positioned(
-      bottom: 12,
-      left: 16,
-      right: rightInset,
-      child: IgnorePointer(
-        ignoring: true,
-        child: AnimatedOpacity(
-          duration: const Duration(milliseconds: 220),
-          curve: Curves.easeOut,
-          opacity: 1.0,
-          child: SafeArea(
-            child: Align(
-              alignment: Alignment.bottomLeft,
-              child: ConstrainedBox(
-                constraints: BoxConstraints(
-                  maxWidth:
-                      isMobile ? size.width - 32 : (size.width * 0.55),
-                ),
-                child: banner,
-              ),
-            ),
-          ),
         ),
       ),
     );
