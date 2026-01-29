@@ -2,7 +2,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:botlode_player/core/network/connectivity_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/chat_provider.dart';
 
@@ -42,19 +41,11 @@ class StatusIndicator extends ConsumerWidget {
     Color color;
 
     // LÓGICA DE ESTADOS
-    // Solo mostrar "DESCONECTADO" si ALGUNA VEZ hubo conectividad real (hasEverBeenOnline = true).
-    // Esto evita mostrar el cartel al refrescar la página sin internet.
-    final hasEverBeenOnline = ref.watch(hasEverBeenOnlineProvider);
-
+    // 🔧 EXPERIMENTO: NO mostrar nunca "DESCONECTADO" dentro del chat.
+    // El estado de red se delega exclusivamente al HUD global.
     if (!isOnline) {
-      if (hasEverBeenOnline) {
-        text = "DESCONECTADO";
-        color = const Color(0xFFFF003C); // Rojo Alerta
-      } else {
-        // Estado inicial offline (nunca hubo conexión en esta sesión): ocultar indicador.
-        text = "";
-        color = const Color(0xFFFF003C);
-      }
+      text = "";
+      color = const Color(0xFFFF003C); // valor dummy, no se usa porque text vacío oculta el widget
     } else {
       // ⬅️ Cuando isLoading es true, NO mostrar "PROCESANDO..." - mostrar estado normal ("EN LÍNEA", emociones, etc.)
       switch (mood.toLowerCase()) {
@@ -144,7 +135,7 @@ class StatusIndicator extends ConsumerWidget {
       ),
     );
 
-    // ⬅️ Si el texto está vacío (chat cerrado + mood neutral), ocultar el widget
+    // ⬅️ Si el texto está vacío (chat cerrado / offline / sin estado), ocultar el widget
     if (text.isEmpty) {
       return const SizedBox.shrink();
     }

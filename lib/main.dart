@@ -12,7 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String DEPLOY_VERSION = "PLAYER PROGRESIVO v5.26 - StatusIndicator usa hasEverBeenOnline (sin cartel en refresh offline)";
+const String DEPLOY_VERSION = "PLAYER PROGRESIVO v5.27 - StatusIndicator sin cartel offline (HUD global único)";
 
 void main() {
   runZonedGuarded(() async {

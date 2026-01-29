@@ -44,13 +44,14 @@
   - `activeSessionIdProvider` → id de la sesión de chat activa.
   - `chatControllerProvider` → para obtener `sessionId` si no se pasa `currentSessionId`.
 
-Lógica relevante actual (simplificada):
+Lógica relevante actual (simplificada, **v5.26+**):
 
 - Si el chat está cerrado (`!isChatOpen`) → retorna `SizedBox.shrink()` (no se muestra nada).
 - Si `!isOnline`:
-  - Calcula `hasActiveSession = activeSessionId != null && activeSessionId.isNotEmpty`.
-  - **Solo muestra “DESCONECTADO”** si `hasActiveSession` es `true`.
-  - Si **no** hay sesión activa (`!hasActiveSession`), deja `text = ""` para que el widget se oculte.
+  - Lee `hasEverBeenOnline = ref.watch(hasEverBeenOnlineProvider)`.
+  - **Solo muestra “DESCONECTADO”** si `hasEverBeenOnline == true`.
+  - Si **nunca** hubo conectividad en la sesión actual (`hasEverBeenOnline == false`), deja `text = ""` para que el widget se oculte (objetivo: no mostrar el cartel en un refresh offline “en frío”).
+- Si `isOnline == true`, usa `mood`, `activeSessionId` y `currentSessionId` para decidir si muestra “EN LÍNEA” u otros estados.
 - Al final:
   - Si `text.isEmpty` → retorna `SizedBox.shrink()` (no renderiza UI).
   - Si hay texto (por ejemplo “DESCONECTADO” o “EN LÍNEA”) → construye el rectángulo con:
@@ -200,17 +201,27 @@ if (activeSessionId == null || activeSessionId.isEmpty) {
    - `!isOnline && hasActiveSession` ⇒ **muestra “DESCONECTADO”**.
 6. Como el texto no está vacío, el widget no se oculta y se ve el rectángulo con el enchufe.
 
-### 3.2 Intento de mitigación actual
+### 3.2 Intentos de mitigación aplicados hasta ahora
 
-Se intentó usar un provider de transición (`connectivityTransitionProvider`) para distinguir entre:
+1. **Provider de transición (`connectivityTransitionProvider`) – DESCARTADO**
+   - Primera versión: se intentó detectar explícitamente una transición `online → offline` y solo mostrar “DESCONECTADO” en ese caso.
+   - Problema: la lógica se volvió compleja y frágil, y además seguía existiendo una sesión activa incluso en refresh offline (por la inicialización en `SimpleChatTest`), por lo que el cartel seguía apareciendo en algunos escenarios.
 
-- Estado inicial offline (refresh sin internet).
-- Transición online→offline (desconexión después de haber estado online).
+2. **Provider histórico `hasEverBeenOnlineProvider` – IMPLEMENTADO**
+   - Versión más reciente: se introdujo `hasEverBeenOnlineProvider`, un `StateNotifierProvider<bool>` monotónico que:
+     - Arranca en `false`.
+     - Pasa a `true` la primera vez que `connectivityProvider` emite `true`.
+   - `StatusIndicator` ahora solo muestra “DESCONECTADO” si:
+     - `!isOnline` **y**
+     - `hasEverBeenOnline == true`.
+   - Objetivo: en un refresh offline “en frío”, `hasEverBeenOnline` debería permanecer `false` y el badge no debería pintarse.
 
-Sin embargo:
-
-- La lógica de transición resultó compleja de mantener y potencialmente frágil.
-- El badge sigue apareciendo porque **hay una sesión activa** incluso en el refresh offline (por la inicialización en `SimpleChatTest`).
+3. **Estado actual del bug**
+   - A pesar de `hasEverBeenOnline`, en algunas pruebas del usuario el rectángulo sigue apareciendo tras un refresh offline.
+   - Hipótesis: puede haber una condición de carrera entre:
+     - El primer valor que emite `connectivityProvider` (y cómo se inicializa `hasEverBeenOnline`),
+     - La creación temprana de una sesión `activeSessionId`,
+     - Y el orden en que se reconstruye `StatusIndicator`.
 
 ### 3.3 Causa raíz (para investigar)
 
@@ -245,16 +256,16 @@ El `StatusIndicator` no tiene forma de saber si esa sesión activa corresponde a
 
 ---
 
-## 5. Posibles líneas de investigación / soluciones
+## 5. Posibles líneas de investigación / soluciones (actualizadas con respuesta de IA)
 
-1. **Flag “hasEverBeenOnline”:**
-   - Añadir un provider simple (por ejemplo `hasEverBeenOnlineProvider`) que:
-     - Empiece en `false`.
-     - Pase a `true` en cuanto `connectivityProvider` emita `true` alguna vez.
-   - El `StatusIndicator` solo mostraría “DESCONECTADO” si:
-     - `!isOnline` **y**
-     - `hasEverBeenOnline == true`.
-   - En un refresh sin internet, `hasEverBeenOnline` permanecería `false` → no se mostraría el badge.
+1. **Flag “hasEverBeenOnline” (ya implementado, pero a revisar finamente):**
+   - Ya existe `hasEverBeenOnlineProvider`, que marca en `true` cuando alguna vez hubo red.
+   - Se debe revisar con lupa:
+     - Cómo se lee el valor inicial de `connectivityProvider` (para evitar que un “falso positivo” de `navigator.onLine` marque el flag en `true` durante un refresh offline).
+     - El orden en que `StatusIndicator` se construye vs. el momento en que `hasEverBeenOnline` cambia.
+   - La otra IA sugiere mantener este enfoque, pero asegurando que:
+     - En **cold start offline**, `hasEverBeenOnline` siga siendo `false` durante todo el primer frame.
+     - Solo se marque en `true` tras una conexión real (idealmente después del primer heartbeat exitoso a Supabase, no solo por `navigator.onLine`).
 
 2. **No inicializar `activeSessionId` cuando no hay conectividad:**
    - En `SimpleChatTest`, antes de inicializar `activeSessionId`, comprobar `isOnline`:
@@ -266,8 +277,8 @@ El `StatusIndicator` no tiene forma de saber si esa sesión activa corresponde a
    - De esta forma, en un refresh sin internet **no** habría sesión activa y el `StatusIndicator` se ocultaría (si se mantiene la condición `hasActiveSession`).
 
 3. **Distinguir “sesión persistida” de “sesión efímera offline”:**
-   - Marcar en `chatState` o en la base local si la sesión fue creada con conectividad real (por ejemplo después de un primer heartbeat a Supabase).
-   - El `StatusIndicator` solo mostraría “DESCONECTADO” para sesiones que tengan un flag `wasOnlineOnce == true`.
+   - Marcar en `chatState` o en la base local si la sesión fue creada con conectividad real (por ejemplo después de un primer heartbeat exitoso a Supabase, como sugiere la IA externa).
+   - El `StatusIndicator` solo mostraría “DESCONECTADO” para sesiones que tengan un flag `wasOnlineOnce == true` y `hasEverBeenOnline == true`.
 
 4. **Mover el rectángulo de “DESCONECTADO” al HUD global para estados iniciales:**
    - Dejar el badge interno solo para estados emocionales (“EN LÍNEA”, “FELIZ”, etc.).
@@ -300,6 +311,6 @@ para conseguir:
 
 ---
 
-**Versión del informe:** 1.0  
-**Versión de la app referida:** `DEPLOY_VERSION` v5.25 (`StatusIndicator oculto al refrescar sin internet (sin sesión activa)`).
+**Versión del informe:** 1.1  
+**Versión de la app referida:** `DEPLOY_VERSION` v5.26 (`StatusIndicator usa hasEverBeenOnline (intento de ocultar cartel en refresh offline)`).
 
