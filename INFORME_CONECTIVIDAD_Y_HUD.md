@@ -75,34 +75,52 @@
 ### 4.1 Cuándo ocurre
 
 - Al **cortar el Wi‑Fi** (o simular offline) con la app en producción (Vercel) y `prueba_jefe.html` cargando el iframe.
-- El **primer** `CONNECTIVITY_STATE` **sí llega** al HTML (ej. `[BotLode Player] CONNECTIVITY_STATE: false chatOpen= false`).
-- Justo después aparece el **TypeError** y luego varias veces `Another exception was thrown: Instance of 'minified:n0<erased>'` (o similar).
+- El usuario tiene el **chat abierto** (UltraSimpleBot). Tras el log `🟢 Chat Abierto (UltraSimple) -> Iniciando heartbeat periódico...`, al pasar a offline **de inmediato** aparece el **TypeError**.
+- En v5.20 **no** se envía `CONNECTIVITY_STATE` desde el overlay (se eliminó ese `ref.listen`). El HTML solo recibe `DEPLOY_INFO`; si en logs antiguos apareció `CONNECTIVITY_STATE`, era de una versión previa.
+- Tras el `TypeError` aparecen varias veces `Another exception was thrown: Instance of 'minified:mZ<erased>'` (u otros `minified:…<erased>`), luego `POST …/session_heartbeats net::ERR_INTERNET_DISCONNECTED` y `RealtimeSubscribeException(… channelError, 1006)`.
+- **Efecto visual:** El HUD/snackbar de conectividad **nunca se ve**. Solo se observa "DESCONECTADO" dentro del chat, interfaz deshabilitada/opaca y "Sin conexión" en el input. El crash ocurre durante el rebuild al pasar a offline, antes de que el overlay llegue a pintarse.
 
-### 4.2 Mensaje y stack (según logs)
+### 4.2 Mensaje y stack (logs reales, v5.20)
 
 ```
-TypeError: Instance of 'minified:e5': type 'minified:e5' is not a subtype of type 'minified:hk'
-    at mi.bhw [as a] (https://botlode-player.vercel.app/main.dart.js:4555:23)
-    at l2.v_ (https://botlode-player.vercel.app/main.dart.js:76669:5)
-    at Ku.yo (https://botlode-player.vercel.app/main.dart.js:80799:8)
-    at Ku.h2 (https://botlode-player.vercel.app/main.dart.js:80768:3)
-    at Ku.h2 (https://botlode-player.vercel.app/main.dart.js:80815:3)
-    at a0l.zu (https://botlode-player.vercel.app/main.dart.js:80511:17)
-    at a0l.ev (https://botlode-player.vercel.app/main.dart.js:80407:24)
-    at a0l.lo (https://botlode-player.vercel.app/main.dart.js:80657:31)
-    at a0l.GI (https://botlode-player.vercel.app/main.dart.js:80602:10)
-    at a0l.a8F (https://botlode-player.vercel.app/main.dart.js:80603:19)
+TypeError: Instance of 'minified:e4': type 'minified:e4' is not a subtype of type 'minified:hi'
+    at mg.bha [as a] (https://botlode-player.vercel.app/main.dart.js:4554:23)
+    at l0.uY (https://botlode-player.vercel.app/main.dart.js:76603:5)
+    at Kq.yn (https://botlode-player.vercel.app/main.dart.js:80733:8)
+    at Kq.h2 (https://botlode-player.vercel.app/main.dart.js:80702:3)
+    at Kq.h2 (https://botlode-player.vercel.app/main.dart.js:80749:3)
+    at a0d.zs (https://botlode-player.vercel.app/main.dart.js:80445:17)
+    at a0d.ev (https://botlode-player.vercel.app/main.dart.js:80341:24)
+    at a0d.ln (https://botlode-player.vercel.app/main.dart.js:80591:31)
+    at a0d.GF (https://botlode-player.vercel.app/main.dart.js:80536:10)
+    at a0d.a8y (https://botlode-player.vercel.app/main.dart.js:80537:19)
+Another exception was thrown: Instance of 'minified:mZ<erased>'
+Another exception was thrown: Instance of 'minified:mZ<erased>'
 ```
 
-(En v5.19 el error mencionaba `minified:e4` y `minified:hi`; en v5.20 pasó a `e5` y `hk`.)
+(En otros deploys los tipos minificados varían —p. ej. `e5`/`hk`, `a0l`/`a0d`—, pero el patrón es el mismo.)
 
-### 4.3 Hipótesis probadas o descartadas
+### 4.3 Secuencia exacta de logs (reproducción típica)
+
+1. `Inicializando Flutter...` → `Motor Flutter inicializado correctamente (HTML RENDERER)`  
+2. `🟦 getStoredMessages()...` / `🟡 saveMessages()...` / `🟣 getOrCreateChatId()...`  
+3. `[BotLode Player] DEPLOY_INFO: PLAYER PROGRESIVO v5.20 - PASO 5.20 - Connectivity HUD + No BackdropFilter`  
+4. (Segunda ronda de getStoredMessages/save/getOrCreateChatId al abrir chat)  
+5. `🟢 Chat Abierto (UltraSimple) -> Iniciando heartbeat periódico (reclamación ya completada)`  
+6. **Inmediatamente después** (al cortar Wi‑Fi o ir a offline): `TypeError: Instance of 'minified:e4'...`  
+7. `Another exception was thrown: Instance of 'minified:mZ<erased>'` (repetido)  
+8. `POST …/session_heartbeats?on_conflict=... net::ERR_INTERNET_DISCONNECTED`  
+9. `🔴 CRITICAL: Error en stream de configuración: RealtimeSubscribeException(... channelError, 1006)`  
+
+**Nota:** En v5.20 no hay log `CONNECTIVITY_STATE` en consola (se dejó de emitir desde el overlay).
+
+### 4.4 Hipótesis probadas o descartadas
 
 - **BackdropFilter:** Se **quitó** del overlay porque en Flutter Web con **HTML renderer** suele dar problemas de capas/casts. El error **persistió** tras quitarlo.
 - **`ref.listen` de conectividad en el overlay:** Se llegó a añadir un `ref.listen` a `connectivityProvider.select(...)` para enviar `CONNECTIVITY_STATE` al parent. Se **eliminó** por si contribuía al crash. El `CONNECTIVITY_STATE` dejó de emitirse desde Flutter, pero el **TypeError siguió** (el usuario siguió viendo el error al cortar Wi‑Fi).
 - **Orden de los widgets en el `Stack`:** El overlay está al final. No se ha cambiado ese orden de forma relevante.
 
-### 4.4 Qué **sí** se confirma
+### 4.5 Qué **sí** se confirma
 
 - **Build correcta en producción:** `DEPLOY_INFO` con `v5.20` (o la versión desplegada) aparece en consola.
 - **Detección de offline:** El `connectivityProvider` reacciona (el `CONNECTIVITY_STATE` llegó cuando el listener estaba activo).

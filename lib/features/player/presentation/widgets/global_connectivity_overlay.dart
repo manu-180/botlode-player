@@ -2,7 +2,6 @@ import 'package:botlode_player/core/network/connectivity_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 /// Overlay global de conectividad.
@@ -21,7 +20,10 @@ class GlobalConnectivityOverlay extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final botConfig = ref.watch(botConfigProvider).asData?.value;
     final isDarkMode = botConfig?.isDarkMode ?? true;
-    final isOnline = ref.watch(connectivityProvider).asData?.value ?? true;
+    // select: solo reconstruir cuando el valor booleano cambie (evita rebuilds por AsyncValue distinto).
+    final isOnline = ref.watch(
+      connectivityProvider.select((async) => async.valueOrNull ?? true),
+    );
     final isChatOpen = ref.watch(chatOpenProvider);
 
     // Este widget debe ser hijo directo de un Stack (UltraSimpleBot / PlayerScreen).
@@ -95,109 +97,99 @@ class _GlobalConnectivityBannerState extends State<_GlobalConnectivityBanner> {
     final IconData icon = showOffline ? Icons.wifi_off_rounded : Icons.wifi_rounded;
 
     // Banner estilo "snackbar" con diseño futurista.
-    // ⚠️ Importante: NO usamos BackdropFilter porque en HTML renderer puede romper (minified cast error).
-    Widget banner = ClipRRect(
-      borderRadius: BorderRadius.circular(999),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 18),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              bgGlow.withOpacity(dark ? 0.92 : 0.88),
-              bgDeep.withOpacity(0.98),
+    // Sin BackdropFilter ni flutter_animate: solo animaciones implícitas nativas (estables en HTML renderer).
+    final Widget banner = AnimatedOpacity(
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+      opacity: 1.0,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 18),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                bgGlow.withOpacity(dark ? 0.92 : 0.88),
+                bgDeep.withOpacity(0.98),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: Colors.white.withOpacity(dark ? 0.22 : 0.30),
+              width: 1.2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: bgGlow.withOpacity(dark ? 0.70 : 0.55),
+                blurRadius: 26,
+                spreadRadius: 2,
+              ),
+              BoxShadow(
+                color: Colors.black.withOpacity(dark ? 0.70 : 0.18),
+                blurRadius: 14,
+                offset: const Offset(0, 8),
+              ),
             ],
           ),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: Colors.white.withOpacity(dark ? 0.22 : 0.30),
-            width: 1.2,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: bgGlow.withOpacity(dark ? 0.70 : 0.55),
-              blurRadius: 26,
-              spreadRadius: 2,
-            ),
-            BoxShadow(
-              color: Colors.black.withOpacity(dark ? 0.70 : 0.18),
-              blurRadius: 14,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            // Ícono dentro de un pequeño "chip" luminoso.
-            Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.black.withOpacity(dark ? 0.28 : 0.10),
-                border: Border.all(
-                  color: Colors.white.withOpacity(0.45),
-                  width: 1,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(dark ? 0.35 : 0.15),
-                    blurRadius: 10,
-                    offset: const Offset(0, 6),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.black.withOpacity(dark ? 0.28 : 0.10),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.45),
+                    width: 1,
                   ),
-                ],
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(dark ? 0.35 : 0.15),
+                      blurRadius: 10,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Icon(icon, color: Colors.white, size: 18),
               ),
-              child: Icon(
-                icon,
-                color: Colors.white,
-                size: 18,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Flexible(
-              child: Text(
-                text,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 12.5,
-                  letterSpacing: 0.4,
-                  decoration: TextDecoration.none,
-                  fontFamily: 'Courier',
-                  height: 1.2,
+              const SizedBox(width: 12),
+              Flexible(
+                child: Text(
+                  text,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 12.5,
+                    letterSpacing: 0.4,
+                    decoration: TextDecoration.none,
+                    fontFamily: 'Courier',
+                    height: 1.2,
+                  ),
                 ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
-    )
-        // Animación suave tipo HUD (leve slide + fade).
-        .animate()
-        .fadeIn(duration: 220.ms, curve: Curves.easeOut)
-        .slideY(begin: 0.2, end: 0, duration: 260.ms, curve: Curves.easeOutCubic);
+    );
 
-    // Layout responsivo: barra que actúa como "bottom app bar" y comparte espacio con el chat.
+    // Positioned fijo (sin AnimatedPositioned) para evitar manipulación de ParentData en HTML renderer.
     final size = MediaQuery.of(context).size;
     final bool isMobile = size.width < 600;
-
-    // Cuando el chat está abierto en desktop, reservamos su ancho a la derecha.
-    // Estos valores replican los usados en UltraSimpleBot para el panel.
     const double desktopChatWidth = 380.0;
     const double desktopChatPadding = 28.0;
-
     final double rightInset = (!isMobile && widget.isChatOpen)
         ? (desktopChatWidth + desktopChatPadding + 16.0)
         : 16.0;
 
-    return AnimatedPositioned(
-      duration: const Duration(milliseconds: 350),
-      curve: Curves.easeOutCubic,
-      bottom: isVisible ? 12 : -120,
+    return Positioned(
+      bottom: 12,
       left: 16,
       right: rightInset,
       child: SafeArea(
@@ -205,7 +197,6 @@ class _GlobalConnectivityBannerState extends State<_GlobalConnectivityBanner> {
           alignment: Alignment.bottomLeft,
           child: ConstrainedBox(
             constraints: BoxConstraints(
-              // En mobile puede ocupar todo el ancho; en desktop, hasta la mitad.
               maxWidth: isMobile ? size.width - 32 : (size.width * 0.55),
             ),
             child: banner,
