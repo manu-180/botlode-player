@@ -2,7 +2,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:botlode_player/core/network/connectivity_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/chat_provider.dart';
 
@@ -43,15 +42,17 @@ class StatusIndicator extends ConsumerWidget {
 
     // LÓGICA DE ESTADOS
     // Solo mostrar "DESCONECTADO" si hubo una transición online->offline (no al refrescar sin internet).
-    final hadTransition = ref.watch(connectivityTransitionProvider);
+    // Si no hay activeSessionId, significa que es un refresh sin internet (no había chat activo antes).
+    final hasActiveSession = activeSessionId != null && activeSessionId.isNotEmpty;
     
     if (!isOnline) {
-      // Solo mostrar "DESCONECTADO" si hubo transición (no es estado inicial offline).
-      if (hadTransition) {
+      // Solo mostrar "DESCONECTADO" si hay una sesión activa (había chat antes de desconectarse).
+      // Si no hay sesión activa, es un refresh sin internet → ocultar el indicador.
+      if (hasActiveSession) {
         text = "DESCONECTADO";
         color = const Color(0xFFFF003C); // Rojo Alerta
       } else {
-        // Estado inicial offline (refresco sin internet): ocultar el indicador.
+        // Refresh sin internet (no hay sesión activa): ocultar el indicador.
         text = "";
         color = const Color(0xFFFF003C);
       }
