@@ -164,7 +164,7 @@ class _SimpleChatTestState extends ConsumerState<SimpleChatTest> {
     const bool isDarkMode = true;
     
     // Conectividad real desde provider
-    final isOnline = ref.watch(connectivityProvider).asData?.value ?? true;
+    final isOnline = ref.watch(connectivityProvider);
 
     return GestureDetector(
       // Consumir todos los taps dentro del chat para que no se propaguen al overlay

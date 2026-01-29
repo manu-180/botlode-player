@@ -119,7 +119,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
     final themeColor = botConfig?.themeColor ?? const Color(0xFFFFC000);
     final isDarkMode = botConfig?.isDarkMode ?? true; 
     final showOfflineAlert = botConfig?.showOfflineAlert ?? true;
-    final isOnline = ref.watch(connectivityProvider).asData?.value ?? true;
+    final isOnline = ref.watch(connectivityProvider);
 
     // COLORES
     final Color solidBgColor = isDarkMode ? const Color(0xFF181818) : const Color(0xFFF9F9F9); 
@@ -149,16 +149,19 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
     });
     // ----------------------------------
 
-    ref.listen(connectivityProvider, (prev, next) {
-      next.whenData((online) {
-        if (showOfflineAlert) {
-          if (!online) {
-            if (!_wasOffline) { _wasOffline = true; html.window.parent?.postMessage('NETWORK_OFFLINE', '*'); }
-          } else {
-            if (_wasOffline) { _wasOffline = false; html.window.parent?.postMessage('NETWORK_ONLINE', '*'); }
-          }
+    ref.listen(connectivityProvider, (prev, online) {
+      if (!showOfflineAlert) return;
+      if (!online) {
+        if (!_wasOffline) {
+          _wasOffline = true;
+          html.window.parent?.postMessage('NETWORK_OFFLINE', '*');
         }
-      });
+      } else {
+        if (_wasOffline) {
+          _wasOffline = false;
+          html.window.parent?.postMessage('NETWORK_ONLINE', '*');
+        }
+      }
     });
 
     ref.listen(chatControllerProvider, (prev, next) {

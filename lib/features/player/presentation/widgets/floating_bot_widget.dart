@@ -170,38 +170,31 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
 
     // ⬅️ LISTENER GLOBAL: Conectividad (se ejecuta incluso con chat cerrado).
     // Propaga el estado hacia el HTML contenedor (parent) para que pueda reaccionar.
-    ref.listen(connectivityProvider, (prev, next) {
+    ref.listen(connectivityProvider, (prev, online) {
       if (!showOfflineAlert) return;
-      next.whenData((online) {
-        if (!online) {
-          if (_wasNetworkOffline) return;
-          _wasNetworkOffline = true;
-
-          // Compatibilidad: mensaje string (contrato existente).
-          html.window.parent?.postMessage('NETWORK_OFFLINE', '*');
-
-          // Nuevo: payload estructurado para integraciones más ricas.
-          html.window.parent?.postMessage({
-            'source': 'botlode_player',
-            'type': 'connectivity',
-            'online': false,
-            'botId': ref.read(currentBotIdProvider),
-            'ts': DateTime.now().toIso8601String(),
-          }, '*');
-        } else {
-          if (!_wasNetworkOffline) return;
-          _wasNetworkOffline = false;
-
-          html.window.parent?.postMessage('NETWORK_ONLINE', '*');
-          html.window.parent?.postMessage({
-            'source': 'botlode_player',
-            'type': 'connectivity',
-            'online': true,
-            'botId': ref.read(currentBotIdProvider),
-            'ts': DateTime.now().toIso8601String(),
-          }, '*');
-        }
-      });
+      if (!online) {
+        if (_wasNetworkOffline) return;
+        _wasNetworkOffline = true;
+        html.window.parent?.postMessage('NETWORK_OFFLINE', '*');
+        html.window.parent?.postMessage({
+          'source': 'botlode_player',
+          'type': 'connectivity',
+          'online': false,
+          'botId': ref.read(currentBotIdProvider),
+          'ts': DateTime.now().toIso8601String(),
+        }, '*');
+      } else {
+        if (!_wasNetworkOffline) return;
+        _wasNetworkOffline = false;
+        html.window.parent?.postMessage('NETWORK_ONLINE', '*');
+        html.window.parent?.postMessage({
+          'source': 'botlode_player',
+          'type': 'connectivity',
+          'online': true,
+          'botId': ref.read(currentBotIdProvider),
+          'ts': DateTime.now().toIso8601String(),
+        }, '*');
+      }
     });
 
     final screenSize = MediaQuery.of(context).size;

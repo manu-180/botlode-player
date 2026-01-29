@@ -1,82 +1,61 @@
 // Archivo: lib/core/network/connectivity_provider.dart
-import 'dart:async';
+// Solución refactorizada: estado síncrono para reconexión inmediata,
+// sin StreamController ni delays. El UI reacciona en el mismo tick que
+// el navegador dispara onOnline/onOffline.
 import 'dart:html' as html;
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 void _logConnectivity(String message) {
-  // Logs de diagnóstico para entender exactamente cuándo el navegador
-  // dispara los eventos de conectividad y qué ve Riverpod.
-  // Se ven en la consola como:
-  // 🛰 [connectivity_provider] <mensaje>
-  // Evitamos dependencias extra (debugPrint) para mantener este archivo core limpio.
-  // ignore: avoid_print
-  print('🛰 [connectivity_provider] $message');
+  if (kDebugMode) {
+    // ignore: avoid_print
+    print('🛰 [connectivity] $message');
+  }
 }
 
-// Este provider escucha los eventos del navegador y nos dice si hay red o no.
-final connectivityProvider = StreamProvider<bool>((ref) {
-  final controller = StreamController<bool>();
+/// Estado de conectividad: true = online, false = offline.
+/// Actualización síncrona en el mismo tick que window.onOnline/onOffline.
+final connectivityProvider = NotifierProvider<ConnectivityNotifier, bool>(
+  ConnectivityNotifier.new,
+);
 
-  // 1. Estado inicial
-  final initialOnline = html.window.navigator.onLine ?? true;
-  _logConnectivity('Estado inicial navigator.onLine = $initialOnline');
-  controller.add(initialOnline);
+class ConnectivityNotifier extends Notifier<bool> {
+  @override
+  bool build() {
+    final initial = html.window.navigator.onLine ?? true;
+    _logConnectivity('Estado inicial: ${initial ? "online" : "offline"}');
 
-  // 2. Escuchar evento "online" (Volvió internet)
-  final onlineSub = html.window.onOnline.listen((event) {
-    _logConnectivity('Evento onOnline recibido → isOnline=true | event=$event');
-    controller.add(true);
-  });
+    final onlineSub = html.window.onOnline.listen((_) {
+      _logConnectivity('Evento onOnline → estado = true');
+      state = true;
+    });
+    final offlineSub = html.window.onOffline.listen((_) {
+      _logConnectivity('Evento onOffline → estado = false');
+      state = false;
+    });
 
-  // 3. Escuchar evento "offline" (Se fue internet)
-  final offlineSub = html.window.onOffline.listen((event) {
-    _logConnectivity('Evento onOffline recibido → isOnline=false | event=$event');
-    controller.add(false);
-  });
+    ref.onDispose(() {
+      _logConnectivity('Dispose: cancelando listeners');
+      onlineSub.cancel();
+      offlineSub.cancel();
+    });
 
-  // Limpieza al cerrar
-  ref.onDispose(() {
-    _logConnectivity('onDispose() → cancelando listeners y cerrando StreamController');
-    onlineSub.cancel();
-    offlineSub.cancel();
-    controller.close();
-  });
+    return initial;
+  }
+}
 
-  return controller.stream;
-});
-
-/// Provider que indica si **alguna vez** hubo conectividad real en esta sesión
-/// (hasEverBeenOnline). Es MONOTÓNICO: pasa de false -> true y nunca vuelve a false.
-///
-/// Objetivo: distinguir entre:
-/// - Estado inicial offline (refresh sin internet)  → hasEverBeenOnline = false
-/// - App que ya estuvo online al menos una vez     → hasEverBeenOnline = true
+/// Indica si en esta sesión hubo al menos un momento con red.
+/// Monotónico: pasa de false → true y no vuelve atrás.
+/// Sirve para no mostrar "DESCONECTADO" en un refresh sin internet.
 final hasEverBeenOnlineProvider =
     StateNotifierProvider<_HasEverBeenOnlineNotifier, bool>((ref) {
   final notifier = _HasEverBeenOnlineNotifier();
+  final initial = ref.read(connectivityProvider);
+  _logConnectivity('hasEverBeenOnline init → connectivity=$initial');
+  if (initial) notifier.markOnline();
 
-  // Leer estado inicial
-  final initial = ref.read(connectivityProvider).valueOrNull ?? true;
-  _logConnectivity(
-    'hasEverBeenOnlineProvider init → connectivityProvider.initial = $initial',
-  );
-  if (initial) {
-    notifier.markOnline();
-  }
-
-  // Escuchar cambios futuros y marcar cuando haya alguna vez online=true
   ref.listen(connectivityProvider, (prev, next) {
-    final prevVal = prev?.valueOrNull;
-    final nextVal = next.valueOrNull;
-    _logConnectivity(
-      'listen(connectivityProvider) → prev=$prevVal, next=$nextVal',
-    );
-
-    next.whenData((isOnline) {
-      if (isOnline) {
-        notifier.markOnline();
-      }
-    });
+    if (next) notifier.markOnline();
   });
 
   return notifier;
@@ -87,10 +66,8 @@ class _HasEverBeenOnlineNotifier extends StateNotifier<bool> {
 
   void markOnline() {
     if (!state) {
-      _logConnectivity('markOnline() → cambiando hasEverBeenOnline false → true');
+      _logConnectivity('markOnline → hasEverBeenOnline = true');
       state = true;
-    } else {
-      _logConnectivity('markOnline() → ya era true, se mantiene');
     }
   }
 }
