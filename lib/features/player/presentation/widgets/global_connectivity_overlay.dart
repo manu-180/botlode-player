@@ -101,76 +101,75 @@ class _GlobalConnectivityBannerState extends State<_GlobalConnectivityBanner> {
     final Widget banner = ClipRRect(
       borderRadius: BorderRadius.circular(999),
       child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 18),
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                bgGlow.withOpacity(dark ? 0.92 : 0.88),
-                bgDeep.withOpacity(0.98),
-              ],
-            ),
-            borderRadius: BorderRadius.circular(999),
-            border: Border.all(
-              color: Colors.white.withOpacity(dark ? 0.22 : 0.30),
-              width: 1.2,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: bgGlow.withOpacity(dark ? 0.70 : 0.55),
-                blurRadius: 26,
-                spreadRadius: 2,
-              ),
-              BoxShadow(
-                color: Colors.black.withOpacity(dark ? 0.70 : 0.18),
-                blurRadius: 14,
-                offset: const Offset(0, 8),
-              ),
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 18),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              bgGlow.withOpacity(dark ? 0.92 : 0.88),
+              bgDeep.withOpacity(0.98),
             ],
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 28,
-                height: 28,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: Colors.black.withOpacity(dark ? 0.28 : 0.10),
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.45),
-                    width: 1,
-                  ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(dark ? 0.35 : 0.15),
-                      blurRadius: 10,
-                      offset: const Offset(0, 6),
-                    ),
-                  ],
-                ),
-                child: Icon(icon, color: Colors.white, size: 18),
-              ),
-              const SizedBox(width: 12),
-              Flexible(
-                child: Text(
-                  text,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 12.5,
-                    letterSpacing: 0.4,
-                    decoration: TextDecoration.none,
-                    fontFamily: 'Courier',
-                    height: 1.2,
-                  ),
-                ),
-              ),
-            ],
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: Colors.white.withOpacity(dark ? 0.22 : 0.30),
+            width: 1.2,
           ),
+          boxShadow: [
+            BoxShadow(
+              color: bgGlow.withOpacity(dark ? 0.70 : 0.55),
+              blurRadius: 26,
+              spreadRadius: 2,
+            ),
+            BoxShadow(
+              color: Colors.black.withOpacity(dark ? 0.70 : 0.18),
+              blurRadius: 14,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.black.withOpacity(dark ? 0.28 : 0.10),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.45),
+                  width: 1,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(dark ? 0.35 : 0.15),
+                    blurRadius: 10,
+                    offset: const Offset(0, 6),
+                  ),
+                ],
+              ),
+              child: Icon(icon, color: Colors.white, size: 18),
+            ),
+            const SizedBox(width: 12),
+            Flexible(
+              child: Text(
+                text,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 12.5,
+                  letterSpacing: 0.4,
+                  decoration: TextDecoration.none,
+                  fontFamily: 'Courier',
+                  height: 1.2,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
