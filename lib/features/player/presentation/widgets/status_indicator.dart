@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:botlode_player/core/network/connectivity_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/chat_provider.dart';
 
@@ -41,9 +42,19 @@ class StatusIndicator extends ConsumerWidget {
     Color color;
 
     // LÓGICA DE ESTADOS
+    // Solo mostrar "DESCONECTADO" si hubo una transición online->offline (no al refrescar sin internet).
+    final hadTransition = ref.watch(connectivityTransitionProvider);
+    
     if (!isOnline) {
-      text = "DESCONECTADO";
-      color = const Color(0xFFFF003C); // Rojo Alerta
+      // Solo mostrar "DESCONECTADO" si hubo transición (no es estado inicial offline).
+      if (hadTransition) {
+        text = "DESCONECTADO";
+        color = const Color(0xFFFF003C); // Rojo Alerta
+      } else {
+        // Estado inicial offline (refresco sin internet): ocultar el indicador.
+        text = "";
+        color = const Color(0xFFFF003C);
+      }
     } else {
       // ⬅️ Cuando isLoading es true, NO mostrar "PROCESANDO..." - mostrar estado normal ("EN LÍNEA", emociones, etc.)
       switch (mood.toLowerCase()) {

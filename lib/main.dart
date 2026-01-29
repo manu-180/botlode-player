@@ -12,7 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String DEPLOY_VERSION = "PLAYER PROGRESIVO v5.23 - HUD solo reconexión (bypass offline para evitar TypeError)";
+const String DEPLOY_VERSION = "PLAYER PROGRESIVO v5.24 - Snackbar offline + StatusIndicator solo si hubo transición";
 
 void main() {
   runZonedGuarded(() async {

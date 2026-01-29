@@ -29,3 +29,45 @@ final connectivityProvider = StreamProvider<bool>((ref) {
 
   return controller.stream;
 });
+
+/// Provider que trackea si hubo una transición de online->offline (no solo estado inicial).
+/// Útil para ocultar "DESCONECTADO" al refrescar sin internet.
+final connectivityTransitionProvider = StateNotifierProvider<_ConnectivityTransitionNotifier, bool>((ref) {
+  final notifier = _ConnectivityTransitionNotifier();
+  
+  // Leer estado inicial
+  final initialValue = ref.read(connectivityProvider).valueOrNull ?? true;
+  notifier._update(initialValue);
+  
+  // Escuchar cambios futuros
+  ref.listen(connectivityProvider, (prev, next) {
+    next.whenData((isOnline) {
+      notifier._update(isOnline);
+    });
+  });
+  
+  return notifier;
+});
+
+class _ConnectivityTransitionNotifier extends StateNotifier<bool> {
+  bool? _previousValue;
+  bool _hasSeenOnline = false;
+
+  _ConnectivityTransitionNotifier() : super(false);
+
+  void _update(bool isOnline) {
+    // Si alguna vez vimos online=true, marcamos que hemos visto online
+    if (isOnline) {
+      _hasSeenOnline = true;
+    }
+    
+    // Solo marcamos transición si: ya vimos online Y ahora está offline
+    if (_hasSeenOnline && !isOnline && _previousValue == true) {
+      state = true; // Hubo transición online->offline
+    } else {
+      state = false; // No hubo transición (o es estado inicial)
+    }
+    
+    _previousValue = isOnline;
+  }
+}
