@@ -12,7 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String DEPLOY_VERSION = "PLAYER PROGRESIVO v5.22 - HUD sin flutter_animate ni AnimatedPositioned (fix minified cast)";
+const String DEPLOY_VERSION = "PLAYER PROGRESIVO v5.23 - HUD solo reconexión (bypass offline para evitar TypeError)";
 
 void main() {
   runZonedGuarded(() async {

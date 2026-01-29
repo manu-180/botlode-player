@@ -26,6 +26,12 @@ class GlobalConnectivityOverlay extends ConsumerWidget {
     );
     final isChatOpen = ref.watch(chatOpenProvider);
 
+    // ⚠️ EXPERIMENTO: NO construir overlay cuando offline para evitar TypeError minificado.
+    // Solo mostrar mensaje de reconexión cuando vuelve online.
+    if (!isOnline) {
+      return const SizedBox.shrink();
+    }
+
     // Este widget debe ser hijo directo de un Stack (UltraSimpleBot / PlayerScreen).
     return IgnorePointer(
       // No queremos capturar taps; el banner es solo informativo.
@@ -72,10 +78,9 @@ class _GlobalConnectivityBannerState extends State<_GlobalConnectivityBanner> {
 
   @override
   Widget build(BuildContext context) {
-    final bool showOffline = !widget.isOnline;
-    final bool isVisible = showOffline || _showSuccess;
-
-    if (!isVisible) {
+    // ⚠️ Solo mostrar cuando hay reconexión (_showSuccess).
+    // El mensaje offline se deshabilitó para evitar TypeError minificado.
+    if (!_showSuccess) {
       return const SizedBox.shrink();
     }
 
@@ -88,13 +93,11 @@ class _GlobalConnectivityBannerState extends State<_GlobalConnectivityBanner> {
     final Color onlineDeep = dark ? const Color(0xFF0B4F29) : const Color(0xFF1B5E20);
     final Color onlineGlow = dark ? const Color(0xFF00E676) : const Color(0xFF69F0AE);
 
-    final Color bgDeep = showOffline ? offlineDeep : onlineDeep;
-    final Color bgGlow = showOffline ? offlineGlow : onlineGlow;
-
-    final String text = showOffline
-        ? "Sin conexión a internet · Verificá tu Wi‑Fi o datos móviles. Las respuestas del asistente se pausarán hasta que vuelva la señal."
-        : "Conexión restablecida · El asistente vuelve a estar en línea y puede seguir respondiendo normalmente.";
-    final IconData icon = showOffline ? Icons.wifi_off_rounded : Icons.wifi_rounded;
+    // Solo mostramos mensaje de reconexión (online).
+    final Color bgDeep = onlineDeep;
+    final Color bgGlow = onlineGlow;
+    final String text = "Conexión restablecida · El asistente vuelve a estar en línea y puede seguir respondiendo normalmente.";
+    final IconData icon = Icons.wifi_rounded;
 
     // Banner estilo "snackbar" con diseño futurista.
     // Sin BackdropFilter ni flutter_animate: solo animaciones implícitas nativas (estables en HTML renderer).
