@@ -52033,7 +52033,7 @@ $0(){var s,r,q
 A.acv("CMD_READY")
 try{s=A.aMO(window.parent)
 if(s!=null){r=t.N
-J.ad2(s,A.ai(["type","DEPLOY_INFO","source","botlode_player","version","PLAYER PROGRESIVO v5.27 - StatusIndicator sin cartel offline (HUD global \xfanico)"],r,r),"*")}}catch(q){}},
+J.ad2(s,A.ai(["type","DEPLOY_INFO","source","botlode_player","version","PLAYER PROGRESIVO v5.27 - StatusIndicator sin cartel offline (HUD global \xfanicoo)"],r,r),"*")}}catch(q){}},
 $S:9}
 A.aNI.prototype={
 $1(a){var s,r,q,p=a.clientX
