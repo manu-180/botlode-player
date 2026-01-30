@@ -12,8 +12,7 @@ void _logOverlay(String message) {
 }
 
 /// Overlay de conectividad: sin UI cuando está offline.
-/// Al restablecerse la conexión muestra un **SnackBar** flotante (poco invasivo)
-/// con la misma estética sci‑fi: gradiente verde, icono, tipografía Courier.
+/// Al restablecerse la conexión no se muestra cartel dentro del chat (el aviso es el snackbar del HTML).
 class GlobalConnectivityOverlay extends ConsumerWidget {
   const GlobalConnectivityOverlay({super.key});
 
@@ -54,136 +53,14 @@ class _ConnectivitySnackBarTriggerState
   @override
   void didUpdateWidget(covariant _ConnectivitySnackBarTrigger oldWidget) {
     super.didUpdateWidget(oldWidget);
+    // Sin cartel de reconexión dentro del chat: solo el snackbar del HTML avisa abajo
     if (!oldWidget.isOnline && widget.isOnline) {
-      _logOverlay('Transición offline → online: mostrando SnackBar');
-      _showReconnectedSnackBar();
+      _logOverlay('Transición offline → online (sin SnackBar interno)');
     }
-  }
-
-  void _showReconnectedSnackBar() {
-    if (!mounted) return;
-    final messenger = ScaffoldMessenger.of(context);
-    final dark = widget.isDarkMode;
-    final Color onlineDeep =
-        dark ? const Color(0xFF0B4F29) : const Color(0xFF1B5E20);
-    final Color onlineGlow =
-        dark ? const Color(0xFF00E676) : const Color(0xFF69F0AE);
-
-    messenger.clearSnackBars();
-    messenger.showSnackBar(
-      SnackBar(
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        margin: const EdgeInsets.only(bottom: 24, left: 16, right: 16),
-        duration: const Duration(seconds: 2),
-        content: _ReconnectedSnackContent(
-          isDarkMode: dark,
-          onlineDeep: onlineDeep,
-          onlineGlow: onlineGlow,
-        ),
-      ),
-    );
   }
 
   @override
   Widget build(BuildContext context) {
     return const SizedBox.shrink();
-  }
-}
-
-/// Contenido del SnackBar "Conexión restablecida" con estética sci‑fi.
-class _ReconnectedSnackContent extends StatelessWidget {
-  final bool isDarkMode;
-  final Color onlineDeep;
-  final Color onlineGlow;
-
-  const _ReconnectedSnackContent({
-    required this.isDarkMode,
-    required this.onlineDeep,
-    required this.onlineGlow,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    const String text =
-        "Conexión restablecida · El asistente vuelve a estar en línea.";
-    final dark = isDarkMode;
-
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(999),
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 18),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              onlineGlow.withOpacity(dark ? 0.92 : 0.88),
-              onlineDeep.withOpacity(0.98),
-            ],
-          ),
-          borderRadius: BorderRadius.circular(999),
-          border: Border.all(
-            color: Colors.white.withOpacity(dark ? 0.22 : 0.30),
-            width: 1.2,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: onlineGlow.withOpacity(dark ? 0.70 : 0.55),
-              blurRadius: 26,
-              spreadRadius: 2,
-            ),
-            BoxShadow(
-              color: Colors.black.withOpacity(dark ? 0.70 : 0.18),
-              blurRadius: 14,
-              offset: const Offset(0, 8),
-            ),
-          ],
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              width: 28,
-              height: 28,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.black.withOpacity(dark ? 0.28 : 0.10),
-                border: Border.all(
-                  color: Colors.white.withOpacity(0.45),
-                  width: 1,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(dark ? 0.35 : 0.15),
-                    blurRadius: 10,
-                    offset: const Offset(0, 6),
-                  ),
-                ],
-              ),
-              child: const Icon(Icons.wifi_rounded, color: Colors.white, size: 18),
-            ),
-            const SizedBox(width: 12),
-            Flexible(
-              child: Text(
-                text,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 12.5,
-                  letterSpacing: 0.4,
-                  decoration: TextDecoration.none,
-                  fontFamily: 'Courier',
-                  height: 1.2,
-                ),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
