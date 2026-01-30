@@ -277,8 +277,9 @@ function extractProjectFragmentsFromUserMessages(history: any[], currentMessage:
       }
     }
 
-    // Frase completa corta que describe el proyecto
-    if (content.length >= 15 && content.length <= 200 && hasProjectKeywords) {
+    // Frase completa solo si es corta y no es relleno (evitar "pasaba por la web... chusmeando...")
+    const isFillerStart = /^(pasaba por|chusmeando|mirando que|vine por que|estaba mirando)\s/i.test(content.trim());
+    if (content.length >= 15 && content.length <= 100 && hasProjectKeywords && !isFillerStart) {
       const cleaned = content
         .replace(/[.?]+$/, '')
         .replace(/\s*(?:agendar|reuni[óo]n|contacto|número|email|teléfono).*$/i, '')
@@ -298,48 +299,65 @@ function extractProjectFragmentsFromUserMessages(history: any[], currentMessage:
   return fragments;
 }
 
-// ⬅️ NUEVA FUNCIÓN: Consolidar fragmentos en un único resumen del proyecto (sin duplicados, coherente)
+// ⬅️ Patrones de relleno/contexto: lo que el usuario dijo de paso, NO la oferta concreta
+const FILLER_STARTS = /^(pasaba por|pasaba por la|chusmeando|mirando que|vine por que|vine porque|estaba mirando|entrando a|solo mirando|quería ver|queria ver|nada más|nada mas)\s/i;
+
+// ⬅️ Consolidar fragmentos en UN solo resumen potable (intención real, sin relleno)
 function consolidateProjectSummary(fragments: string[]): string | null {
   if (!fragments || fragments.length === 0) return null;
 
   const normalized = fragments
-    .map(f => f.trim().toLowerCase())
-    .filter(f => f.length >= 8 && f.length <= 250);
+    .map(f => f.trim())
+    .filter(f => f.length >= 8 && f.length <= 280);
 
   if (normalized.length === 0) return null;
 
-  // Si un fragmento está contenido en otro más largo, quedarse solo con el más informativo
-  const filtered: string[] = [];
+  // Quitar duplicados (case-insensitive) y fragmentos contenidos en otros más largos
+  const deduped: string[] = [];
+  const seenLower = new Set<string>();
   for (const f of normalized) {
-    const containedInOther = normalized.some(o => o !== f && o.length > f.length && o.includes(f));
-    if (!containedInOther) filtered.push(f);
+    const lower = f.toLowerCase();
+    if (seenLower.has(lower)) continue;
+    const containedInOther = normalized.some(o => o !== f && o.length > f.length && o.toLowerCase().includes(lower));
+    if (containedInOther) continue;
+    seenLower.add(lower);
+    deduped.push(f);
   }
-
-  const deduped = [...new Set(filtered)];
   if (deduped.length === 0) return null;
 
-  // Construir resumen: si hay uno que ya dice "página/web/sitio", usarlo como base; el resto agregar
-  const withPage = deduped.find(f => /página|web|sitio/.test(f));
-  const rest = deduped.filter(f => f !== withPage);
+  // Filtrar relleno: frases que son contexto ("pasaba por la web...", "chusmeando...")
+  const noFiller = deduped.filter(f => !FILLER_STARTS.test(f.trim().toLowerCase()));
 
-  let summary: string;
-  if (withPage) {
-    const base = withPage.charAt(0).toUpperCase() + withPage.slice(1);
-    if (rest.length === 0) {
-      summary = base;
-    } else {
-      summary = `${base}. ${rest.map(r => r.charAt(0).toUpperCase() + r.slice(1)).join('. ')}`;
-    }
-  } else {
-    summary = deduped.map(r => r.charAt(0).toUpperCase() + r.slice(1)).join('. ');
-    if (!/página|web|sitio/i.test(summary)) {
-      summary = `Página web: ${summary}`;
-    }
+  // Puntuación de "potabilidad": qué tan bien describe la oferta concreta (página para X)
+  const score = (text: string): number => {
+    const t = text.toLowerCase();
+    let s = 0;
+    if (/para vender|para mostrar|servicio|service|producto|productos|negocio/.test(t)) s += 2;
+    if (/página|web|sitio/.test(t)) s += 1;
+    if (/^(una |un )?(página|web|sitio)\s+(para|de|con)/i.test(t)) s += 2;
+    if (t.length > 120 && !/para vender|para mostrar|servicio|service/.test(t)) s -= 1;
+    if (FILLER_STARTS.test(t)) s -= 2;
+    return s;
+  };
+
+  const candidates = noFiller.length > 0 ? noFiller : deduped;
+  const sorted = [...candidates].sort((a, b) => score(b) - score(a));
+
+  // Quedarse con el mejor fragmento (el más potable), no concatenar todo
+  const best = sorted[0];
+  if (!best) return null;
+
+  let summary = best.trim();
+  summary = summary.charAt(0).toUpperCase() + summary.slice(1);
+  if (!/página|web|sitio/i.test(summary)) {
+    summary = `Página web: ${summary}`;
   }
 
-  const maxLen = 500;
+  const maxLen = 220;
   if (summary.length > maxLen) {
-    summary = summary.substring(0, maxLen - 3) + '…';
+    const cut = summary.substring(0, maxLen - 3);
+    const lastSpace = cut.lastIndexOf(' ');
+    summary = (lastSpace > 100 ? cut.substring(0, lastSpace) : cut) + '…';
   }
   return summary;
 }

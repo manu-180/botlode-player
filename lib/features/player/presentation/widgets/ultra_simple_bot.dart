@@ -274,24 +274,20 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
     final double calculatedHeight = (maxAvailableHeight * 0.98) - (verticalPadding * 2);
     final double chatHeight = calculatedHeight.clamp(480.0, 1400.0);
     
-    // ⬅️ FIX: Fondo totalmente transparente
-    // ✅ TRACKING GLOBAL: Manejado por JavaScript nativo en main.dart
+    // ⬅️ Fondo transparente; zona fuera del chat deja pasar scroll/touch para scrollear la página
     return Scaffold(
-      backgroundColor: Colors.transparent, 
-      body: GestureDetector(
-        // ⬅️ NUEVO: Cerrar chat al hacer clic fuera
-        onTap: () {
-          if (isOpen) {
-            ref.read(chatOpenProvider.notifier).set(false);
-          }
-        },
-        behavior: HitTestBehavior.translucent,
-        child: Stack(
+      backgroundColor: Colors.transparent,
+      body: Stack(
         fit: StackFit.expand,
         children: [
-        
-            // CHAT COMPLEJO (Panel)
-            Positioned(
+          // Zona que deja pasar eventos para scrollear la página de fondo
+          Positioned.fill(
+            child: IgnorePointer(
+              child: const SizedBox.expand(),
+            ),
+          ),
+          // CHAT (solo esta zona absorbe toques; fuera se puede scrollear)
+          Positioned(
               bottom: 0,
               right: 0,
               child: AnimatedSlide(
@@ -334,56 +330,19 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
                             ),
                           ],
                         ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(28),
-                          child: Stack(
-                            children: [
-                              const ChatPanelView(), // ⬅️ Aquí usa BotAvatarWidget(isBubble: false) por defecto
-                              Positioned(
-                                top: 16,
-                                right: 16,
-
-                                child: Consumer(
-                                  builder: (context, ref, _) {
-                                    final botConfig = ref.watch(botConfigProvider);
-                                    final isDarkMode = botConfig.asData?.value.isDarkMode ?? true;
-                                    
-                                    // ⬅️ Color adaptativo según tema
-                                    final iconColor = isDarkMode 
-                                        ? Colors.white 
-                                        : Colors.black87;
-                                    
-                                    return Material(
-                                      color: Colors.transparent,
-                                      child: IconButton(
-                                        icon: Icon(Icons.close_rounded, color: iconColor),
-                                        onPressed: () => ref.read(chatOpenProvider.notifier).set(false),
-                                        tooltip: 'Cerrar chat',
-                                        style: IconButton.styleFrom(
-                                          backgroundColor: isDarkMode 
-                                              ? Colors.white.withOpacity(0.1)
-                                              : Colors.black.withOpacity(0.05),
-                                          hoverColor: isDarkMode
-                                              ? Colors.white.withOpacity(0.2)
-                                              : Colors.black.withOpacity(0.1),
-                                        ),
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
+                        child: const ClipRRect(
+                          borderRadius: BorderRadius.all(Radius.circular(28)),
+                          child: ChatPanelView(), // ⬅️ Un solo X de cierre en el header (chat_panel_view)
                         ),
-                      ),
                       ),
                     ),
                   ),
                 ),
               ),
             ),
-            
-            // BURBUJA FLOTANTE
+          ),
+
+          // BURBUJA FLOTANTE
             Positioned(
               bottom: isMobile ? 16.0 : 40.0, // ⬅️ RESPONSIVE: Menos espacio en móvil
               right: isMobile ? 16.0 : 40.0, // ⬅️ RESPONSIVE: Menos espacio en móvil
@@ -417,10 +376,9 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
               ),
             ),
 
-            // ⬅️ OVERLAY GLOBAL DE CONECTIVIDAD (full-screen, incluso con chat cerrado)
-            const GlobalConnectivityOverlay(),
+          // ⬅️ OVERLAY GLOBAL DE CONECTIVIDAD (full-screen, incluso con chat cerrado)
+          const GlobalConnectivityOverlay(),
         ],
-        ),
       ),
     );
   }
