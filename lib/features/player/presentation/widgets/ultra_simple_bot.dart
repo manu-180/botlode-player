@@ -1,4 +1,5 @@
 // ULTRA SIMPLE - Burbuja + Chat COMPLEJO (chat_panel_view) para testing
+import 'dart:html' as html;
 import 'package:botlode_player/core/config/supabase_provider.dart';
 import 'package:botlode_player/core/services/presence_manager.dart';
 import 'package:botlode_player/core/services/presence_manager_provider.dart';
@@ -80,8 +81,19 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
     final presenceManager = ref.watch(presenceManagerProvider);
     _presenceManager = presenceManager; // Actualizar referencia
     
-    // ⬅️ NUEVO: Sincronizar estado online/offline con el historial
-    // ⚠️ IMPORTANTE: Usar Future.microtask para asegurar que se ejecute después del build
+    // ⬅️ Enviar showOfflineAlert al HTML cuando la config del bot esté disponible (widget activo = UltraSimpleBot).
+    // Así la página padre puede ocultar los snackbars si el bot tiene show_offline_alert = false.
+    ref.listen(botConfigProvider, (prev, next) {
+      final show = next.asData?.value.showOfflineAlert ?? false;
+      try {
+        html.window.parent?.postMessage({
+          'type': 'BOT_CONFIG',
+          'showOfflineAlert': show,
+        }, '*');
+      } catch (_) {}
+    });
+
+    // ⬅️ Sincronizar estado online/offline con el historial
     ref.listen(chatOpenProvider, (previous, current) {
       // ⬅️ Solo procesar si el estado realmente cambió
       if (previous == current) return;

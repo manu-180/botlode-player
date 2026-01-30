@@ -118,7 +118,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
     final botConfig = ref.watch(botConfigProvider).asData?.value;
     final themeColor = botConfig?.themeColor ?? const Color(0xFFFFC000);
     final isDarkMode = botConfig?.isDarkMode ?? true; 
-    final showOfflineAlert = botConfig?.showOfflineAlert ?? true;
+    final showOfflineAlert = botConfig?.showOfflineAlert ?? false;
     final isOnline = ref.watch(connectivityProvider);
 
     // COLORES

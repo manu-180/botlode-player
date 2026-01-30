@@ -12,13 +12,13 @@ class BotRepositoryImpl implements BotRepository {
 
   @override
   Stream<BotConfig> getBotConfigStream(String botId) {
-    // Configuración "Skeleton" por defecto (Fallback de seguridad)
+    // Configuración "Skeleton" por defecto (Fallback de seguridad). showOfflineAlert false para no invadir páginas que tengan su sistema.
     final defaultConfig = BotConfig(
       name: "Cargando...",
       themeColor: const Color(0xFFFFC000),
       systemPrompt: "",
       isDarkMode: true,
-      showOfflineAlert: true,
+      showOfflineAlert: false,
       initialMessage: null,
     );
 

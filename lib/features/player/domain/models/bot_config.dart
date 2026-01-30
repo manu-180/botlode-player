@@ -25,11 +25,22 @@ class BotConfig {
       systemPrompt: json['system_prompt'] ?? '',
       // Mapeo seguro: Si es null o 'dark', es Dark Mode.
       isDarkMode: (json['theme_mode'] ?? 'dark') == 'dark',
-      // Mapeo seguro: Si es null, muestra alerta por defecto.
-      showOfflineAlert: json['show_offline_alert'] ?? true,
+      // Mapeo seguro: acepta bool o string "true"/"false". Si falta, default false (cada página puede tener su sistema).
+      showOfflineAlert: _parseBool(json['show_offline_alert'], false),
       // ⬅️ Mensaje inicial: si no existe, usar el por defecto
       initialMessage: json['initial_message'] as String?,
     );
+  }
+
+  static bool _parseBool(dynamic value, bool defaultValue) {
+    if (value == null) return defaultValue;
+    if (value is bool) return value;
+    if (value is String) {
+      final lower = value.toLowerCase();
+      if (lower == 'true' || lower == '1') return true;
+      if (lower == 'false' || lower == '0') return false;
+    }
+    return defaultValue;
   }
 
   static Color _parseColor(String? hexString) {

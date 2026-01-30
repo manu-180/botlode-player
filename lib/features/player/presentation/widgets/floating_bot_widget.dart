@@ -42,7 +42,7 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     final isHovered = ref.watch(isHoveredExternalProvider);
 
     final bool showOfflineAlert =
-        botConfigAsync.asData?.value.showOfflineAlert ?? true;
+        botConfigAsync.asData?.value.showOfflineAlert ?? false;
     
     // ⬅️ LISTENER: Manejar estado cuando se abre/cierra el chat
     ref.listen(chatOpenProvider, (previous, next) {
@@ -169,7 +169,7 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
 
     // ⬅️ Enviar showOfflineAlert al HTML cuando la config del bot esté disponible (para que el padre muestre/oculte snackbars).
     ref.listen(botConfigProvider, (prev, next) {
-      final show = next.asData?.value.showOfflineAlert ?? true;
+      final show = next.asData?.value.showOfflineAlert ?? false;
       try {
         html.window.parent?.postMessage({
           'type': 'BOT_CONFIG',
