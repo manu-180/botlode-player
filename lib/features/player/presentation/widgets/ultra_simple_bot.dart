@@ -254,14 +254,13 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
     final double horizontalPadding = isMobile ? 8.0 : 28.0; // Menos padding en móvil
     final double verticalPadding = isMobile ? 8.0 : 28.0;
     
-    // ⬅️ MEJORADO: Altura más generosa aprovechando mejor el espacio
-    // - Usa 97% de la pantalla para aprovechar más espacio vertical
-    // - Máximo 1000px para pantallas grandes (más alto que antes)
-    // - Mínimo 400px para pantallas pequeñas
-    // - Margen superior mínimo de 30px (reducido para más altura)
-    final double maxAvailableHeight = screenSize.height - 30.0; // Margen superior reducido
-    final double calculatedHeight = (maxAvailableHeight * 0.97) - (verticalPadding * 2);
-    final double chatHeight = calculatedHeight.clamp(400.0, 1000.0);
+    // ⬅️ Altura generosa: casi toda la pantalla para que el chat no quede petiso
+    // - Usa 98% de la altura disponible
+    // - Máximo 1400px para pantallas muy altas
+    // - Mínimo 480px para pantallas pequeñas
+    final double maxAvailableHeight = screenSize.height - 24.0; // Margen mínimo
+    final double calculatedHeight = (maxAvailableHeight * 0.98) - (verticalPadding * 2);
+    final double chatHeight = calculatedHeight.clamp(480.0, 1400.0);
     
     // ⬅️ FIX: Fondo totalmente transparente
     // ✅ TRACKING GLOBAL: Manejado por JavaScript nativo en main.dart
@@ -305,7 +304,7 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
                         ),
                         child: Container(
                         width: chatWidth, // ⬅️ RESPONSIVE: Ancho adaptativo
-                        height: chatHeight, // ⬅️ RESPONSIVE: Altura optimizada (95% pantalla, max 900px)
+                        height: chatHeight, // ⬅️ RESPONSIVE: Altura generosa (98% pantalla, max 1400px)
                         constraints: BoxConstraints(
                           maxWidth: chatWidth, // ⬅️ Asegurar que nunca exceda el ancho calculado
                           maxHeight: chatHeight, // ⬅️ Asegurar que nunca exceda la altura calculada

@@ -7,8 +7,7 @@ import 'package:botlode_player/core/services/presence_manager_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/chat_provider.dart'; // ⬅️ NUEVO: Para acceder a chatControllerProvider
 import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
-// import 'package:botlode_player/features/player/presentation/views/chat_panel_view.dart';
-import 'package:botlode_player/features/player/presentation/views/simple_chat_test.dart'; // ⬅️ TEST
+import 'package:botlode_player/features/player/presentation/views/chat_panel_view.dart';
 import 'package:botlode_player/features/player/presentation/widgets/floating_head_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -263,7 +262,7 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
                 maxHeight: safeHeight, 
                 maxWidth: isMobile ? double.infinity : 420 // Ancho aumentado
               ),
-              child: const SimpleChatTest(), // ⬅️ CHAT COMPLETO (ya tiene su propio Container con fondo)
+              child: const ChatPanelView(),
             ),
           ),
 

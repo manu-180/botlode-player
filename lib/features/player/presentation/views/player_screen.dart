@@ -21,7 +21,7 @@ class PlayerScreen extends ConsumerWidget {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          // FLOATING BOT WIDGET (burbuja + SimpleChatTest)
+          // FLOATING BOT WIDGET (burbuja + ChatPanelView)
           const FloatingBotWidget(),
 
           // ⬅️ ALERTA GLOBAL FULL-SCREEN (conectividad)

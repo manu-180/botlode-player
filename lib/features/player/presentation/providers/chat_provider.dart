@@ -139,7 +139,7 @@ class ChatController extends _$ChatController {
     // ⬅️ NUEVO: Marcar este chat como activo cuando se envía un mensaje
     try {
       // Importar ui_provider aquí causaría dependencia circular, así que lo haremos desde fuera
-      // El activeSessionId se actualizará desde simple_chat_test cuando se envía el mensaje
+      // El activeSessionId se actualiza desde ChatPanelView al enviar mensaje
     } catch (e) {
       // Ignorar errores
     }
