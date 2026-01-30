@@ -41,11 +41,9 @@ class StatusIndicator extends ConsumerWidget {
     Color color;
 
     // LÓGICA DE ESTADOS
-    // 🔧 EXPERIMENTO: NO mostrar nunca "DESCONECTADO" dentro del chat.
-    // El estado de red se delega exclusivamente al HUD global.
     if (!isOnline) {
-      text = "";
-      color = const Color(0xFFFF003C); // valor dummy, no se usa porque text vacío oculta el widget
+      text = "DESCONECTADO";
+      color = const Color(0xFFFF003C);
     } else {
       // ⬅️ Cuando isLoading es true, NO mostrar "PROCESANDO..." - mostrar estado normal ("EN LÍNEA", emociones, etc.)
       switch (mood.toLowerCase()) {

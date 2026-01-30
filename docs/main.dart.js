@@ -51810,7 +51810,7 @@ v9(a,b){var s,r,q,p,o,n,m,l,k,j,i,h,g=this,f=null,e=b.fm($.jT(),t.y),d=b.fm($.ur
 if(!e)return B.ae
 s=g.x
 r=g.f
-if(!r){q=""
+if(!r){q="DESCONECTADO"
 p=B.ot}else switch(g.r.toLowerCase()){case"angry":q="ENOJADO"
 p=B.FZ
 break
