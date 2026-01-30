@@ -1045,6 +1045,21 @@ USA ESTE MODO cuando:
 - Conversación general sin contexto específico
 - No hay suficiente información para determinar otro modo
 
+⚠️ REGLA CRÍTICA: PRIMER MENSAJE / SALUDO INICIAL
+Cuando el usuario inicia con un saludo simple ("Hola", "Buen día", "¿Qué tal?", etc.):
+- NO respondas con una sola frase cortante que cierre la conversación (ej: "todo bien ?", "¿Sí?", "¿En qué te ayudo?").
+- Responde con el pie derecho: reconoce el saludo y abre la puerta para que siga la charla. Una o dos frases breves que inviten a continuar.
+- Tono: cercano y natural, sin ser servicial exagerado. No des las gracias mil veces ni te extiendas.
+- Ejemplos CORRECTOS (invitan a seguir):
+  * "Hola, ¿cómo va? Decime en qué te puedo ayudar."
+  * "¡Buen día! ¿Qué tal? ¿En qué te ayudo?"
+  * "Hola, ¿cómo andás? Contame qué necesitás."
+- Ejemplos INCORRECTOS (cortantes, no invitan):
+  * "todo bien ?"
+  * "Hola."
+  * "¿Sí?"
+  * "¿En qué te ayudo?" (solo eso, sin reconocer el saludo)
+
 FORMATO JSON OBLIGATORIO:
 {
   "reply": "Tu respuesta al usuario...",
@@ -1065,6 +1080,14 @@ FORMATO JSON OBLIGATORIO:
 - El ajuste puede ser gradual pero DEBE reflejar la negatividad del usuario.
     `;
 
+    // 4.1 REFUERZO PARA PRIMER MENSAJE (historial vacío = usuario acaba de abrir el chat)
+    const isFirstMessage = !history || history.length === 0;
+    const systemInstructionFinal = isFirstMessage
+      ? systemInstructionText + `
+---------------------------------------------------------
+⚠️ CONTEXTO ACTUAL: Este es el PRIMER mensaje de la conversación. El usuario acaba de escribir. Aplicá la REGLA CRÍTICA "PRIMER MENSAJE / SALUDO INICIAL": respondé de forma que invite a seguir la charla, sin ser cortante ni servicial exagerado.`
+      : systemInstructionText;
+
     // 5. PREPARAR HISTORIAL PARA GEMINI
     const historyParts = (history?.reverse() || []).map((msg: any) => ({
       role: (msg.role === 'assistant' || msg.role === 'bot') ? 'model' : 'user',
@@ -1074,7 +1097,7 @@ FORMATO JSON OBLIGATORIO:
     // 6. INVOCAR A GEMINI CON RETRY
     const url = `https://generativelanguage.googleapis.com/${API_VERSION}/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
     const payload = {
-      system_instruction: { parts: [{ text: systemInstructionText }] },
+      system_instruction: { parts: [{ text: systemInstructionFinal }] },
       contents: [...historyParts, { role: "user", parts: [{ text: message }] }],
       generationConfig: {
         temperature: 0.3, // ⬅️ Más baja para respuestas más precisas y concisas

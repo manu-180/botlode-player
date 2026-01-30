@@ -134,6 +134,12 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
 
     final reversedMessages = chatState.messages.reversed.toList();
 
+    // ⬅️ Padding horizontal responsive: en móvil más margen + safe area para no chocar con bordes
+    final mq = MediaQuery.of(context);
+    final double horizontalPadding = isMobile
+        ? (20.0 + (mq.padding.left > mq.padding.right ? mq.padding.left : mq.padding.right)).clamp(24.0, 40.0)
+        : 20.0;
+
     // --- ESCUCHA DE APERTURA/CIERRE ---
     ref.listen(chatOpenProvider, (previous, isOpen) {
       try {
@@ -179,9 +185,6 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
           color: solidBgColor, 
           borderRadius: BorderRadius.circular(28),
           border: Border.all(color: borderColor, width: 1.0),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.5), blurRadius: 30, offset: const Offset(0, 10))
-          ],
         ),
         child: Material(
           color: Colors.transparent,
@@ -208,7 +211,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                                 ),
                               ),
                               Positioned(
-                                top: 16, right: 16,
+                                top: 16, right: horizontalPadding,
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min, 
                                   children: [
@@ -237,7 +240,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                                 ),
                               ),
                               Positioned(
-                                bottom: 12, left: 24,
+                                bottom: 12, left: horizontalPadding,
                                 child: StatusIndicator(
                                   isLoading: chatState.isLoading, 
                                   isOnline: isOnline, 
@@ -258,7 +261,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                             child: ListView.builder(
                               controller: _scrollController,
                               reverse: true,
-                              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+                              padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 20),
                               physics: const BouncingScrollPhysics(),
                               itemCount: reversedMessages.length + (chatState.isLoading ? 1 : 0),
                               itemBuilder: (context, index) {
@@ -292,7 +295,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                         
                         // ⬅️ INPUT AREA REDISEÑADO - Estilo profesional y moderno
                         Container(
-                          padding: EdgeInsets.fromLTRB(20, 16, 20, 20 + (isMobile ? MediaQuery.of(context).padding.bottom : 0)),
+                          padding: EdgeInsets.fromLTRB(horizontalPadding, 16, horizontalPadding, 20 + (isMobile ? mq.padding.bottom : 0)),
                           decoration: BoxDecoration(
                             color: solidBgColor,
                             boxShadow: [
