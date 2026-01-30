@@ -329,8 +329,8 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     required String subtext,
     required bool isDarkMode,
   }) {
-    const double closedSize = 72.0; 
-    const double headSize = 58.0;    
+    const double closedSize = 78.0; 
+    const double headSize = 64.0;    
     
     int maxChars = math.max(name.length, subtext.length);
     double calculatedWidth = 120.0 + (maxChars * 9.0);
