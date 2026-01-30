@@ -444,6 +444,13 @@ class _SimpleChatTestState extends ConsumerState<SimpleChatTest> {
                             color: Colors.white.withOpacity(0.3),
                             fontSize: 14,
                           ),
+                          prefixIcon: !isOnline
+                              ? Icon(
+                                  Icons.wifi_off_rounded,
+                                  size: 20,
+                                  color: Colors.white.withOpacity(0.5),
+                                )
+                              : null,
                           border: InputBorder.none,
                           contentPadding: const EdgeInsets.symmetric(vertical: 14),
                           isDense: true,

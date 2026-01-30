@@ -458,6 +458,15 @@ class _ProfessionalInputFieldState extends State<_ProfessionalInputField> {
                     fontSize: 15,
                     fontWeight: FontWeight.w400,
                   ),
+                  prefixIcon: (!widget.isOnline && !widget.isLoading)
+                      ? Icon(
+                          Icons.wifi_off_rounded,
+                          size: 20,
+                          color: widget.isDarkMode
+                              ? Colors.white.withOpacity(0.5)
+                              : Colors.black.withOpacity(0.4),
+                        )
+                      : null,
                   border: InputBorder.none,
                   // ⬅️ Asegurar que no haya bordes enfocados del tema global
                   enabledBorder: InputBorder.none,

@@ -168,6 +168,17 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
       }
     });
 
+    // ⬅️ Enviar showOfflineAlert al HTML cuando la config del bot esté disponible (para que el padre muestre/oculte snackbars).
+    ref.listen(botConfigProvider, (prev, next) {
+      final show = next.asData?.value.showOfflineAlert ?? true;
+      try {
+        html.window.parent?.postMessage({
+          'type': 'BOT_CONFIG',
+          'showOfflineAlert': show,
+        }, '*');
+      } catch (_) {}
+    });
+
     // ⬅️ LISTENER GLOBAL: Conectividad (se ejecuta incluso con chat cerrado).
     // Propaga el estado hacia el HTML contenedor (parent) para que pueda reaccionar.
     ref.listen(connectivityProvider, (prev, online) {
