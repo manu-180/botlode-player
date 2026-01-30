@@ -228,110 +228,142 @@ function extractProjectSummary(botReply: string): string | null {
   return null;
 }
 
-// ⬅️ NUEVA FUNCIÓN: Extraer resumen del proyecto de los mensajes del USUARIO
-function extractProjectSummaryFromUserMessages(history: any[]): string | null {
-  if (!history || history.length === 0) return null;
-  
-  // Palabras clave que indican que el usuario está describiendo su proyecto
+// ⬅️ NUEVA FUNCIÓN: Extraer TODOS los fragmentos de proyecto de los mensajes del usuario (para consolidar después)
+// Devuelve un array de strings; cada uno es un fragmento relevante sobre el proyecto.
+function extractProjectFragmentsFromUserMessages(history: any[], currentMessage: string): string[] {
+  const fragments: string[] = [];
+  const seen = new Set<string>();
+
   const projectKeywords = [
     'quiero', 'necesito', 'busco', 'me interesa', 'quiero hacer', 'necesito hacer',
     'página', 'web', 'sitio', 'productos', 'servicios', 'negocio', 'empresa',
-    'vender', 'mostrar', 'promocionar', 'publicar', 'catálogo', 'tienda', 'ecommerce'
+    'vender', 'mostrar', 'promocionar', 'publicar', 'catálogo', 'tienda', 'ecommerce',
+    'carrito', 'compras', 'formulario', 'galería', 'reservas', 'blog', 'landing'
   ];
-  
-  // Buscar en los mensajes del usuario (más recientes primero)
-  const userMessages = history
-    .filter((msg: any) => msg.role === 'user')
-    .slice(0, 5); // Solo últimos 5 mensajes del usuario
-  
-  for (const msg of userMessages) {
-    const content = msg.content || '';
+
+  const addFragment = (text: string) => {
+    const normalized = text.trim().toLowerCase().replace(/\s+/g, ' ');
+    if (normalized.length < 8 || normalized.length > 300) return;
+    if (seen.has(normalized)) return;
+    seen.add(normalized);
+    fragments.push(text.trim());
+  };
+
+  const processContent = (content: string) => {
+    if (!content || content.length < 10) return;
     const contentLower = content.toLowerCase();
-    
-    // Verificar si el mensaje contiene palabras clave de proyecto
-    const hasProjectKeywords = projectKeywords.some(keyword => contentLower.includes(keyword));
-    
-    if (hasProjectKeywords && content.length > 15) {
-      // Extraer la parte relevante del mensaje
-      // Buscar frases que describan el proyecto
-      const projectPatterns = [
-        // "Quiero una página para vender productos"
-        /(?:quiero|necesito|busco|me interesa)\s+(?:una|un|hacer|crear|tener)\s+(?:página|web|sitio)\s+(?:para|de)\s+(.+?)(?:\.|,|$|para|con|y)/i,
-        // "Quiero una página web"
-        /(?:quiero|necesito|busco|me interesa)\s+(?:una|un|hacer|crear|tener)\s+(.+?)(?:página|web|sitio)/i,
-        // "Página para vender productos"
-        /(?:página|web|sitio)\s+(?:para|de)\s+(.+?)(?:\.|,|$|con|y)/i,
-        // "Quiero vender productos"
-        /(?:quiero|necesito)\s+(?:vender|mostrar|promocionar|publicar)\s+(.+?)(?:\.|,|$|en|con|y)/i,
-        // "Necesito mostrar mis servicios"
-        /(?:quiero|necesito|busco)\s+(?:mostrar|promocionar|publicar)\s+(?:mis|mi|sus|su)\s+(.+?)(?:\.|,|$|en|con|y)/i,
-      ];
-      
-      for (const pattern of projectPatterns) {
-        const match = content.match(pattern);
-        if (match && match[1]) {
-          let summary = match[1].trim();
-          // Limpiar y formatear
-          summary = summary
-            .replace(/^(?:una|un|el|la|las|los|mis|mi|sus|su)\s+/i, '') // Remover artículos/posesivos al inicio
-            .replace(/\s*\.\s*$/, '') // Remover punto final
-            .replace(/\s*(?:para|con|y|en).*$/, '') // Remover preposiciones y conectores al final
+    const hasProjectKeywords = projectKeywords.some(k => contentLower.includes(k));
+    if (!hasProjectKeywords) return;
+
+    // Patrones que extraen fragmentos de proyecto (varios por mensaje)
+    const patterns = [
+      /(?:quiero|necesito|busco|me interesa)\s+(?:una|un|hacer|crear|tener)?\s*(?:página|web|sitio)?\s*(?:para|de)?\s*([^.,?]+?)(?=[.,]|$|para|con|y|agendar|reuni[óo]n|contacto)/gi,
+      /(?:página|web|sitio)\s+(?:para|de|con)?\s*([^.,?]+?)(?=[.,]|$|con|y)/gi,
+      /(?:con|que tenga|que tenga|incluya|con)\s+([^.,?]+?)(?=[.,]|$|y|para)/gi,
+      /(?:vender|mostrar|promocionar)\s+([^.,?]+?)(?=[.,]|$|en|con)/gi,
+    ];
+
+    for (const pattern of patterns) {
+      let m;
+      const re = new RegExp(pattern.source, pattern.flags);
+      while ((m = re.exec(content)) !== null) {
+        if (m[1]) {
+          let frag = m[1]
+            .replace(/^(?:una|un|el|la|las|los|mis|mi|sus|su)\s+/i, '')
+            .replace(/\s*(?:para|con|y|en)\s*$/i, '')
             .trim();
-          
-          if (summary.length > 10 && summary.length < 200) {
-            // Formatear como resumen completo
-            // Si ya menciona "página" o "web", no agregarlo
-            if (contentLower.includes('página') || contentLower.includes('web') || contentLower.includes('sitio')) {
-              return summary.charAt(0).toUpperCase() + summary.slice(1);
-            } else {
-              return `Página web para ${summary}`;
-            }
-          }
-        }
-      }
-      
-      // ⬅️ NUEVO: Patrón más simple - capturar frases completas que describan el proyecto
-      // Ejemplo: "Quiero una página para vender productos"
-      const simplePattern = /(?:quiero|necesito|busco|me interesa)\s+(?:una|un|hacer|crear|tener)?\s*(?:página|web|sitio)?\s*(?:para|de)?\s*(.+?)(?:\.|,|$|para|con|y|agendar|reuni[óo]n|contacto)/i;
-      const simpleMatch = content.match(simplePattern);
-      if (simpleMatch && simpleMatch[1]) {
-        let summary = simpleMatch[1].trim();
-        summary = summary
-          .replace(/^(?:una|un|el|la|las|los|mis|mi|sus|su)\s+/i, '')
-          .replace(/\s*\.\s*$/, '')
-          .replace(/\s*(?:para|con|y|en|agendar|reuni[óo]n|contacto).*$/, '')
-          .trim();
-        
-        if (summary.length > 10 && summary.length < 200) {
-          // Si el mensaje ya menciona "página/web", usar el resumen tal cual
-          if (contentLower.includes('página') || contentLower.includes('web') || contentLower.includes('sitio')) {
-            // Construir resumen completo
-            const pageMatch = content.match(/(?:página|web|sitio)/i);
-            if (pageMatch) {
-              return `${pageMatch[0]} para ${summary}`;
-            }
-          }
-          return `Página web para ${summary}`;
-        }
-      }
-      
-      // Si no se encontró patrón específico pero tiene palabras clave, usar una parte del mensaje
-      if (content.length > 20 && content.length < 150) {
-        // Tomar las primeras palabras relevantes (hasta 100 caracteres)
-        let summary = content.substring(0, 100).trim();
-        // Remover signos de interrogación, puntos y referencias a contacto/reunión al final
-        summary = summary
-          .replace(/[\.\?]+$/, '')
-          .replace(/\s*(?:agendar|reuni[óo]n|contacto|contactar|número|email|teléfono).*$/i, '')
-          .trim();
-        if (summary.length > 15) {
-          return summary;
+          if (frag.length > 8) addFragment(frag);
         }
       }
     }
+
+    // Frase completa corta que describe el proyecto
+    if (content.length >= 15 && content.length <= 200 && hasProjectKeywords) {
+      const cleaned = content
+        .replace(/[.?]+$/, '')
+        .replace(/\s*(?:agendar|reuni[óo]n|contacto|número|email|teléfono).*$/i, '')
+        .trim();
+      if (cleaned.length > 15) addFragment(cleaned);
+    }
+  };
+
+  // Procesar historial (orden cronológico: más antiguos primero para mantener secuencia)
+  const userMessages = (history || [])
+    .filter((msg: any) => msg.role === 'user')
+    .map((msg: any) => msg.content || '')
+    .filter(Boolean);
+  userMessages.forEach(processContent);
+  processContent(currentMessage || '');
+
+  return fragments;
+}
+
+// ⬅️ NUEVA FUNCIÓN: Consolidar fragmentos en un único resumen del proyecto (sin duplicados, coherente)
+function consolidateProjectSummary(fragments: string[]): string | null {
+  if (!fragments || fragments.length === 0) return null;
+
+  const normalized = fragments
+    .map(f => f.trim().toLowerCase())
+    .filter(f => f.length >= 8 && f.length <= 250);
+
+  if (normalized.length === 0) return null;
+
+  // Si un fragmento está contenido en otro más largo, quedarse solo con el más informativo
+  const filtered: string[] = [];
+  for (const f of normalized) {
+    const containedInOther = normalized.some(o => o !== f && o.length > f.length && o.includes(f));
+    if (!containedInOther) filtered.push(f);
   }
-  
-  return null;
+
+  const deduped = [...new Set(filtered)];
+  if (deduped.length === 0) return null;
+
+  // Construir resumen: si hay uno que ya dice "página/web/sitio", usarlo como base; el resto agregar
+  const withPage = deduped.find(f => /página|web|sitio/.test(f));
+  const rest = deduped.filter(f => f !== withPage);
+
+  let summary: string;
+  if (withPage) {
+    const base = withPage.charAt(0).toUpperCase() + withPage.slice(1);
+    if (rest.length === 0) {
+      summary = base;
+    } else {
+      summary = `${base}. ${rest.map(r => r.charAt(0).toUpperCase() + r.slice(1)).join('. ')}`;
+    }
+  } else {
+    summary = deduped.map(r => r.charAt(0).toUpperCase() + r.slice(1)).join('. ');
+    if (!/página|web|sitio/i.test(summary)) {
+      summary = `Página web: ${summary}`;
+    }
+  }
+
+  const maxLen = 500;
+  if (summary.length > maxLen) {
+    summary = summary.substring(0, maxLen - 3) + '…';
+  }
+  return summary;
+}
+
+// ⬅️ MANTENER: Extraer resumen del proyecto de la respuesta del BOT (solo cuando el bot hace un resumen explícito en FASE 3)
+function extractProjectSummaryFromBotReply(botReply: string): string | null {
+  return extractProjectSummary(botReply);
+}
+
+// ⬅️ Helper: reunir fecha y hora de una lista de mensajes (orden cronológico: más antiguo primero)
+async function gatherDateAndTimeFromMessages(
+  messages: string[],
+  apiKey: string,
+  vendorName: string | null
+): Promise<{ date: string | null; time: string | null }> {
+  let date: string | null = null;
+  let time: string | null = null;
+  for (const msg of messages) {
+    if (!msg || typeof msg !== 'string') continue;
+    const r = await extractMeetingWithAI(msg, apiKey, vendorName);
+    if (r.date && !date) date = r.date;
+    if (r.time && !time) time = r.time;
+  }
+  return { date, time };
 }
 
 // ⬅️ MEJORA 4: Extracción inteligente de reuniones usando IA (más preciso que regex)
@@ -341,13 +373,13 @@ async function extractMeetingWithAI(
   vendorName: string | null
 ): Promise<{ date: string | null; time: string | null; intent: boolean }> {
   try {
-    const extractionPrompt = `Analiza este mensaje del USUARIO (NO del bot) y determina si el USUARIO está CONFIRMANDO que quiere agendar una reunión.
+    const extractionPrompt = `Analiza este mensaje del USUARIO (NO del bot).
 
-IMPORTANTE:
-- Solo marca "has_meeting_intent": true si el USUARIO confirma que quiere agendar (ej: "sí, agendemos", "perfecto, quedamos", "sí, para mañana")
-- NO marques true si el bot está proponiendo una reunión
-- NO marques true si es solo una pregunta del usuario
-- Solo marca true si es una CONFIRMACIÓN clara del usuario
+1) ¿El usuario CONFIRMA que quiere agendar una reunión? (has_meeting_intent: true solo si dice "sí agendemos", "quiero agendar", "perfecto quedamos", etc. NO si es solo una fecha/hora suelta.)
+2) Extrae fecha si el mensaje menciona un DÍA: mañana, el lunes, pasado mañana, el martes, etc. → date
+3) Extrae hora si el mensaje menciona una HORA: 15:00, a las 15, a las 10, 10:30, etc. → time
+
+Puede ser solo fecha ("mañana"), solo hora ("15:00" o "a las 15"), o ambos. Extrae lo que haya.
 
 Mensaje: "${message}"
 
@@ -358,13 +390,14 @@ Responde con este formato exacto:
   "time": "hora extraída o null"
 }
 
-Ejemplos CORRECTOS:
-- "Sí, agendemos para mañana a las 15:00" → {"has_meeting_intent": true, "date": "mañana", "time": "15:00"}
-- "Perfecto, quedamos el lunes" → {"has_meeting_intent": true, "date": "lunes", "time": null}
-- "Mi número es 1234567890" → {"has_meeting_intent": false, "date": null, "time": null}
-- "¿Quedamos el lunes?" → {"has_meeting_intent": false, "date": null, "time": null} (es pregunta, no confirmación)
-- "Quiero agendar" → {"has_meeting_intent": true, "date": null, "time": null}
-- "Está bien, agendemos" → {"has_meeting_intent": true, "date": null, "time": null}`;
+Ejemplos:
+- "Sí, agendemos" → {"has_meeting_intent": true, "date": null, "time": null}
+- "Mañana" → {"has_meeting_intent": false, "date": "mañana", "time": null}
+- "A las 15" o "15:00" → {"has_meeting_intent": false, "date": null, "time": "15:00"}
+- "Mañana a las 15:00" → {"has_meeting_intent": false, "date": "mañana", "time": "15:00"}
+- "El lunes a las 10" → {"has_meeting_intent": false, "date": "lunes", "time": "10:00"}
+- "Mi número es 1134272488" → {"has_meeting_intent": false, "date": null, "time": null}
+- "Quiero agendar" → {"has_meeting_intent": true, "date": null, "time": null}`;
 
     const url = `https://generativelanguage.googleapis.com/${API_VERSION}/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
     const payload = {
@@ -439,6 +472,41 @@ function extractVendorName(systemPrompt: string): string | null {
   }
   
   return null;
+}
+
+// ⬅️ NUEVA FUNCIÓN: Detección de charla casual / small talk (mantener score bajo 25-30%)
+function detectCasualSmallTalk(message: string): boolean {
+  if (!message || typeof message !== 'string') return false;
+  const m = message.toLowerCase().trim();
+  if (m.length > 120) return false; // Mensajes largos suelen tener sustancia
+
+  const casualPatterns = [
+    /\b(?:todo\s+bien|todo\s+ok|acá\s+ando|aca\s+ando)\b/i,
+    /\b(?:comiendo|cenando|almorzando|desayunando)\s+(?:un\s+rato|algo)?\b/i,
+    /\b(?:por\s+domri|por\s+dormir|dormir\s+una\s+siesta|dormiendo\s+una\s+siesta)\b/i,
+    /\b(?:que\s+contas|qué\s+contás|que\s+cuentas|qué\s+cuentas)\b/i,
+    /\b(?:que\s+tal|qué\s+tal|como\s+andas|como\s+vas)\b/i,
+    /\b(?:hola|buenas|buen\s+d[ií]a|buenas\s+tardes|buenas\s+noches)\s*[.!?]?\s*$/i,
+    /\b(?:nada|acá\s+nada|aca\s+nada|por\s+acá|por\s+aca)\s*[.!?]?\s*$/i,
+    /\b(?:tranqui|tranquilo|tranquila)\b/i,
+    /\b(?:bien\s+y\s+vos|bien\s+y\s+tu|bien\s+gracias)\b/i,
+    /\b(?:solo\s+pasaba|pasaba\s+por\s+acá|de\s+curioso)\b/i,
+    /\b(?:probando|probando\s+el\s+chat)\b/i,
+    /^\s*(?:si|sí|no|ok|dale|bueno)\s*[.!?]?\s*$/i,
+    /^\s*(?:jaja|jajaja|jeje|:)+\s*$/i,
+  ];
+
+  for (const p of casualPatterns) {
+    if (new RegExp(p.source, p.flags).test(m)) return true;
+  }
+
+  // Frase muy corta sin palabras de proyecto/compra
+  const projectWords = ['quiero', 'necesito', 'página', 'web', 'sitio', 'comprar', 'vender', 'contratar', 'precio', 'costo', 'producto', 'servicio'];
+  const hasProject = projectWords.some(w => m.includes(w));
+  if (!hasProject && m.split(/\s+/).length <= 4 && m.length <= 35) {
+    return true; // "Nada por acá" / "Todo bien" / "Acá ando"
+  }
+  return false;
 }
 
 // ⬅️ NUEVA FUNCIÓN: Detección de negatividad y desinterés para ajustar intent_score
@@ -796,28 +864,32 @@ REGLAS DE PUNTUACIÓN DINÁMICA (ACTUALIZACIÓN EN TIEMPO REAL):
   * Usuario: "No quiero comprar" → intent_score: 12
   * Usuario: "No me sirve" → intent_score: 16
 
-🔵 ZONA FRÍA (21-40%): CURIOSIDAD PASIVA / NEUTRAL
-- Saludos simples ("Hola", "Buen día").
-- Preguntas vagas ("¿Qué hacen?", "¿De qué se trata?").
-- Respuestas cortas o secas ("Ok", "Entiendo", "Bien").
-- Usuario solo explorando sin compromiso.
+🔵 ZONA FRÍA (21-30%): CHARLA CASUAL / SIN SUSTANCIA
+- Charla que no lleva a nada: "todo bien", "acá ando", "comiendo un rato", "por dormir una siesta", "qué contás", "qué tal", "nada por acá".
+- Saludos simples ("Hola", "Buen día") sin pedir nada concreto.
+- NUNCA pasar de 30% en estos casos. intent_score: 25-30.
 
-🟡 ZONA TIBIA (41-79%): INTERÉS REAL / VALIDACIÓN
-- Preguntas específicas sobre el producto/servicio.
-- Preguntas sobre precios, tiempos, garantías, características.
-- El usuario invierte tiempo escribiendo y haciendo preguntas detalladas.
-- Muestra interés pero aún no está listo para comprar.
+🟡 CUANDO DICE QUÉ QUIERE (40%):
+- Usuario expresa intención general: "quiero una página web", "necesito un sitio", "quiero comprar una página".
+- intent_score: 40. No subir más hasta que dé más detalles.
 
-🟢 ZONA CALIENTE (80-100%): CIERRE / COMPRA / COMPROMISO
-- "Me interesa", "Quiero contratar", "¿Cómo pago?", "Agendemos", "Quiero comprar".
-- El usuario da datos de contacto o pide link de pago.
-- Muestra intención clara de avanzar con la compra.
+🟡 ZONA TIBIA (41-75%): MÁS DETALLES, SIN DATO GUARDADO
+- Da más detalles: "para vender productos", "con carrito de compras", "para mi negocio".
+- Preguntas sobre precios, tiempos, garantías.
+- El bot puede ofrecer reunión/contacto, pero el usuario AÚN NO dio teléfono/email.
+- intent_score: MÁXIMO 75%. NUNCA 80% si no hay dato de contacto guardado.
+
+🟢 ZONA VERDE (80-100%): SOLO CON DATO GUARDADO
+- 80% = "hay dato guardado para mostrar en el historial" (contacto + resumen del proyecto).
+- El usuario YA dio teléfono, email o WhatsApp Y se guardó junto con el resumen del proyecto.
+- NUNCA poner 80% solo porque el usuario dijo "para vender productos" o porque el bot ofreció agendar. Solo cuando el contacto/reunión y el resumen estén guardados.
 
 CRITERIO DE AJUSTE DINÁMICO (MUY IMPORTANTE):
-- Si el usuario pasa de preguntar precios (score 60) a decir "ah, muy caro" → el score debe CAER a 15-18 (ZONA ROJA).
-- Si el usuario pasa de mostrar interés (score 70) a decir "no me interesa" → el score debe CAER a 12-15 (ZONA ROJA).
-- Si el usuario pasa de saludar (score 20) a preguntar "¿aceptan tarjeta?" → el score debe SUBIR a 75-85 (ZONA TIBIA/CALIENTE).
-- Si el usuario dice "no quiero comprar" o "no me interesa" → SIEMPRE poner score entre 10-20, NO mantener scores altos.
+- Charla casual ("todo bien", "acá ando", "comiendo", "qué contás") → intent_score: 25, nunca pasar de 30.
+- "Quiero una página web" (recién dice qué quiere) → intent_score: 40.
+- "Para vender productos" / más detalles pero sin dar contacto → intent_score: 55-75, NUNCA 80.
+- Usuario da su número/email y se guarda contacto + resumen → entonces sí intent_score: 80.
+- Si el usuario dice "no quiero comprar" o "no me interesa" → SIEMPRE poner score entre 10-20.
 
 ⚠️ REGLA CRÍTICA: DETECCIÓN DE NEGATIVIDAD
 - Si detectas CUALQUIER señal de rechazo, negatividad o desinterés, el score DEBE estar en ZONA ROJA (0-20%).
@@ -903,19 +975,27 @@ FASE 3: CIERRE (ACTIVARSE RÁPIDO - NO ESPERAR TODOS LOS DETALLES)
   * ❌ Usuario: "Quiero una página para vender productos" → "Perfecto, querés una página para vender productos con formulario de contacto y galería de fotos y sistema de reservas. ¿Agendamos una reunión?"
   * ❌ Usuario: "Quiero una página para vender productos" → "Entiendo. ¿Qué tipo de productos? ¿Ya tenés el contenido? ¿Necesitás ayuda con el diseño? ¿Agendamos una reunión?"
 
-⚠️ REGLA CRÍTICA: SI EL USUARIO AGREGA UNA REUNIÓN
-- Si el usuario dice que quiere agendar una reunión (ej: "sí, agendemos", "mañana a las 15:00", "el lunes"):
-  DEBES pedirle su contacto INMEDIATAMENTE en el mismo mensaje
-- Ejemplo: "Perfecto, agendamos para mañana a las 15:00. Para concretar la reunión, necesito tu número de contacto o email para que ${vendorName ? vendorName : 'te'} pueda contactarte. ¿Me lo podés dejar?"
-- NO dejes que se vaya sin dejar su contacto si ya agendó una reunión
-- Es OBLIGATORIO obtener el contacto cuando hay una reunión agendada
+⚠️ REGLA CRÍTICA: REUNIÓN - NUNCA PROPOR LA HORA, PREGUNTÁ DÍA Y HORA
+- NUNCA propongas vos la fecha ni la hora (ej: "agendamos para mañana a las 15:00"). Siempre PREGUNTÁ al usuario.
+- Si el usuario dice que quiere agendar una reunión (ej: "sí, agendemos", "quiero agendar"):
+  1) Primero preguntá el DÍA: "¿Qué día te queda bien?" o "¿Para qué día te gustaría?"
+  2) Cuando el usuario diga el día (ej: "mañana", "el lunes"), preguntá la HORA: "¿A qué hora te queda bien?" o "¿A qué hora preferís?"
+  3) Cuando el usuario diga la hora (ej: "a las 15", "15:00"), pedí el contacto: "Para concretar la reunión, necesito tu número o email para que ${vendorName ? vendorName : 'te'} pueda contactarte. ¿Me lo podés dejar?"
+- Ejemplos CORRECTOS:
+  * Usuario: "Sí, agendemos" → "Perfecto. ¿Qué día te queda bien?"
+  * Usuario: "Mañana" → "Dale. ¿A qué hora te queda bien?"
+  * Usuario: "A las 15" → "Perfecto. Para concretar la reunión, necesito tu número o email para que ${vendorName ? vendorName : 'te'} pueda contactarte. ¿Me lo podés dejar?"
+- Ejemplos INCORRECTOS (NUNCA hacer esto):
+  * ❌ "Perfecto, agendamos para mañana a las 15:00. ¿Me dejás tu contacto?" (no proponer hora)
+  * ❌ "Quedamos el lunes a las 10. ¿Tu número?" (no proponer día ni hora)
+- Es OBLIGATORIO obtener día, hora y contacto cuando el usuario quiere reunión. Una pregunta a la vez.
 
 ⚠️ MEJORAS DE CALIDAD EN MODO VENDEDOR:
 - Cuando el usuario te da su contacto (email, teléfono o WhatsApp), confirma brevemente: "Perfecto, ya tengo tu contacto. ${vendorName ? vendorName : 'Te'} contactará pronto."
 - ⚠️ REGLA CRÍTICA ABSOLUTA: Si el usuario te da UN contacto (email O teléfono O WhatsApp), es SUFICIENTE. NO pidas más información.
 - NO pidas teléfono si ya te dio email. NO pidas email si ya te dio teléfono. UN contacto es suficiente para contactarlo.
 - Si el contacto parece incompleto o inválido (ej: email sin @, número muy corto), pide aclaración de forma amable: "¿Podrías confirmarme tu email/número completo?"
-- Después de obtener contacto + reunión, resume brevemente: "Listo, quedamos para [fecha/hora] y ${vendorName ? vendorName : 'te'} contactará en tu [email/teléfono]."
+- Después de obtener contacto + reunión (con el día y hora que dijo el usuario), resume: "Listo, quedamos para [día/hora que dijo el usuario] y ${vendorName ? vendorName : 'te'} te contactará."
 - ⚠️ NO SEAS INSISTENTE NI AGOBIANTE: Si el usuario te dio su contacto, agradece y confirma. NO pidas más información adicional. NO combines confirmación con solicitudes.
 - Ejemplos CORRECTOS cuando el usuario da contacto (1 frase, solo confirmación):
   * Usuario: "Mi email es juan@email.com" → "Perfecto, ya tengo tu contacto. ${vendorName ? vendorName : 'Te'} contactará pronto."
@@ -1067,17 +1147,13 @@ FORMATO JSON OBLIGATORIO:
   "intent_score": 15
 }
 
-⚠️⚠️⚠️ REGLA ABSOLUTA SOBRE INTENT_SCORE Y NEGATIVIDAD ⚠️⚠️⚠️
-- SI el usuario dice algo NEGATIVO (no me interesa, muy caro, no quiero, no me sirve, etc.), el intent_score DEBE estar entre 10-20.
-- NO puedes mantener un intent_score alto (40+) cuando el usuario muestra rechazo o desinterés.
-- El intent_score DEBE reflejar la REALIDAD: si el usuario rechaza, el score DEBE bajar.
-- Ejemplos OBLIGATORIOS:
-  * Usuario: "No me interesa" → intent_score: 15 (NO 50, NO 60, DEBE ser 15)
-  * Usuario: "Muy caro" → intent_score: 18 (NO 45, NO 55, DEBE ser 18)
-  * Usuario: "No quiero comprar" → intent_score: 12 (NO 40, NO 50, DEBE ser 12)
-  * Usuario: "No me sirve" → intent_score: 16 (NO 35, NO 45, DEBE ser 16)
-- Si detectas negatividad y pones un score alto, estás INCORRECTO. El score DEBE bajar.
-- El ajuste puede ser gradual pero DEBE reflejar la negatividad del usuario.
+⚠️⚠️⚠️ REGLA ABSOLUTA SOBRE INTENT_SCORE ⚠️⚠️⚠️
+- Charla casual ("todo bien", "acá ando", "comiendo", "qué contás") → intent_score: 25. NUNCA pasar de 30.
+- Recién dice qué quiere ("quiero una página web") → intent_score: 40.
+- Da más detalles ("para vender productos") pero NO dio contacto → intent_score: MÁXIMO 75. NUNCA 80.
+- 80% SOLO cuando hay dato guardado (contacto + resumen del proyecto). Si el usuario no dio teléfono/email aún, NO pongas 80.
+- Si el usuario dice algo NEGATIVO → intent_score entre 10-20.
+- Ejemplos: "No me interesa" → 15. "Muy caro" → 18. "Para vender productos" (sin contacto) → 75 (no 80).
     `;
 
     // 4.1 REFUERZO PARA PRIMER MENSAJE (historial vacío = usuario acaba de abrir el chat)
@@ -1120,15 +1196,32 @@ FORMATO JSON OBLIGATORIO:
     
     // Solo agregar reunión si el usuario confirmó Y hay contacto
     if (meetingInfo.intent && hasContactInThisMessage) {
-      // Logging reducido para evitar saturación BigQuery
-      // log('info', 'Reunión confirmada CON contacto - guardando reunión');
+      let finalDate = meetingInfo.date;
+      let finalTime = meetingInfo.time;
+      if (!finalDate || !finalTime) {
+        try {
+          const { data: recentUser } = await supabaseAdmin
+            .from('chat_logs')
+            .select('content')
+            .eq('session_id', sessionId)
+            .eq('bot_id', botId)
+            .eq('role', 'user')
+            .order('created_at', { ascending: true })
+            .limit(5);
+          const contents = (recentUser || []).map((r: any) => r.content).filter(Boolean);
+          contents.push(message);
+          const gathered = await gatherDateAndTimeFromMessages(contents, apiKey, vendorName);
+          finalDate = finalDate || gathered.date;
+          finalTime = finalTime || gathered.time;
+        } catch (_) { /* ignorar */ }
+      }
       extractedContacts.push({
         type: 'meeting',
-        value: `Reunión agendada${meetingInfo.date ? ` - ${meetingInfo.date}` : ''}${meetingInfo.time ? ` a las ${meetingInfo.time}` : ''}`,
+        value: `Reunión agendada${finalDate ? ` - ${finalDate}` : ''}${finalTime ? ` a las ${finalTime}` : ''}`,
         metadata: {
           intent: 'meeting_scheduled',
-          date: meetingInfo.date,
-          time: meetingInfo.time,
+          date: finalDate,
+          time: finalTime,
           full_message: message.substring(0, 200),
         },
       });
@@ -1174,35 +1267,32 @@ FORMATO JSON OBLIGATORIO:
     
     if (hasContactInMessage && !meetingInfo.intent && !hasPreviousMeeting) {
       try {
-        // Buscar en los últimos mensajes del usuario para ver si confirmó una reunión
-        const { data: recentMessages } = await supabaseAdmin
+        // Buscar en los últimos mensajes del usuario: confirmación de reunión Y fecha/hora que dijo
+        const { data: recentMessagesDesc } = await supabaseAdmin
           .from('chat_logs')
           .select('content, created_at')
           .eq('session_id', sessionId)
           .eq('bot_id', botId)
           .eq('role', 'user')
           .order('created_at', { ascending: false })
-          .limit(5);
-        
-        if (recentMessages && recentMessages.length > 0) {
-          // Buscar en los mensajes recientes si hay confirmación de reunión
-          for (const msg of recentMessages) {
-            const previousMeetingCheck = await extractMeetingWithAI(msg.content, apiKey, vendorName);
-            if (previousMeetingCheck.intent) {
-              // Encontramos una confirmación de reunión previa
-              pendingMeetingInfo = {
-                date: previousMeetingCheck.date,
-                time: previousMeetingCheck.time,
-              };
-              // Logging reducido
-              // log('info', 'Reunión confirmada previamente encontrada en mensajes anteriores', {
-              //   date: pendingMeetingInfo.date,
-              //   time: pendingMeetingInfo.time,
-              //   messagePreview: msg.content.substring(0, 100)
-              // });
-              break; // Solo necesitamos la más reciente
-            }
-          }
+          .limit(6); // incluir mensaje actual si ya está guardado, o los 5 previos
+        const recentMessages = (recentMessagesDesc || []).reverse(); // más antiguo primero para orden cronológico
+        let hasIntent = false;
+        let accumulatedDate: string | null = null;
+        let accumulatedTime: string | null = null;
+        for (const msg of recentMessages) {
+          const r = await extractMeetingWithAI(msg.content, apiKey, vendorName);
+          if (r.intent) hasIntent = true;
+          if (r.date && !accumulatedDate) accumulatedDate = r.date;
+          if (r.time && !accumulatedTime) accumulatedTime = r.time;
+        }
+        // También revisar el mensaje actual (puede tener solo contacto)
+        const currentR = await extractMeetingWithAI(message, apiKey, vendorName);
+        if (currentR.intent) hasIntent = true;
+        if (currentR.date && !accumulatedDate) accumulatedDate = currentR.date;
+        if (currentR.time && !accumulatedTime) accumulatedTime = currentR.time;
+        if (hasIntent) {
+          pendingMeetingInfo = { date: accumulatedDate, time: accumulatedTime };
         }
       } catch (e: any) {
         log('warn', 'Error buscando reunión previa en mensajes', { error: e.message });
@@ -1268,7 +1358,6 @@ FORMATO JSON OBLIGATORIO:
       }
       
       // ⬅️ CRÍTICO: Ajustar intent_score basado en detección de negatividad/desinterés
-      // Esto asegura que el score baje cuando el usuario muestra rechazo, incluso si Gemini no lo detectó
       const originalScore = parsedResponse.intent_score;
       parsedResponse.intent_score = detectNegativityAndAdjustScore(message, parsedResponse.intent_score);
       
@@ -1279,45 +1368,55 @@ FORMATO JSON OBLIGATORIO:
           messagePreview: message.substring(0, 100)
         });
       }
+
+      // ⬅️ REGLA DE NEGOCIO: 80% (verde) solo cuando hay dato guardado (contacto + resumen).
+      // Charla casual → 25%. Sin dato guardado → máx 75%. Con contacto/reunión guardado → permitir 80%+.
+      if (detectCasualSmallTalk(message)) {
+        parsedResponse.intent_score = 25;
+        log('info', 'Score fijado a 25% (charla casual)', { messagePreview: message.substring(0, 80) });
+      } else if (!(hasContact || hasMeetingConfirmed)) {
+        if (parsedResponse.intent_score > 75) {
+          parsedResponse.intent_score = 75;
+          log('info', 'Score capado a 75% (sin dato de contacto/reunión guardado)', {
+            messagePreview: message.substring(0, 80),
+            hadScore: originalScore
+          });
+        }
+      }
+      // Si hasContact || hasMeetingConfirmed → no capar; 80%+ permitido (email y verde con sentido)
       
-      // ⬅️ NUEVO: Extraer resumen del proyecto de la respuesta del bot
-      // También buscar en mensajes anteriores del bot si no se encuentra en la respuesta actual
-      projectSummary = extractProjectSummary(parsedResponse.reply);
-      
-      // Si no se encontró en la respuesta actual, buscar en los últimos mensajes del bot
-      if (!projectSummary && history) {
-        const botMessages = history.filter((msg: any) => msg.role === 'assistant' || msg.role === 'bot');
-        for (const botMsg of botMessages) {
-          projectSummary = extractProjectSummary(botMsg.content);
+      // ⬅️ REFACTOR: Resumen del proyecto SOLO cuando hay contacto o reunión confirmada.
+      // Durante la conversación NO guardamos la primera frase como resumen; recopilamos fragmentos
+      // y al momento de contacto/reunión consolidamos todo en un único resumen.
+      if (hasContact || hasMeetingConfirmed) {
+        const fragments = extractProjectFragmentsFromUserMessages(history || [], message);
+        const consolidated = consolidateProjectSummary(fragments);
+        if (consolidated) {
+          projectSummary = consolidated;
+          log('info', 'Resumen del proyecto consolidado (contacto/reunión confirmada)', {
+            summary: projectSummary.substring(0, 100),
+            fragmentsCount: fragments.length,
+          });
+        }
+        // Si no hubo fragmentos suficientes, usar resumen explícito del bot si hizo uno en FASE 3
+        if (!projectSummary) {
+          projectSummary = extractProjectSummaryFromBotReply(parsedResponse.reply);
+          if (!projectSummary && history) {
+            const botMessages = history.filter((msg: any) => msg.role === 'assistant' || msg.role === 'bot');
+            for (const botMsg of botMessages) {
+              projectSummary = extractProjectSummary(botMsg.content);
+              if (projectSummary) break;
+            }
+          }
           if (projectSummary) {
-            log('info', 'Resumen encontrado en mensaje anterior del bot', {
+            log('info', 'Resumen del proyecto tomado de respuesta del bot', {
               summary: projectSummary.substring(0, 100),
             });
-            break;
           }
         }
-      }
-      
-      // ⬅️ NUEVO: Si no se encontró en las respuestas del bot, buscar en los mensajes del USUARIO
-      // Esto captura casos donde el usuario dijo "quiero una página para vender productos" pero el bot no hizo resumen explícito
-      if (!projectSummary && history) {
-        projectSummary = extractProjectSummaryFromUserMessages(history);
-        if (projectSummary) {
-          log('info', 'Resumen extraído de mensajes del usuario', {
-            summary: projectSummary.substring(0, 100),
-          });
-        }
-      }
-      
-      // ⬅️ NUEVO: También buscar en el mensaje actual del usuario si no se encontró antes
-      if (!projectSummary) {
-        const userMessageSummary = extractProjectSummaryFromUserMessages([{ role: 'user', content: message }]);
-        if (userMessageSummary) {
-          projectSummary = userMessageSummary;
-          log('info', 'Resumen extraído del mensaje actual del usuario', {
-            summary: projectSummary.substring(0, 100),
-          });
-        }
+      } else {
+        // Sin contacto ni reunión: no guardar resumen (evitar "quiero comprar una página" como resumen final)
+        projectSummary = null;
       }
       
       // ⬅️ MEJORADO: Manejo inteligente de contacto y reunión
@@ -1453,8 +1552,8 @@ FORMATO JSON OBLIGATORIO:
     }
 
     // 9. GUARDAR CONTACTOS Y REUNIONES (ANTES de guardar mensajes)
-    // ⬅️ NUEVO: Agregar resumen del proyecto si se detectó (guardar siempre, no solo cuando hay contacto)
-    // Esto permite que el resumen esté disponible cuando se obtenga el contacto más adelante
+    // ⬅️ REFACTOR: Resumen del proyecto SOLO cuando hay contacto o reunión confirmada.
+    // Se construye consolidando toda la información que el usuario fue dando durante la conversación.
     if (projectSummary) {
       // Buscar si ya existe una reunión para agregar el resumen al metadata
       const meetingContact = extractedContacts.find(c => c.type === 'meeting');
