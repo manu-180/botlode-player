@@ -135,9 +135,8 @@ class _BannerCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = isOffline ? AppTheme.error : AppTheme.success;
-    final bgColor = isDarkMode
-        ? Colors.black.withOpacity(0.95)
-        : Colors.white.withOpacity(0.98);
+    // Siempre fondo oscuro: evita el efecto "blanco opaco" cuando el bot está en modo claro
+    final bgColor = Colors.black.withOpacity(0.96);
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
@@ -235,7 +234,7 @@ class _BannerCard extends StatelessWidget {
                         ? "Se ha perdido la conexión. Cuando la señal esté disponible, podés seguir navegando con normalidad."
                         : "La conexión ha sido restablecida correctamente.",
                     style: TextStyle(
-                      color: (isDarkMode ? Colors.white : Colors.black87).withOpacity(0.85),
+                      color: Colors.white.withOpacity(0.88),
                       fontSize: 12,
                       fontFamily: 'Courier',
                       height: 1.3,
