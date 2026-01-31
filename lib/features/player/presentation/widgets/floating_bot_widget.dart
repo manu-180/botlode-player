@@ -251,20 +251,24 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
       child: Stack(
         fit: StackFit.expand,
         children: [
-        // PANEL DE CHAT - SIN ANIMACIONES (causan problema en iframe)
+        // PANEL DE CHAT - Animación lateral de derecha a izquierda
         // Posicionado desde arriba, dejando espacio para appbar (80px)
-        if (isOpen)
-          Positioned(
-            top: 80, // Espacio para appbar
-            right: 0,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxHeight: safeHeight, 
-                maxWidth: isMobile ? double.infinity : 420 // Ancho aumentado
-              ),
+        AnimatedPositioned(
+          duration: const Duration(milliseconds: 350),
+          curve: Curves.easeOutCubic,
+          top: 80, // Espacio para appbar
+          right: isOpen ? 0 : -450, // Fuera de pantalla cuando cerrado
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: safeHeight, 
+              maxWidth: isMobile ? double.infinity : 420 // Ancho aumentado
+            ),
+            child: IgnorePointer(
+              ignoring: !isOpen,
               child: const ChatPanelView(),
             ),
           ),
+        ),
 
         // ⬅️ OVERLAY: Detectar clicks fuera del chat para cerrarlo
         // Debe estar DESPUÉS del chat en el Stack para estar encima
