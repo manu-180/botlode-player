@@ -51494,9 +51494,9 @@ q=r.a
 p=r.b
 if(i.a.d){o=new A.m(q-76,p-76)
 n=350
-m=500}else{o=new A.m(q-28-190,p-28-90)
+m=1000}else{o=new A.m(q-28-190,p-28-90)
 n=600
-m=600}l=A.b9h(s,m,n,o)
+m=1200}l=A.b9h(s,m,n,o)
 i.ay=l.a
 i.ch=l.b
 i.cy=l.c

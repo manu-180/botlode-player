@@ -119,7 +119,7 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       // Margen inferior total: 40 (screen) + 7 (margin container) + 29 (mitad avatar) ≈ 76px
       myCenter = Offset(screenSize.width - 76, screenSize.height - 76);
       sensitivity = 350.0; // Rango medio para la burbuja
-      maxDistance = 500.0; // ⬅️ BURBUJA: Rango ajustado (500px)
+      maxDistance = 1000.0; // ⬅️ BURBUJA: Rango duplicado (500px → 1000px)
     } else {
       // --- MODO CHAT PANEL ---
       // Ancho Panel: 380px. Padding right: 28px.
@@ -132,7 +132,7 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       
       myCenter = Offset(chatCenterX, chatAvatarCenterY);
       sensitivity = 600.0; // ⬅️ Sensibilidad ajustada
-      maxDistance = 600.0; // ⬅️ CHAT: Rango ajustado (600px)
+      maxDistance = 1200.0; // ⬅️ CHAT: Rango duplicado (600px → 1200px)
     }
 
     // 3. DELEGAR CÁLCULO AL CONTROLLER

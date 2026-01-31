@@ -36,7 +36,7 @@ class HeadTrackingController {
     required Offset? globalPointer,
     required Offset widgetCenter,
     required double sensitivity,
-    double maxDistance = 1200.0, // ⬅️ NUEVO: Distancia máxima antes de volver al centro
+    double maxDistance = 2400.0, // ⬅️ Distancia máxima duplicada (1200px → 2400px) - valor por defecto para casos sin especificar
   }) {
     // 1. Si el mouse no está en pantalla, mirar al centro
     if (globalPointer == null) {
