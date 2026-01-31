@@ -39,43 +39,19 @@ class StatusIndicator extends ConsumerWidget {
     
     String text;
     Color color;
-    IconData? statusIcon;
-    bool shouldAnimate = false; // Control de animación del punto
 
     // LÓGICA DE ESTADOS
     if (!isOnline) {
-      text = "SIN CONEXIÓN";
+      text = "DESCONECTADO";
       color = const Color(0xFFFF003C);
-      statusIcon = Icons.wifi_off_rounded; // WiFi tachado
-      shouldAnimate = true; // Punto rojo parpadeante cuando está offline
     } else {
       // ⬅️ Cuando isLoading es true, NO mostrar "PROCESANDO..." - mostrar estado normal ("EN LÍNEA", emociones, etc.)
       switch (mood.toLowerCase()) {
-        case 'angry': 
-          text = "ENOJADO"; 
-          color = const Color(0xFFFF2A00);
-          statusIcon = Icons.mood_bad_rounded;
-          break;
-        case 'happy': 
-          text = "FELIZ"; 
-          color = const Color(0xFFFF00D6);
-          statusIcon = Icons.mood_rounded;
-          break;
-        case 'sales': 
-          text = "VENDEDOR"; 
-          color = const Color(0xFFFFC000);
-          statusIcon = Icons.attach_money_rounded;
-          break;
-        case 'confused': 
-          text = "CONFUNDIDO"; 
-          color = const Color(0xFF7B00FF);
-          statusIcon = Icons.help_outline_rounded;
-          break;
-        case 'tech': 
-          text = "TÉCNICO"; 
-          color = const Color(0xFF00F0FF);
-          statusIcon = Icons.settings_suggest_rounded;
-          break;
+        case 'angry': text = "ENOJADO"; color = const Color(0xFFFF2A00); break;
+        case 'happy': text = "FELIZ"; color = const Color(0xFFFF00D6); break;
+        case 'sales': text = "VENDEDOR"; color = const Color(0xFFFFC000); break;
+        case 'confused': text = "CONFUNDIDO"; color = const Color(0xFF7B00FF); break;
+        case 'tech': text = "TÉCNICO"; color = const Color(0xFF00F0FF); break;
         case 'neutral':
         case 'idle':
         default: 
@@ -111,10 +87,8 @@ class StatusIndicator extends ConsumerWidget {
           }
           
           if (shouldShowOnline) {
-            text = "CONEXIÓN RESTABLECIDA"; 
+            text = "EN LÍNEA"; 
             color = const Color(0xFF00FF94);
-            statusIcon = Icons.check_circle_rounded; // Check cuando se recupera
-            shouldAnimate = false; // Sin animación cuando está conectado
           } else {
             text = ""; 
             color = const Color(0xFF00FF94);
@@ -136,22 +110,25 @@ class StatusIndicator extends ConsumerWidget {
         ? Colors.white.withOpacity(0.1)
         : Colors.black.withOpacity(0.1);
 
-    // WIDGET DEL PUNTO INDICADOR (Reemplaza la barra, más visible)
-    final Widget statusDot = Container(
-      width: 10, 
-      height: 10,
+    // WIDGET DEL REACTOR (La barra de luz)
+    final Widget reactorBar = Container(
+      width: 4, 
+      height: 14,
       decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
+        color: color, 
+        borderRadius: BorderRadius.circular(2),
         boxShadow: isDarkMode 
             ? [
-                // MODO DARK: GLOW ATMOSFÉRICO
-                BoxShadow(color: color, blurRadius: 6, spreadRadius: 2),
-                BoxShadow(color: color.withOpacity(0.6), blurRadius: 14, spreadRadius: 4),
+                // MODO DARK: GLOW ATMOSFÉRICO (Tu efecto favorito actual)
+                // Se ve iluminado y expansivo sobre fondo negro.
+                BoxShadow(color: color, blurRadius: 4, spreadRadius: 1),
+                BoxShadow(color: color.withOpacity(0.6), blurRadius: 12, spreadRadius: 3),
               ]
             : [
-                // MODO LIGHT: LED SÓLIDO
-                BoxShadow(color: color.withOpacity(0.7), blurRadius: 3, spreadRadius: 0),
+                // MODO LIGHT: LED SÓLIDO (Corrección solicitada)
+                // Eliminamos el blur excesivo. Ahora es nítido y saturado.
+                // Solo un pequeño brillo muy pegado para que no se vea plano, pero sin manchar.
+                BoxShadow(color: color.withOpacity(0.6), blurRadius: 2, spreadRadius: 0),
               ],
       ),
     );
@@ -162,7 +139,7 @@ class StatusIndicator extends ConsumerWidget {
     }
 
     return Container(
-      padding: const EdgeInsets.only(left: 10, right: 12, top: 8, bottom: 8),
+      padding: const EdgeInsets.only(left: 6, right: 12, top: 6, bottom: 6),
       decoration: ShapeDecoration(
         color: bgColor,
         shape: BeveledRectangleBorder(
@@ -185,31 +162,14 @@ class StatusIndicator extends ConsumerWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          // ICONO DE ESTADO (WiFi tachado / Check / etc)
-          if (statusIcon != null) ...[
-            Icon(
-              statusIcon,
-              size: 18,
-              color: color,
-            ).animate(
-              onPlay: shouldAnimate ? (c) => c.repeat() : null,
-            )
-              .fadeIn(duration: 200.ms, curve: Curves.easeOut)
-              .then(delay: 300.ms)
-              .fadeOut(duration: 600.ms, curve: Curves.easeIn)
-              .then(delay: 100.ms),
-            const SizedBox(width: 8),
-          ],
+          // ANIMACIÓN SECUENCIAL PURA
+          reactorBar.animate(onPlay: (c) => c.repeat()) // Bucle infinito
+            .fadeIn(duration: 200.ms, curve: Curves.easeOut) // 1. IGNICIÓN
+            .then(delay: isOnline ? 1300.ms : 200.ms)        // 2. HOLD (TIEMPO PRENDIDO REAL)
+            .fadeOut(duration: 800.ms, curve: Curves.easeIn) // 3. APAGADO
+            .then(delay: 150.ms),                            // 4. TIEMPO APAGADO
 
-          // PUNTO PARPADEANTE (solo cuando está offline)
-          if (shouldAnimate) ...[
-            statusDot.animate(onPlay: (c) => c.repeat()) // Bucle infinito
-              .fadeIn(duration: 200.ms, curve: Curves.easeOut) // 1. IGNICIÓN
-              .then(delay: 200.ms)        // 2. HOLD (TIEMPO PRENDIDO)
-              .fadeOut(duration: 800.ms, curve: Curves.easeIn) // 3. APAGADO
-              .then(delay: 150.ms),       // 4. TIEMPO APAGADO
-            const SizedBox(width: 10),
-          ],
+          const SizedBox(width: 10),
 
           // TEXTO TÉCNICO
           Text(
