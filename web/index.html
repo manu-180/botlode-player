@@ -29,7 +29,7 @@
       overflow: hidden;
       -webkit-font-smoothing: antialiased;
       -moz-osx-font-smoothing: grayscale;
-      /* ⬅️ FIX: SIN forzar transparencia, dejar que Flutter/Scaffold maneje el fondo */
+      background: transparent !important;
     }
     
     /* Contenedor para Flutter */
@@ -39,7 +39,7 @@
       left: 0;
       width: 100%;
       height: 100%;
-      /* ⬅️ FIX: SIN forzar transparencia */
+      background: transparent !important;
       pointer-events: auto;
     }
   </style>

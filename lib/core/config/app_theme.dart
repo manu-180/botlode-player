@@ -16,7 +16,7 @@ class AppTheme {
   static ThemeData get darkTheme {
     return ThemeData.dark().copyWith(
       primaryColor: primary,
-      scaffoldBackgroundColor: background,
+      scaffoldBackgroundColor: Colors.transparent,
       
       // Esquema de colores
       colorScheme: const ColorScheme.dark(
