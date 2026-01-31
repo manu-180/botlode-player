@@ -31,10 +31,14 @@ class UltraSimpleBot extends ConsumerStatefulWidget {
   ConsumerState<UltraSimpleBot> createState() => _UltraSimpleBotState();
 }
 
-class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
+class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> 
+    with SingleTickerProviderStateMixin {
   bool _isHovered = false;
   PresenceManager? _presenceManager; // ⬅️ NUEVO: Mantener referencia al manager
   bool _lastKnownOpenState = false; // ⬅️ NUEVO: Trackear último estado conocido
+  
+  // ⬅️ ANIMACIÓN PRO: Controlar visibilidad para que la animación de cierre se vea
+  bool _shouldRenderChat = false; // Controla si el chat está en el árbol de widgets
 
   @override
   void initState() {
@@ -45,9 +49,9 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
         // 1. Asegurar que chatControllerProvider esté inicializado (necesario para sessionId)
         ref.read(chatControllerProvider);
         
-        // ⬅️ NUEVO: Si el chat ya está abierto al inicializar, marcar como online
-        // Nota: El presenceManager se obtendrá en el build con ref.watch()
+        // ⬅️ NUEVO: Si el chat ya está abierto al inicializar, marcar como online y renderizar
         if (ref.read(chatOpenProvider)) {
+          setState(() => _shouldRenderChat = true);
           Future.microtask(() {
             try {
               final manager = ref.read(presenceManagerProvider);
@@ -97,6 +101,19 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
     ref.listen(chatOpenProvider, (previous, current) {
       // ⬅️ Solo procesar si el estado realmente cambió
       if (previous == current) return;
+      
+      // ⬅️ ANIMACIÓN PRO: Controlar cuándo el chat está en el árbol de widgets
+      if (current) {
+        // Abrir: inmediatamente renderizar para que la animación de entrada se vea
+        setState(() => _shouldRenderChat = true);
+      } else {
+        // Cerrar: esperar a que termine la animación (450ms) antes de quitar del árbol
+        Future.delayed(const Duration(milliseconds: 450), () {
+          if (mounted && !ref.read(chatOpenProvider)) {
+            setState(() => _shouldRenderChat = false);
+          }
+        });
+      }
       
       if (previous == true && current == false) {
         // Chat se cerró: Invalidar activeSessionId SÍNCRONAMENTE y marcar TODOS los chats como offline en BD
@@ -287,6 +304,8 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
             ),
           ),
           // CHAT (solo esta zona absorbe toques; fuera se puede scrollear)
+          // ⬅️ ANIMACIÓN PRO: Usar _shouldRenderChat para mantener el widget durante la animación de cierre
+          if (_shouldRenderChat)
           Positioned(
               bottom: 0,
               right: 0,
@@ -295,10 +314,12 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
                 curve: Curves.easeOutCubic,
                 offset: isOpen ? Offset.zero : const Offset(1.2, 0),
                 child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 300),
+                  duration: const Duration(milliseconds: 350),
                   opacity: isOpen ? 1.0 : 0.0,
-                  child: Visibility(
-                    visible: isOpen,
+                  child: IgnorePointer(
+                    ignoring: !isOpen, // ⬅️ Ignorar toques durante animación de cierre
+                    child: Visibility(
+                    visible: _shouldRenderChat,
                     maintainState: true,
                     child: GestureDetector(
                       // ⬅️ NUEVO: Detener propagación de clics dentro del chat
@@ -340,6 +361,7 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> {
                 ),
               ),
             ),
+          ),
           ),
 
           // BURBUJA FLOTANTE
