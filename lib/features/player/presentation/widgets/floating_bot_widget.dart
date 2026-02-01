@@ -39,13 +39,31 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
   Widget build(BuildContext context) {
     final isOpen = ref.watch(chatOpenProvider);
     final botConfigAsync = ref.watch(botConfigProvider);
-    final isHovered = ref.watch(isHoveredExternalProvider);
+    final isHoveredRaw = ref.watch(isHoveredExternalProvider);
+    final hoverLocked = ref.watch(hoverLockedProvider);
+    
+    // ⬅️ CRÍTICO: El hover solo debe aplicarse cuando el chat está CERRADO Y no está bloqueado
+    final isHovered = !isOpen && isHoveredRaw && !hoverLocked;
+    
+    // 🔍 DEBUG: Log de estados
+    print('🔍 BUILD floating_bot_widget - isOpen: $isOpen, isHoveredRaw: $isHoveredRaw, hoverLocked: $hoverLocked, isHovered: $isHovered');
 
     final bool showOfflineAlert =
         botConfigAsync.asData?.value.showOfflineAlert ?? false;
     
     // ⬅️ LISTENER: Manejar estado cuando se abre/cierra el chat
     ref.listen(chatOpenProvider, (previous, next) {
+      // ⬅️ RESETEAR HOVER: Siempre que el chat cambie de estado (abre o cierra), resetear hover
+      print('🔍 LISTENER chatOpenProvider - previous: $previous, next: $next, RESETEANDO HOVER a false');
+      ref.read(isHoveredExternalProvider.notifier).state = false;
+      print('🔍 HOVER después de reset: ${ref.read(isHoveredExternalProvider)}');
+      
+      // ⬅️ BLOQUEAR HOVER: Cuando el chat se cierra, bloquear hover hasta que el mouse salga
+      if (previous == true && next == false) {
+        ref.read(hoverLockedProvider.notifier).state = true;
+        print('🔒 HOVER BLOQUEADO - El mouse debe salir de la burbuja para reactivar hover');
+      }
+      
       if (previous == true && next == false) {
         // Chat se cerró: Invalidar activeSessionId SÍNCRONAMENTE y marcar TODOS los chats como offline en BD
         // ⚠️ CRÍTICO: Debe hacerse SÍNCRONAMENTE, no en un Future.microtask
@@ -252,25 +270,19 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
         fit: StackFit.expand,
         children: [
         // PANEL DE CHAT - Animación lateral de derecha a izquierda
-        // Deslizamiento suave simulando el movimiento del hover de la burbuja
+        // Deslizamiento suave desde el borde derecho hacia adentro (cuando se abre)
+        // y de vuelta hacia la derecha (cuando se cierra)
         AnimatedPositioned(
           duration: const Duration(milliseconds: 400), // ⬅️ Misma duración que el hover de la burbuja
-          curve: Curves.easeOutCubic, // ⬅️ Misma curva que el hover
+          curve: isOpen ? Curves.easeOutCubic : Curves.easeInCubic, // ⬅️ Curva asimétrica
           top: 80, // Espacio para appbar
-          right: isOpen ? 0 : -450, // Fuera de pantalla cuando cerrado
-          child: AnimatedOpacity(
-            duration: const Duration(milliseconds: 300),
-            opacity: isOpen ? 1.0 : 0.0,
-            curve: Curves.easeOut,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxHeight: safeHeight, 
-                maxWidth: isMobile ? double.infinity : 420 // Ancho aumentado
-              ),
-              child: IgnorePointer(
-                ignoring: !isOpen,
-                child: const ChatPanelView(),
-              ),
+          right: isOpen ? 0 : -(isMobile ? screenSize.width.toDouble() : 420.0), // Desliza el ancho completo del chat
+          child: SizedBox(
+            width: isMobile ? screenSize.width.toDouble() : 420,
+            height: safeHeight,
+            child: IgnorePointer(
+              ignoring: !isOpen,
+              child: const ChatPanelView(),
             ),
           ),
         ),
@@ -315,8 +327,28 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
           child: IgnorePointer(
             ignoring: isOpen, 
             child: MouseRegion(
-              onEnter: (_) => ref.read(isHoveredExternalProvider.notifier).state = true,
-              onExit: (_) => ref.read(isHoveredExternalProvider.notifier).state = false,
+              onEnter: (_) {
+                final hoverLocked = ref.read(hoverLockedProvider);
+                print('🔍 MouseRegion ENTER - isOpen: $isOpen, hoverLocked: $hoverLocked');
+                // ⬅️ Solo activar hover si no está bloqueado
+                if (!hoverLocked) {
+                  ref.read(isHoveredExternalProvider.notifier).state = true;
+                  print('🔍 MouseRegion ENTER - hover activado: ${ref.read(isHoveredExternalProvider)}');
+                } else {
+                  print('🔒 MouseRegion ENTER - hover bloqueado, no se activa');
+                }
+              },
+              onExit: (_) {
+                final hoverLocked = ref.read(hoverLockedProvider);
+                print('🔍 MouseRegion EXIT - isOpen: $isOpen, hoverLocked: $hoverLocked');
+                ref.read(isHoveredExternalProvider.notifier).state = false;
+                // ⬅️ Desbloquear hover cuando el mouse sale
+                if (hoverLocked) {
+                  ref.read(hoverLockedProvider.notifier).state = false;
+                  print('🔓 HOVER DESBLOQUEADO - Ahora el hover puede activarse nuevamente');
+                }
+                print('🔍 MouseRegion EXIT - hover ahora: ${ref.read(isHoveredExternalProvider)}');
+              },
               child: AnimatedScale(
                 scale: isOpen ? 0.0 : 1.0, 
                 duration: const Duration(milliseconds: 300),

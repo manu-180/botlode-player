@@ -225,6 +225,11 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                                     IconButton(
                                       icon: const Icon(Icons.close_rounded), 
                                       onPressed: () {
+                                        // ⬅️ RESETEAR HOVER primero para que la burbuja se cierre inmediatamente
+                                        print('🔍 BOTÓN X - ANTES - hover: ${ref.read(isHoveredExternalProvider)}, chatOpen: ${ref.read(chatOpenProvider)}');
+                                        ref.read(isHoveredExternalProvider.notifier).state = false;
+                                        print('🔍 BOTÓN X - DESPUÉS reset hover: ${ref.read(isHoveredExternalProvider)}');
+                                        
                                         // Cierre manual explícito
                                         try {
                                           ref.read(presenceManagerProvider).setOffline();
@@ -232,6 +237,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                                           // Error silenciado
                                         }
                                         ref.read(chatOpenProvider.notifier).set(false);
+                                        print('🔍 BOTÓN X - DESPUÉS cerrar chat: ${ref.read(chatOpenProvider)}');
                                       },
                                       color: isDarkMode ? Colors.white70 : Colors.black54,
                                       tooltip: "Cerrar",

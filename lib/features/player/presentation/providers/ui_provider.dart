@@ -27,6 +27,11 @@ final pointerPositionProvider = StateProvider<Offset?>((ref) => null);
 //asdsad
 final isHoveredExternalProvider = StateProvider<bool>((ref) => false);
 
+// ⬅️ NUEVO: Provider para bloquear el hover después de cerrar el chat
+// Cuando se cierra el chat, este flag se activa y previene que el hover se active
+// hasta que el mouse salga y vuelva a entrar en la burbuja
+final hoverLockedProvider = StateProvider<bool>((ref) => false);
+
 // ⬅️ Provider para trackear el sessionId activo (el más reciente)
 // Solo el chat con este sessionId debe mostrar "EN LÍNEA"
 final activeSessionIdProvider = StateProvider<String?>((ref) => null);
