@@ -252,20 +252,25 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
         fit: StackFit.expand,
         children: [
         // PANEL DE CHAT - Animación lateral de derecha a izquierda
-        // Posicionado desde arriba, dejando espacio para appbar (80px)
+        // Deslizamiento suave simulando el movimiento del hover de la burbuja
         AnimatedPositioned(
-          duration: const Duration(milliseconds: 350),
-          curve: Curves.easeOutCubic,
+          duration: const Duration(milliseconds: 400), // ⬅️ Misma duración que el hover de la burbuja
+          curve: Curves.easeOutCubic, // ⬅️ Misma curva que el hover
           top: 80, // Espacio para appbar
           right: isOpen ? 0 : -450, // Fuera de pantalla cuando cerrado
-          child: ConstrainedBox(
-            constraints: BoxConstraints(
-              maxHeight: safeHeight, 
-              maxWidth: isMobile ? double.infinity : 420 // Ancho aumentado
-            ),
-            child: IgnorePointer(
-              ignoring: !isOpen,
-              child: const ChatPanelView(),
+          child: AnimatedOpacity(
+            duration: const Duration(milliseconds: 300),
+            opacity: isOpen ? 1.0 : 0.0,
+            curve: Curves.easeOut,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: safeHeight, 
+                maxWidth: isMobile ? double.infinity : 420 // Ancho aumentado
+              ),
+              child: IgnorePointer(
+                ignoring: !isOpen,
+                child: const ChatPanelView(),
+              ),
             ),
           ),
         ),
