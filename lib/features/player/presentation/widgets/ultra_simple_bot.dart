@@ -39,10 +39,60 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
   
   // ⬅️ ANIMACIÓN PRO: Controlar visibilidad para que la animación de cierre se vea
   bool _shouldRenderChat = false; // Controla si el chat está en el árbol de widgets
+  
+  // ⬅️ ANIMACIÓN PROFESIONAL: Controller para animación personalizada
+  late AnimationController _animationController;
+  late Animation<double> _scaleAnimation;
+  late Animation<double> _fadeAnimation;
+  late Animation<Offset> _slideAnimation;
+  late Animation<double> _borderRadiusAnimation;
 
   @override
   void initState() {
     super.initState();
+    
+    // ⬅️ ANIMACIÓN PROFESIONAL: Inicializar controller
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 400),
+      vsync: this,
+    );
+    
+    // ⬅️ Animación de escala: Crece desde ~10% (tamaño de burbuja) hasta 100%
+    _scaleAnimation = Tween<double>(
+      begin: 0.15,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _animationController,
+      curve: const Interval(0.0, 0.8, curve: Curves.easeOutCubic),
+    ));
+    
+    // ⬅️ Animación de fade: Aparece suavemente
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _animationController,
+      curve: const Interval(0.0, 0.5, curve: Curves.easeOut),
+    ));
+    
+    // ⬅️ Animación de slide: Pequeño desplazamiento desde abajo-derecha
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0.1, 0.1),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _animationController,
+      curve: const Interval(0.0, 0.7, curve: Curves.easeOutCubic),
+    ));
+    
+    // ⬅️ Animación de borderRadius: Morphing de círculo (80px) a rectángulo redondeado (28px)
+    _borderRadiusAnimation = Tween<double>(
+      begin: 40.0, // Radio de la burbuja (80px / 2)
+      end: 28.0,   // Radio del chat
+    ).animate(CurvedAnimation(
+      parent: _animationController,
+      curve: const Interval(0.2, 1.0, curve: Curves.easeInOut),
+    ));
+    
     // ⬅️ Pre-inicializar providers necesarios para PresenceManager
     WidgetsBinding.instance.addPostFrameCallback((_) {
       try {
@@ -52,6 +102,7 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
         // ⬅️ NUEVO: Si el chat ya está abierto al inicializar, marcar como online y renderizar
         if (ref.read(chatOpenProvider)) {
           setState(() => _shouldRenderChat = true);
+          _animationController.value = 1.0; // Saltar animación si ya está abierto
           Future.microtask(() {
             try {
               final manager = ref.read(presenceManagerProvider);
@@ -71,6 +122,7 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
   void dispose() {
     // ⬅️ NUEVO: Asegurar que se marque como offline al dispose del widget
     _presenceManager?.setOffline();
+    _animationController.dispose();
     super.dispose();
   }
 
@@ -106,9 +158,13 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
       if (current) {
         // Abrir: inmediatamente renderizar para que la animación de entrada se vea
         setState(() => _shouldRenderChat = true);
+        // Iniciar animación de apertura
+        _animationController.forward();
       } else {
-        // Cerrar: esperar a que termine la animación (350ms) antes de quitar del árbol
-        Future.delayed(const Duration(milliseconds: 350), () {
+        // Cerrar: iniciar animación de cierre
+        _animationController.reverse();
+        // Esperar a que termine la animación (400ms) antes de quitar del árbol
+        Future.delayed(const Duration(milliseconds: 400), () {
           if (mounted && !ref.read(chatOpenProvider)) {
             setState(() => _shouldRenderChat = false);
           }
@@ -304,95 +360,113 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
             ),
           ),
           // CHAT (solo esta zona absorbe toques; fuera se puede scrollear)
-          // ⬅️ ANIMACIÓN PRO: Usar _shouldRenderChat para mantener el widget durante la animación de cierre
+          // ⬅️ ANIMACIÓN PROFESIONAL: Morphing desde burbuja hasta chat completo
           if (_shouldRenderChat)
           Positioned(
               bottom: 0,
               right: 0,
-              child: AnimatedSlide(
-                duration: const Duration(milliseconds: 350),
-                curve: Curves.easeOutCubic,
-                offset: isOpen ? Offset.zero : const Offset(1.2, 0),
-                child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 300),
-                  opacity: isOpen ? 1.0 : 0.0,
-                  child: IgnorePointer(
-                    ignoring: !isOpen, // ⬅️ Ignorar toques durante animación de cierre
-                    child: Visibility(
-                    visible: _shouldRenderChat,
-                    maintainState: true,
-                    child: GestureDetector(
-                      // ⬅️ NUEVO: Detener propagación de clics dentro del chat
-                      onTap: () {}, // No hacer nada, solo detener propagación
-                      child: Padding(
-                        padding: EdgeInsets.only(
-                          right: horizontalPadding, 
-                          bottom: verticalPadding,
-                          left: isMobile ? horizontalPadding : 0, // ⬅️ Padding izquierdo en móvil
-                          top: isMobile ? 40.0 : 0, // ⬅️ Padding superior en móvil (margen seguro para appbar)
-                        ),
-                        child: Container(
-                        width: chatWidth, // ⬅️ RESPONSIVE: Ancho adaptativo
-                        height: chatHeight, // ⬅️ RESPONSIVE: Altura generosa (98% pantalla, max 1400px)
-                        constraints: BoxConstraints(
-                          maxWidth: chatWidth, // ⬅️ Asegurar que nunca exceda el ancho calculado
-                          maxHeight: chatHeight, // ⬅️ Asegurar que nunca exceda la altura calculada
-                          minWidth: isMobile ? 320.0 : 380.0, // ⬅️ Ancho mínimo
-                          minHeight: 400.0, // ⬅️ Altura mínima (nunca se corta)
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF181818),
-                          borderRadius: BorderRadius.circular(28),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.4),
-                              blurRadius: 25,
-                              offset: const Offset(-5, 0),
+              left: isMobile ? 0 : null, // ⬅️ En móvil, ocupar todo el ancho disponible
+              child: Padding(
+                padding: EdgeInsets.only(
+                  right: horizontalPadding, 
+                  bottom: verticalPadding,
+                  left: isMobile ? horizontalPadding : 0,
+                  top: isMobile ? 40.0 : 0,
+                ),
+                child: AnimatedBuilder(
+                  animation: _animationController,
+                  builder: (context, child) {
+                    return SlideTransition(
+                      position: _slideAnimation,
+                      child: FadeTransition(
+                        opacity: _fadeAnimation,
+                        child: Transform.scale(
+                          scale: _scaleAnimation.value,
+                          alignment: Alignment.bottomRight, // ⬅️ Crece desde la posición de la burbuja
+                          child: IgnorePointer(
+                            ignoring: !isOpen || _animationController.isAnimating,
+                            child: GestureDetector(
+                              onTap: () {}, // Detener propagación
+                              child: Container(
+                                width: chatWidth,
+                                height: chatHeight,
+                                constraints: BoxConstraints(
+                                  maxWidth: chatWidth,
+                                  maxHeight: chatHeight,
+                                  minWidth: isMobile ? 320.0 : 380.0,
+                                  minHeight: 400.0,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF181818),
+                                  // ⬅️ BorderRadius animado: morfea de círculo a rectángulo redondeado
+                                  borderRadius: BorderRadius.circular(_borderRadiusAnimation.value),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.4 * _fadeAnimation.value),
+                                      blurRadius: 25 * _fadeAnimation.value,
+                                      offset: Offset(-5 * _fadeAnimation.value, 0),
+                                    ),
+                                  ],
+                                ),
+                                child: ClipRRect(
+                                  // ⬅️ BorderRadius animado también en el clip
+                                  borderRadius: BorderRadius.circular(_borderRadiusAnimation.value),
+                                  child: Opacity(
+                                    // ⬅️ Fade del contenido interno: aparece después de que la escala está avanzada
+                                    opacity: (_scaleAnimation.value - 0.3).clamp(0.0, 1.0),
+                                    child: child,
+                                  ),
+                                ),
+                              ),
                             ),
-                          ],
-                        ),
-                        child: const ClipRRect(
-                          borderRadius: BorderRadius.all(Radius.circular(28)),
-                          child: ChatPanelView(), // ⬅️ Un solo X de cierre en el header (chat_panel_view)
+                          ),
                         ),
                       ),
-                    ),
-                  ),
+                    );
+                  },
+                  child: const ChatPanelView(),
                 ),
               ),
-            ),
-          ),
           ),
 
           // BURBUJA FLOTANTE
             Positioned(
               bottom: isMobile ? 16.0 : 40.0, // ⬅️ RESPONSIVE: Menos espacio en móvil
               right: isMobile ? 16.0 : 40.0, // ⬅️ RESPONSIVE: Menos espacio en móvil
-              child: Visibility(
-                visible: !isOpen,
-                maintainState: true,
-                child: MouseRegion(
-                  onEnter: (_) => setState(() => _isHovered = true),
-                  onExit: (_) => setState(() => _isHovered = false),
-                  child: Consumer(
-                    builder: (context, ref, _) {
-                      final botConfig = ref.watch(botConfigProvider);
-                      
-                      return botConfig.when(
-                        data: (config) => _buildExpandableBubble(
-                          name: config.name.toUpperCase(),
-                          subtext: "¿En qué te ayudo?",
-                        ),
-                        loading: () => _buildExpandableBubble(
-                          name: "CARGANDO...",
-                          subtext: "",
-                        ),
-                        error: (_, __) => _buildExpandableBubble(
-                          name: "BOT",
-                          subtext: "Haz click para abrir",
-                        ),
-                      );
-                    },
+              child: AnimatedScale(
+                scale: isOpen ? 0.0 : 1.0,
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeInBack,
+                child: AnimatedOpacity(
+                  opacity: isOpen ? 0.0 : 1.0,
+                  duration: const Duration(milliseconds: 200),
+                  child: Visibility(
+                    visible: !isOpen,
+                    maintainState: true,
+                    child: MouseRegion(
+                      onEnter: (_) => setState(() => _isHovered = true),
+                      onExit: (_) => setState(() => _isHovered = false),
+                      child: Consumer(
+                        builder: (context, ref, _) {
+                          final botConfig = ref.watch(botConfigProvider);
+                          
+                          return botConfig.when(
+                            data: (config) => _buildExpandableBubble(
+                              name: config.name.toUpperCase(),
+                              subtext: "¿En qué te ayudo?",
+                            ),
+                            loading: () => _buildExpandableBubble(
+                              name: "CARGANDO...",
+                              subtext: "",
+                            ),
+                            error: (_, __) => _buildExpandableBubble(
+                              name: "BOT",
+                              subtext: "Haz click para abrir",
+                            ),
+                          );
+                        },
+                      ),
+                    ),
                   ),
                 ),
               ),
