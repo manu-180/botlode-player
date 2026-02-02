@@ -107,8 +107,8 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
         // Abrir: inmediatamente renderizar para que la animación de entrada se vea
         setState(() => _shouldRenderChat = true);
       } else {
-        // Cerrar: esperar a que termine la animación (450ms) antes de quitar del árbol
-        Future.delayed(const Duration(milliseconds: 450), () {
+        // Cerrar: esperar a que termine la animación (350ms) antes de quitar del árbol
+        Future.delayed(const Duration(milliseconds: 350), () {
           if (mounted && !ref.read(chatOpenProvider)) {
             setState(() => _shouldRenderChat = false);
           }
@@ -310,11 +310,11 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
               bottom: 0,
               right: 0,
               child: AnimatedSlide(
-                duration: const Duration(milliseconds: 400),
+                duration: const Duration(milliseconds: 350),
                 curve: Curves.easeOutCubic,
                 offset: isOpen ? Offset.zero : const Offset(1.2, 0),
                 child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 350),
+                  duration: const Duration(milliseconds: 300),
                   opacity: isOpen ? 1.0 : 0.0,
                   child: IgnorePointer(
                     ignoring: !isOpen, // ⬅️ Ignorar toques durante animación de cierre

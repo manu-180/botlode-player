@@ -170,8 +170,12 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
     });
 
     ref.listen(chatOpenProvider, (prev, isOpen) {
-      if (!isOpen) _safePostMessage('CMD_CLOSE');
-      else _safePostMessage('CMD_OPEN');
+      // Enviar mensaje inmediatamente sin delay
+      // Usar scheduleMicrotask para asegurar que se envíe en el próximo frame
+      scheduleMicrotask(() {
+        if (!isOpen) _safePostMessage('CMD_CLOSE');
+        else _safePostMessage('CMD_OPEN');
+      });
     });
 
     return MaterialApp.router(
