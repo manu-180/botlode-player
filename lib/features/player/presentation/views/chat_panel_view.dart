@@ -195,8 +195,9 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                     Column(
                       children: [
                         // HEADER
+                        // ⬅️ NUEVO: Altura ajustada sin necesidad de espacio para appbar
                         Container(
-                          height: 180,
+                          height: 200, // ⬅️ Altura aumentada para dar más espacio al avatar
                           width: double.infinity,
                           decoration: BoxDecoration(
                              color: solidBgColor,

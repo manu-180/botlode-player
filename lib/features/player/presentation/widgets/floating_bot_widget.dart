@@ -53,6 +53,13 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     
     // ⬅️ LISTENER: Manejar estado cuando se abre/cierra el chat
     ref.listen(chatOpenProvider, (previous, next) {
+      // ⬅️ Notificar al HTML padre para redimensionar el iframe
+      if (next) {
+        html.window.parent?.postMessage('CMD_OPEN', '*');
+      } else {
+        html.window.parent?.postMessage('CMD_CLOSE', '*');
+      }
+      
       // ⬅️ RESETEAR HOVER: Siempre que el chat cambie de estado (abre o cierra), resetear hover
       print('🔍 LISTENER chatOpenProvider - previous: $previous, next: $next, RESETEANDO HOVER a false');
       ref.read(isHoveredExternalProvider.notifier).state = false;
@@ -227,8 +234,11 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
 
     final screenSize = MediaQuery.of(context).size;
     final isMobile = screenSize.width < 600;
-    // Altura aumentada: casi toda la pantalla, dejando espacio para appbar (80px)
-    final double safeHeight = (screenSize.height - 80.0).clamp(600.0, double.infinity);
+    
+    // ⬅️ NUEVO: Altura completa de pantalla para el chat (sin espacio para appbar)
+    final double chatHeight = screenSize.height;
+    // ⬅️ NUEVO: Ancho del chat lateral (420px desktop, pantalla completa móvil)
+    final double chatWidth = isMobile ? screenSize.width : 420.0;
 
     const double ghostPadding = 40.0;
 
@@ -242,12 +252,9 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
         
         if (isOpen) {
           // Chat ABIERTO: calcular respecto al avatar dentro del chat
-          // El chat está en top con ancho máximo de 420px (o menos en móvil)
-          final double chatWidth = isMobile ? screenSize.width : 420.0;
-          
-          // Avatar está centrado horizontalmente en el chat y a ~100px del top del chat (80px appbar + 100px)
+          // Avatar está centrado horizontalmente en el chat y a ~100px del top del chat
           final double avatarCenterX = isMobile ? screenSize.width / 2 : screenSize.width - (chatWidth / 2);
-          final double avatarCenterY = 80.0 + 100.0; // appbar + offset del avatar
+          final double avatarCenterY = 100.0; // offset del avatar desde el top
           
           dx = event.position.dx - avatarCenterX;
           dy = event.position.dy - avatarCenterY;
@@ -269,17 +276,36 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
       child: Stack(
         fit: StackFit.expand,
         children: [
-        // PANEL DE CHAT - Animación lateral de derecha a izquierda
-        // Deslizamiento suave desde el borde derecho hacia adentro (cuando se abre)
-        // y de vuelta hacia la derecha (cuando se cierra)
+        // ⬅️ OVERLAY OSCURO: Aparece cuando el chat está abierto
+        // Cubre toda la pantalla con un fondo semitransparente
+        AnimatedOpacity(
+          duration: const Duration(milliseconds: 300),
+          opacity: isOpen ? 1.0 : 0.0,
+          child: IgnorePointer(
+            ignoring: !isOpen,
+            child: GestureDetector(
+              behavior: HitTestBehavior.translucent,
+              onTap: () {
+                // Cerrar chat cuando se hace clic en el overlay
+                ref.read(chatOpenProvider.notifier).set(false);
+              },
+              child: Container(
+                color: Colors.black.withOpacity(0.5),
+              ),
+            ),
+          ),
+        ),
+
+        // PANEL DE CHAT - Deslizamiento lateral desde la derecha
+        // ✅ NUEVO: Usa AnimatedPositioned para deslizarse suavemente desde el borde derecho
         AnimatedPositioned(
-          duration: const Duration(milliseconds: 400), // ⬅️ Misma duración que el hover de la burbuja
-          curve: isOpen ? Curves.easeOutCubic : Curves.easeInCubic, // ⬅️ Curva asimétrica
-          top: 80, // Espacio para appbar
-          right: isOpen ? 0 : -(isMobile ? screenSize.width.toDouble() : 420.0), // Desliza el ancho completo del chat
+          duration: const Duration(milliseconds: 350),
+          curve: isOpen ? Curves.easeOutCubic : Curves.easeInCubic,
+          top: 0,
+          right: isOpen ? 0 : -chatWidth, // ⬅️ Desliza desde fuera de la pantalla
           child: SizedBox(
-            width: isMobile ? screenSize.width.toDouble() : 420,
-            height: safeHeight,
+            width: chatWidth,
+            height: chatHeight,
             child: IgnorePointer(
               ignoring: !isOpen,
               child: const ChatPanelView(),
@@ -287,43 +313,11 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
           ),
         ),
 
-        // ⬅️ OVERLAY: Detectar clicks fuera del chat para cerrarlo
-        // Debe estar DESPUÉS del chat en el Stack para estar encima
-        if (isOpen)
-          Positioned.fill(
-            child: GestureDetector(
-              behavior: HitTestBehavior.translucent,
-              onTapDown: (details) {
-                // Calcular si el tap está dentro del área del chat
-                final chatWidth = isMobile ? screenSize.width : 420.0;
-                final chatLeft = screenSize.width - chatWidth;
-                final chatTop = 80.0;
-                final chatRight = screenSize.width;
-                final chatBottom = chatTop + safeHeight;
-                
-                final tapX = details.localPosition.dx;
-                final tapY = details.localPosition.dy;
-                
-                // Solo cerrar si el tap está FUERA del área del chat
-                final isOutsideChat = tapX < chatLeft || 
-                                      tapX > chatRight || 
-                                      tapY < chatTop || 
-                                      tapY > chatBottom;
-                
-                if (isOutsideChat) {
-                  // Cerrar chat (el listener se encargará de resetear el mood)
-                  ref.read(chatOpenProvider.notifier).set(false);
-                }
-              },
-              child: Container(
-                color: Colors.transparent,
-              ),
-            ),
-          ),
-
         // BURBUJA FLOTANTE
+        // ✅ NUEVO: Siempre visible en la esquina inferior derecha (oculta cuando el chat está abierto)
         Positioned(
-          bottom: ghostPadding, right: ghostPadding,
+          bottom: ghostPadding, 
+          right: ghostPadding,
           child: IgnorePointer(
             ignoring: isOpen, 
             child: MouseRegion(
@@ -351,7 +345,7 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
               },
               child: AnimatedScale(
                 scale: isOpen ? 0.0 : 1.0, 
-                duration: const Duration(milliseconds: 300),
+                duration: const Duration(milliseconds: 250),
                 alignment: Alignment.center,
                 child: botConfigAsync.when(
                   loading: () => _buildFloatingButton(isHovered: false, name: "...", color: Colors.grey, subtext: "...", isDarkMode: true),
@@ -410,7 +404,6 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
             borderRadius: BorderRadius.circular(closedSize / 2),
             onTap: () {
               ref.read(chatOpenProvider.notifier).set(true);
-              html.window.parent?.postMessage('CMD_OPEN', '*');
             },
             child: Row(
               mainAxisAlignment: MainAxisAlignment.end,
