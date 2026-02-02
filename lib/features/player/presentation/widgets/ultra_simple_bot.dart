@@ -51,19 +51,19 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
   void initState() {
     super.initState();
     
-    // ⬅️ ANIMACIÓN PROFESIONAL: Inicializar controller
+    // ⬅️ ANIMACIÓN PROFESIONAL: Inicializar controller con duración más fluida
     _animationController = AnimationController(
-      duration: const Duration(milliseconds: 400),
+      duration: const Duration(milliseconds: 500),
       vsync: this,
     );
     
-    // ⬅️ Animación de escala: Crece desde ~10% (tamaño de burbuja) hasta 100%
+    // ⬅️ Animación de escala: Crece sutilmente (no desde burbuja, solo zoom ligero)
     _scaleAnimation = Tween<double>(
-      begin: 0.15,
+      begin: 0.92,
       end: 1.0,
     ).animate(CurvedAnimation(
       parent: _animationController,
-      curve: const Interval(0.0, 0.8, curve: Curves.easeOutCubic),
+      curve: const Interval(0.0, 0.6, curve: Curves.easeOutCubic),
     ));
     
     // ⬅️ Animación de fade: Aparece suavemente
@@ -72,25 +72,25 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
       end: 1.0,
     ).animate(CurvedAnimation(
       parent: _animationController,
-      curve: const Interval(0.0, 0.5, curve: Curves.easeOut),
+      curve: const Interval(0.0, 0.4, curve: Curves.easeOut),
     ));
     
-    // ⬅️ Animación de slide: Pequeño desplazamiento desde abajo-derecha
+    // ⬅️ Animación de slide: Entra desde la DERECHA (fuera de pantalla) hacia la izquierda
     _slideAnimation = Tween<Offset>(
-      begin: const Offset(0.1, 0.1),
+      begin: const Offset(1.0, 0.0), // 100% hacia la derecha (fuera de pantalla)
       end: Offset.zero,
     ).animate(CurvedAnimation(
       parent: _animationController,
-      curve: const Interval(0.0, 0.7, curve: Curves.easeOutCubic),
+      curve: Curves.easeOutQuart, // Curva muy fluida y profesional
     ));
     
-    // ⬅️ Animación de borderRadius: Morphing de círculo (80px) a rectángulo redondeado (28px)
+    // ⬅️ Animación de borderRadius: Siempre redondeado (sin morphing desde círculo)
     _borderRadiusAnimation = Tween<double>(
-      begin: 40.0, // Radio de la burbuja (80px / 2)
-      end: 28.0,   // Radio del chat
+      begin: 28.0, // Ya empieza con el radio del chat
+      end: 28.0,   // Se mantiene igual
     ).animate(CurvedAnimation(
       parent: _animationController,
-      curve: const Interval(0.2, 1.0, curve: Curves.easeInOut),
+      curve: Curves.linear,
     ));
     
     // ⬅️ Pre-inicializar providers necesarios para PresenceManager
@@ -163,8 +163,8 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
       } else {
         // Cerrar: iniciar animación de cierre
         _animationController.reverse();
-        // Esperar a que termine la animación (400ms) antes de quitar del árbol
-        Future.delayed(const Duration(milliseconds: 400), () {
+        // Esperar a que termine la animación (500ms) antes de quitar del árbol
+        Future.delayed(const Duration(milliseconds: 500), () {
           if (mounted && !ref.read(chatOpenProvider)) {
             setState(() => _shouldRenderChat = false);
           }
@@ -382,7 +382,7 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
                         opacity: _fadeAnimation,
                         child: Transform.scale(
                           scale: _scaleAnimation.value,
-                          alignment: Alignment.bottomRight, // ⬅️ Crece desde la posición de la burbuja
+                          alignment: Alignment.centerRight, // ⬅️ Crece desde el centro-derecha (fluido)
                           child: IgnorePointer(
                             ignoring: !isOpen || _animationController.isAnimating,
                             child: GestureDetector(
@@ -412,8 +412,8 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
                                   // ⬅️ BorderRadius animado también en el clip
                                   borderRadius: BorderRadius.circular(_borderRadiusAnimation.value),
                                   child: Opacity(
-                                    // ⬅️ Fade del contenido interno: aparece después de que la escala está avanzada
-                                    opacity: (_scaleAnimation.value - 0.3).clamp(0.0, 1.0),
+                                    // ⬅️ Fade del contenido interno: aparece gradualmente con un pequeño delay
+                                    opacity: ((_animationController.value - 0.2) / 0.8).clamp(0.0, 1.0),
                                     child: child,
                                   ),
                                 ),
@@ -435,11 +435,11 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
               right: isMobile ? 16.0 : 40.0, // ⬅️ RESPONSIVE: Menos espacio en móvil
               child: AnimatedScale(
                 scale: isOpen ? 0.0 : 1.0,
-                duration: const Duration(milliseconds: 250),
-                curve: Curves.easeInBack,
+                duration: const Duration(milliseconds: 300),
+                curve: isOpen ? Curves.easeInCubic : Curves.easeOutBack,
                 child: AnimatedOpacity(
                   opacity: isOpen ? 0.0 : 1.0,
-                  duration: const Duration(milliseconds: 200),
+                  duration: const Duration(milliseconds: 250),
                   child: Visibility(
                     visible: !isOpen,
                     maintainState: true,
