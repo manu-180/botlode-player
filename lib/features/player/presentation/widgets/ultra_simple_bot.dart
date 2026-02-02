@@ -414,108 +414,64 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
         final botConfig = ref.watch(botConfigProvider);
         final isDarkMode = botConfig.asData?.value.isDarkMode ?? true;
         
-        const double closedSize = 80.0; // ⬅️ Aumentado de 72 a 80
-        const double headSize = 68.0; // ⬅️ Aumentado de 58 a 68
-        const double padding = 25.0; 
-        const double extraSpace = 40.0; 
+        const double bubbleSize = 80.0; // Tamaño fijo de la burbuja
+        const double headSize = 68.0; // Tamaño del avatar
         
-        double textWidth = _calculateTextWidth(name, const TextStyle(fontSize: 15, fontWeight: FontWeight.w900));
-        double subtextWidth = _calculateTextWidth(subtext, const TextStyle(fontSize: 10));
-        double maxTextWidth = textWidth > subtextWidth ? textWidth : subtextWidth;
+        // ⬅️ NUEVA ESTRATEGIA: Scale en lugar de expandir horizontalmente
+        final double targetScale = _isHovered ? 1.1 : 1.0; // 10% más grande en hover
+        final double targetBlur = _isHovered ? 15.0 : 10.0; // Shadow más pronunciado en hover
         
-        double expandedWidth = headSize + padding + maxTextWidth + extraSpace;
-        double targetWidth = _isHovered ? expandedWidth : closedSize;
-        
-        // ⬅️ COLORES ADAPTATIVOS según tema (sutil pero profesional)
-        // ESTRATEGIA: Mantener identidad visual (burbuja oscura) pero optimizar contraste
+        // ⬅️ COLORES ADAPTATIVOS según tema
         final bubbleColor = isDarkMode 
-            ? const Color(0xFF2A2A3E)  // Dark: Mantener el color actual (te gusta)
-            : const Color(0xFF4A4A5E); // Light: Un poco más claro para mejor contraste, pero mantiene identidad oscura
+            ? const Color(0xFF2A2A3E)
+            : const Color(0xFF4A4A5E);
         
         final borderColor = isDarkMode
             ? Colors.white.withOpacity(0.15)
-            : Colors.white.withOpacity(0.2); // Light: Borde más visible para definir mejor la burbuja
+            : Colors.white.withOpacity(0.2);
         
-        // ⬅️ CRÍTICO: Texto siempre claro para máximo contraste con burbuja oscura
-        // Esto garantiza legibilidad perfecta en ambos modos manteniendo la identidad visual
-        final textColor = Colors.white; // Siempre blanco para contraste óptimo
-        final subtextColor = Colors.white.withOpacity(0.85); // Subtexto con opacidad sutil
-        
-        return GestureDetector(
-          onTap: () => ref.read(chatOpenProvider.notifier).set(true),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 350),
-            curve: Curves.easeOutCubic,
-            width: targetWidth,
-            height: closedSize,
-            decoration: BoxDecoration(
-              color: bubbleColor,
-              borderRadius: BorderRadius.circular(closedSize / 2),
-              border: Border.all(
-                color: borderColor,
-                width: 1.0,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(isDarkMode ? 0.3 : 0.15),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
+        return AnimatedScale(
+          scale: targetScale,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOutCubic,
+          child: GestureDetector(
+            onTap: () => ref.read(chatOpenProvider.notifier).set(true),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 250),
+              curve: Curves.easeOutCubic,
+              width: bubbleSize,
+              height: bubbleSize,
+              decoration: BoxDecoration(
+                color: bubbleColor,
+                borderRadius: BorderRadius.circular(bubbleSize / 2),
+                border: Border.all(
+                  color: borderColor,
+                  width: 1.0,
                 ),
-              ],
-            ),
-            child: Material(
-              color: Colors.transparent,
-              borderRadius: BorderRadius.circular(closedSize / 2),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(closedSize / 2),
-                onTap: () => ref.read(chatOpenProvider.notifier).set(true),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    if (_isHovered)
-                      Flexible(
-                        child: Padding(
-                          padding: const EdgeInsets.only(left: padding, right: 12),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Text(
-                                name,
-                                textAlign: TextAlign.right,
-                                style: TextStyle(
-                                  color: textColor, // ⬅️ Siempre blanco para contraste óptimo
-                                  fontWeight: FontWeight.w900,
-                                  fontSize: 15,
-                                ),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              if (subtext.isNotEmpty)
-                                Text(
-                                  subtext,
-                                  textAlign: TextAlign.right,
-                                  style: TextStyle(
-                                    color: subtextColor, // ⬅️ Blanco con opacidad para jerarquía visual
-                                    fontSize: 10,
-                                  ),
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    
-                    Container(
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(isDarkMode ? 0.3 : 0.15),
+                    blurRadius: targetBlur,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(bubbleSize / 2),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(bubbleSize / 2),
+                  onTap: () => ref.read(chatOpenProvider.notifier).set(true),
+                  child: Center(
+                    child: Container(
                       width: headSize,
                       height: headSize,
-                      margin: const EdgeInsets.all(7),
                       child: ClipOval(
                         child: Consumer(
                           builder: (context, ref, _) {
                             final riveLoader = ref.watch(riveHeadFileLoaderProvider); 
                             
                             return riveLoader.when(
-                              // ⬅️ PASO 2: Aquí pasamos isBubble: true
                               data: (_) => const BotAvatarWidget(isBubble: true),
                               loading: () => const Center(
                                 child: CircularProgressIndicator(
@@ -533,7 +489,7 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
                         ),
                       ),
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
@@ -542,15 +498,5 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
 
       },
     );
-  }
-
-  double _calculateTextWidth(String text, TextStyle style) {
-    final TextPainter textPainter = TextPainter(
-      text: TextSpan(text: text, style: style),
-      maxLines: 1,
-      textDirection: TextDirection.ltr,
-    )..layout();
-    
-    return textPainter.width;
   }
 }
