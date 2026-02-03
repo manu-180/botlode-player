@@ -7,6 +7,7 @@ import 'package:botlode_player/core/config/app_theme.dart';
 import 'package:botlode_player/core/config/configure_web.dart';
 import 'package:botlode_player/core/router/app_router.dart';
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
+import 'package:botlode_player/features/player/presentation/providers/loader_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -51,6 +52,11 @@ void main() {
     
     // ⬅️ Configurar tracking global DESPUÉS de tener el container
     _setupGlobalMouseTrackingWithProvider(container);
+    
+    // ⬅️ Precargar Rive de la burbuja (y cuerpo) para que la primera vez que se abra
+    // la burbuja o el chat el archivo ya esté en memoria y no se muestre CircularProgressIndicator.
+    await container.read(riveHeadFileLoaderProvider.future);
+    await container.read(riveFileLoaderProvider.future);
     
     runApp(
       UncontrolledProviderScope(
