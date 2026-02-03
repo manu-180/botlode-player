@@ -1,5 +1,5 @@
 // Archivo: lib/features/player/presentation/widgets/rive_avatar.dart
-import 'dart:ui'; 
+import 'dart:ui';
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/chat_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/head_tracking_provider.dart';
@@ -10,8 +10,12 @@ import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rive/rive.dart';
 
+/// Misma lógica de seguimiento que botlode_web (home, bot view, demo):
+/// - Centro del widget desde RenderBox (posición real)
+/// - Transición suave al entrar en rango (primeros ~10 frames)
+/// - Fluidez al volver al centro cuando el mouse sale del rango
 class BotAvatarWidget extends ConsumerStatefulWidget {
-  final bool isBubble; // ⬅️ NUEVO: Contexto de ubicación
+  final bool isBubble;
   const BotAvatarWidget({super.key, this.isBubble = false});
 
   @override
@@ -24,16 +28,22 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
   SMINumber? _lookXInput;
   SMINumber? _lookYInput;
   SMIBool? _errorInput;
-  SMINumber? _downloadInput; // ⬅️ Input para activar "Face download"
-  int? _savedMood; // ⬅️ Guardar el mood real cuando no está pensando
+  SMINumber? _downloadInput;
+  int? _savedMood;
 
   late Ticker _ticker;
   double _targetX = 50.0;
   double _targetY = 50.0;
   double _currentX = 50.0;
   double _currentY = 50.0;
-  
+
   bool _isTracking = false;
+  bool _wasTrackingPreviously = false;
+  int _trackingFrames = 0;
+
+  /// Sensibilidad y rango: 450px máximo para que no siga por toda la pantalla
+  double get _sensitivity => widget.isBubble ? 400.0 : 600.0;
+  double get _maxDistance => 450.0;
 
   @override
   void initState() {
@@ -44,20 +54,68 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
   @override
   void dispose() {
     _ticker.dispose();
+    _controller?.dispose();
     super.dispose();
   }
 
   void _onTick(Duration elapsed) {
-    if (_lookXInput == null || _lookYInput == null) return;
-    
-    // LÓGICA PURA: Tracking sin lag, reposo suave.
-    final double smoothFactor = _isTracking ? 1.0 : 0.05;
-    
+    if (!mounted || _lookXInput == null || _lookYInput == null) return;
+
+    // Calcular tracking en cada frame (como botlode_web): posición real del widget
+    try {
+      final globalPointer = ref.read(pointerPositionProvider);
+      final renderObject = context.findRenderObject();
+      if (renderObject == null || renderObject is! RenderBox) return;
+
+      final RenderBox box = renderObject;
+      if (!box.hasSize || !box.attached) return;
+
+      final widgetCenter = Offset(
+        box.localToGlobal(Offset.zero).dx + box.size.width / 2,
+        box.localToGlobal(Offset.zero).dy + box.size.height / 2,
+      );
+
+      final trackingState = HeadTrackingController.calculateGlobalTracking(
+        globalPointer: globalPointer,
+        widgetCenter: widgetCenter,
+        sensitivity: _sensitivity,
+        maxDistance: _maxDistance,
+      );
+
+      _targetX = trackingState.targetX;
+      _targetY = trackingState.targetY;
+      _isTracking = trackingState.isTracking;
+
+      if (_isTracking && !_wasTrackingPreviously) _trackingFrames = 0;
+      if (_isTracking) _trackingFrames++; else _trackingFrames = 0;
+      _wasTrackingPreviously = _isTracking;
+    } catch (e) {
+      _targetX = 50.0;
+      _targetY = 50.0;
+      _isTracking = false;
+      _wasTrackingPreviously = false;
+      _trackingFrames = 0;
+    }
+
+    // Misma física que botlode_web: suave al entrar, preciso siguiendo, fluido al centro
+    double smoothFactor;
+    if (_isTracking) {
+      smoothFactor = _trackingFrames < 10 ? 0.15 : 1.0;
+    } else {
+      smoothFactor = 0.05;
+    }
+
+    // Calibración Y igual que en botlode_web
+    double calibratedTargetY = _targetY - 15.0;
+    calibratedTargetY = calibratedTargetY.clamp(0.0, 100.0);
+
     _currentX = lerpDouble(_currentX, _targetX, smoothFactor) ?? 50;
-    _currentY = lerpDouble(_currentY, _targetY, smoothFactor) ?? 50;
-    
-    _lookXInput!.value = _currentX;
-    _lookYInput!.value = _currentY;
+    _currentY = lerpDouble(_currentY, calibratedTargetY, smoothFactor) ?? 50;
+
+    try {
+      _lookXInput!.value = _currentX;
+      _lookYInput!.value = _currentY;
+    } catch (_) {}
   }
 
   void _onRiveInit(Artboard artboard) {
@@ -97,56 +155,9 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
 
   @override
   Widget build(BuildContext context) {
-    // ⬅️ SELECCIONAR ARCHIVO RIVE CORRECTO según contexto
-    final riveFileAsync = widget.isBubble 
-        ? ref.watch(riveHeadFileLoaderProvider)   // ⬅️ BURBUJA: Solo cabeza
-        : ref.watch(riveFileLoaderProvider);      // ⬅️ CHAT: Cuerpo completo
-    
-    // 1. OBTENER DATOS DE ENTRADA
-    final globalPointer = ref.watch(pointerPositionProvider); // Mouse Global
-    final screenSize = MediaQuery.of(context).size; // Tamaño pantalla
-
-    // 2. CALCULAR MI POSICIÓN (GEOMETRÍA)
-    Offset myCenter;
-    double sensitivity;
-    double maxDistance; // ⬅️ NUEVO: Distancia máxima según contexto
-
-    if (widget.isBubble) {
-      // --- MODO BURBUJA ---
-      // Posición fija: bottom: 40, right: 40.
-      // Contenedor ancho variable, pero Avatar pegado a la derecha.
-      // Margen derecho total: 40 (screen) + 7 (margin container) + 29 (mitad avatar) ≈ 76px
-      // Margen inferior total: 40 (screen) + 7 (margin container) + 29 (mitad avatar) ≈ 76px
-      myCenter = Offset(screenSize.width - 76, screenSize.height - 76);
-      sensitivity = 350.0; // Rango medio para la burbuja
-      maxDistance = 1000.0; // ⬅️ BURBUJA: Rango duplicado (500px → 1000px)
-    } else {
-      // --- MODO CHAT PANEL ---
-      // Ancho Panel: 380px. Padding right: 28px.
-      // Centro X del panel = ScreenWidth - 28 (padding) - (380 / 2) = ScreenWidth - 218
-      final double chatCenterX = screenSize.width - 28 - 190;
-      
-      // Chat desde bottom: 28px. Header: 180px. Avatar en medio del header.
-      // Centro Y Avatar = ScreenHeight - 28 (padding bottom) - 90 (mitad del header)
-      final double chatAvatarCenterY = screenSize.height - 28 - 90;
-      
-      myCenter = Offset(chatCenterX, chatAvatarCenterY);
-      sensitivity = 600.0; // ⬅️ Sensibilidad ajustada
-      maxDistance = 1200.0; // ⬅️ CHAT: Rango duplicado (600px → 1200px)
-    }
-
-    // 3. DELEGAR CÁLCULO AL CONTROLLER
-    final trackingState = HeadTrackingController.calculateGlobalTracking(
-      globalPointer: globalPointer,
-      widgetCenter: myCenter,
-      sensitivity: sensitivity,
-      maxDistance: maxDistance, // ⬅️ Pasar distancia máxima según contexto
-    );
-
-    // 4. ACTUALIZAR VARIABLES LOCALES
-    _targetX = trackingState.targetX;
-    _targetY = trackingState.targetY;
-    _isTracking = trackingState.isTracking;
+    final riveFileAsync = widget.isBubble
+        ? ref.watch(riveHeadFileLoaderProvider)
+        : ref.watch(riveFileLoaderProvider);
 
     // Listener para cambios de mood
     ref.listen(botMoodProvider, (prev, next) {
