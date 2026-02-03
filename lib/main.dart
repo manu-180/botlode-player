@@ -98,16 +98,26 @@ void _setupGlobalMouseTrackingWithProvider(ProviderContainer container) {
       container.read(pointerPositionProvider.notifier).state = null;
     });
     
-    // 2. Listener de MENSAJES del parent (funciona cuando el mouse está FUERA del iframe)
+    // 2. Listener de MENSAJES del parent (cuando estamos embebidos en iframe)
+    // El padre envía (x,y) en su viewport; convertimos a coordenadas del iframe
+    // para que coincidan con widgetCenter (RenderBox) y el RIV siga bien el cursor.
     html.window.onMessage.listen((event) {
       try {
         final data = event.data;
         if (data is Map && data['type'] == 'MOUSE_MOVE') {
           final x = (data['x'] as num).toDouble();
           final y = (data['y'] as num).toDouble();
-          container.read(pointerPositionProvider.notifier).state = Offset(x, y);
+          final iframeX = data['iframeX'] as num?;
+          final iframeY = data['iframeY'] as num?;
+          if (iframeX != null && iframeY != null) {
+            // Coordenadas en el viewport del iframe (mismo sistema que RenderBox)
+            final localX = x - iframeX.toDouble();
+            final localY = y - iframeY.toDouble();
+            container.read(pointerPositionProvider.notifier).state = Offset(localX, localY);
+          } else {
+            container.read(pointerPositionProvider.notifier).state = Offset(x, y);
+          }
         } else if (data is Map && data['type'] == 'MOUSE_LEAVE') {
-          // ⬅️ NUEVO: El HTML padre nos avisa que el mouse salió completamente
           container.read(pointerPositionProvider.notifier).state = null;
         }
       } catch (e) {

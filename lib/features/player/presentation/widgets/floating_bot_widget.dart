@@ -242,35 +242,15 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
 
     const double ghostPadding = 40.0;
 
-    // MouseRegion global que captura el mouse en TODA la pantalla
-    // Calcula respecto a diferentes puntos según si el chat está abierto o cerrado
+    // MouseRegion global: enviamos posición GLOBAL (event.position) al provider.
+    // rive_avatar y HeadTrackingController esperan coordenadas globales y calculan
+    // el centro del widget con RenderBox; si pasamos deltas aquí, el RIV no sigue bien el mouse.
     return MouseRegion(
       hitTestBehavior: HitTestBehavior.translucent,
       onHover: (event) {
-        final double dx;
-        final double dy;
-        
-        if (isOpen) {
-          // Chat ABIERTO: calcular respecto al avatar dentro del chat
-          // Avatar está centrado horizontalmente en el chat y a ~100px del top del chat
-          final double avatarCenterX = isMobile ? screenSize.width / 2 : screenSize.width - (chatWidth / 2);
-          final double avatarCenterY = 100.0; // offset del avatar desde el top
-          
-          dx = event.position.dx - avatarCenterX;
-          dy = event.position.dy - avatarCenterY;
-        } else {
-          // Chat CERRADO: calcular respecto al botón flotante
-          final double headCenterX = screenSize.width - ghostPadding - 36.0;
-          final double headCenterY = screenSize.height - ghostPadding - 36.0;
-          
-          dx = event.position.dx - headCenterX;
-          dy = event.position.dy - headCenterY;
-        }
-        
-        ref.read(pointerPositionProvider.notifier).state = Offset(dx, dy);
+        ref.read(pointerPositionProvider.notifier).state = event.position;
       },
       onExit: (_) {
-        // Resetear cuando el mouse sale completamente
         ref.read(pointerPositionProvider.notifier).state = null;
       },
       child: Stack(
