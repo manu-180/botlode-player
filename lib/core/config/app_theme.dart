@@ -16,7 +16,8 @@ class AppTheme {
   static ThemeData get darkTheme {
     return ThemeData.dark().copyWith(
       primaryColor: primary,
-      scaffoldBackgroundColor: background,
+      // ⬅️ CRÍTICO: Fondo transparente para que no se vea el cuadrado de fondo en Mac
+      scaffoldBackgroundColor: Colors.transparent,
       
       // Esquema de colores
       colorScheme: const ColorScheme.dark(
@@ -24,7 +25,8 @@ class AppTheme {
         secondary: techCyan,
         surface: surface,
         error: error,
-        background: background,
+        // ⬅️ CRÍTICO: Fondo transparente en el colorScheme también
+        background: Colors.transparent,
       ),
 
       // Tipografía Sci-Fi (Oxanium)
