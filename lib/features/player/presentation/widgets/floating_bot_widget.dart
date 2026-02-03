@@ -297,9 +297,9 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
         ),
 
         // PANEL DE CHAT - Deslizamiento lateral desde la derecha
-        // ✅ NUEVO: Usa AnimatedPositioned para deslizarse suavemente desde el borde derecho
+        // ✅ Animación coordinada con el iframe: primero se expande el iframe (200ms), luego desliza el chat
         AnimatedPositioned(
-          duration: const Duration(milliseconds: 350),
+          duration: const Duration(milliseconds: 400),
           curve: isOpen ? Curves.easeOutCubic : Curves.easeInCubic,
           top: 0,
           right: isOpen ? 0 : -chatWidth, // ⬅️ Desliza desde fuera de la pantalla
