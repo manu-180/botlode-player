@@ -12,7 +12,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String DEPLOY_VERSION = "PLAYER PROGRESIVO v5.28 - Conectividad refactor: sin cartel offline, reconexión rápida";
+const String DEPLOY_VERSION = "PLAYER PROGRESIVO v5.29 - Fix transparencia Safari/Mac: cuadrado negro eliminado";
 
 void main() {
   runZonedGuarded(() async {

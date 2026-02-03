@@ -52012,7 +52012,7 @@ $0(){var s,r,q
 A.acs("CMD_READY")
 try{s=A.ack(window.parent)
 if(s!=null){r=t.N
-J.RF(s,A.aj(["type","DEPLOY_INFO","source","botlode_player","version","PLAYER PROGRESIVO v5.28 - Conectividad refactor: sin cartel offline, reconexi\xf3n r\xe1pida"],r,r),"*")}}catch(q){}},
+J.RF(s,A.aj(["type","DEPLOY_INFO","source","botlode_player","version","PLAYER PROGRESIVO v5.29 - Fix transparencia Safari/Mac: cuadrado negro eliminado"],r,r),"*")}}catch(q){}},
 $S:9}
 A.aNt.prototype={
 $1(a){var s,r,q,p=a.clientX
