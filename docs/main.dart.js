@@ -52012,7 +52012,7 @@ $0(){var s,r,q
 A.acs("CMD_READY")
 try{s=A.ack(window.parent)
 if(s!=null){r=t.N
-J.RF(s,A.aj(["type","DEPLOY_INFO","source","botlode_player","version","PLAYER PROGRESIVO v5.30 - Animaci\xf3n mejorada: deslizamiento suave sin lag"],r,r),"*")}}catch(q){}},
+J.RF(s,A.aj(["type","DEPLOY_INFO","source","botlode_player","version","PLAYER PROGRESIVO v5.40 - Animaci\xf3n mejorada: deslizamiento suave sin lag"],r,r),"*")}}catch(q){}},
 $S:9}
 A.aNt.prototype={
 $1(a){var s,r,q,p=a.clientX
