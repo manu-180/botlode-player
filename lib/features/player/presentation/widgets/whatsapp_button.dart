@@ -32,6 +32,7 @@ class WhatsAppButton extends StatelessWidget {
     final borderColor = Colors.white.withOpacity(0.2);
 
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: () => _openWhatsApp(phoneNumber),
       child: Container(
         width: buttonSize,

@@ -212,13 +212,13 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                           child: Stack(
                             children: [
                               // Avatar: oculto cuando teclado visible para ahorrar espacio
-                              AnimatedOpacity(
-                                duration: const Duration(milliseconds: 200),
-                                opacity: isKeyboardVisible ? 0.0 : 1.0,
-                                child: IgnorePointer(
-                                  ignoring: isKeyboardVisible,
-                                  child: const Positioned.fill(
-                                    child: Padding(
+                              Positioned.fill(
+                                child: AnimatedOpacity(
+                                  duration: const Duration(milliseconds: 200),
+                                  opacity: isKeyboardVisible ? 0.0 : 1.0,
+                                  child: IgnorePointer(
+                                    ignoring: isKeyboardVisible,
+                                    child: const Padding(
                                       padding: EdgeInsets.only(bottom: 20),
                                       child: BotAvatarWidget(), 
                                     ),
@@ -417,34 +417,41 @@ class _ProfessionalInputFieldState extends State<_ProfessionalInputField> {
     return AnimatedOpacity(
       duration: const Duration(milliseconds: 200),
       opacity: inputOpacity,
-      child: ClipRRect(
-        // ⬅️ Forzar recorte del borderRadius para que el borde izquierdo se vea redondeado
-        borderRadius: BorderRadius.circular(50),
-        child: Container(
-          decoration: BoxDecoration(
-            color: widget.inputFill,
-            // ⬅️ Bordes completamente redondeados (pill shape)
-            borderRadius: BorderRadius.circular(50),
-            border: Border.all(
-              color: borderColor,
-              width: 1.0,
-            ),
-            boxShadow: _isFocused ? [
-              BoxShadow(
-                // ⬅️ Sombra neutra que funciona bien en ambos modos (no usa themeColor)
-                color: widget.isDarkMode 
-                    ? Colors.white.withOpacity(0.05)
-                    : Colors.black.withOpacity(0.08),
-                blurRadius: 12,
-                spreadRadius: 0,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: isInputEnabled ? () {
+          if (_focusNode.canRequestFocus) {
+            _focusNode.requestFocus();
+          }
+        } : null,
+        child: ClipRRect(
+          // ⬅️ Forzar recorte del borderRadius para que el borde izquierdo se vea redondeado
+          borderRadius: BorderRadius.circular(50),
+          child: Container(
+            decoration: BoxDecoration(
+              color: widget.inputFill,
+              // ⬅️ Bordes completamente redondeados (pill shape)
+              borderRadius: BorderRadius.circular(50),
+              border: Border.all(
+                color: borderColor,
+                width: 1.0,
               ),
-            ] : null,
-          ),
-          child: Row(
-          children: [
-            const SizedBox(width: 20),
-            Expanded(
-              child: TextField(
+              boxShadow: _isFocused ? [
+                BoxShadow(
+                  // ⬅️ Sombra neutra que funciona bien en ambos modos (no usa themeColor)
+                  color: widget.isDarkMode 
+                      ? Colors.white.withOpacity(0.05)
+                      : Colors.black.withOpacity(0.08),
+                  blurRadius: 12,
+                  spreadRadius: 0,
+                ),
+              ] : null,
+            ),
+            child: Row(
+            children: [
+              const SizedBox(width: 20),
+              Expanded(
+                child: TextField(
                 controller: widget.controller,
                 focusNode: _focusNode,
                 enabled: isInputEnabled, // ⬅️ NUEVO: Bloquear cuando isLoading es true
@@ -534,6 +541,7 @@ class _ProfessionalInputFieldState extends State<_ProfessionalInputField> {
             const SizedBox(width: 6),
           ],
           ),
+        ),
         ),
       ),
     );

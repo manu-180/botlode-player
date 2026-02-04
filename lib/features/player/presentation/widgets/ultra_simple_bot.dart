@@ -286,8 +286,8 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
             setState(() => _shouldRenderChat = false);
           }
         });
-        // Mostrar burbujas con delay (después de que el chat salga)
-        Future.delayed(const Duration(milliseconds: 500), () {
+        // Mostrar burbujas con delay reducido (350ms) para respuesta más rápida
+        Future.delayed(const Duration(milliseconds: 350), () {
           if (mounted && !ref.read(chatOpenProvider)) {
             setState(() => _showBubbles = true);
           }
@@ -465,10 +465,12 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
     // ⬅️ Altura generosa: casi toda la pantalla para que el chat no quede petiso
     // - Usa 98% de la altura disponible
     // - Máximo 1400px para pantallas muy altas
-    // - Mínimo 480px para pantallas pequeñas
-    final double maxAvailableHeight = screenSize.height - 24.0; // Margen mínimo
+    // - Mínimo 400px para pantallas pequeñas (reducido para móvil con teclado)
+    // - Resta viewInsets.bottom para que el chat suba cuando aparece el teclado
+    final mq = MediaQuery.of(context);
+    final double maxAvailableHeight = screenSize.height - 24.0 - mq.viewInsets.bottom;
     final double calculatedHeight = (maxAvailableHeight * 0.98) - (verticalPadding * 2);
-    final double chatHeight = calculatedHeight.clamp(480.0, 1400.0);
+    final double chatHeight = calculatedHeight.clamp(400.0, 1400.0);
     
     // ⬅️ Fondo transparente; zona fuera del chat deja pasar scroll/touch para scrollear la página
     return Scaffold(
@@ -558,14 +560,13 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
               right: isMobile ? 16.0 : 40.0,
               child: AnimatedScale(
                 scale: _showBubbles ? 1.0 : 0.0,
-                duration: const Duration(milliseconds: 300),
+                duration: const Duration(milliseconds: 250),
                 curve: _showBubbles ? Curves.easeOutBack : Curves.easeInCubic,
                 child: AnimatedOpacity(
                   opacity: _showBubbles ? 1.0 : 0.0,
-                  duration: const Duration(milliseconds: 250),
-                  child: Visibility(
-                    visible: _showBubbles,
-                    maintainState: true,
+                  duration: const Duration(milliseconds: 200),
+                  child: IgnorePointer(
+                    ignoring: !_showBubbles,
                     child: MouseRegion(
                       onEnter: (_) => setState(() => _isHovered = true),
                       onExit: (_) => setState(() => _isHovered = false),
@@ -595,7 +596,7 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
               ),
             ),
 
-          // ⬅️ BOTÓN DE WHATSAPP (arriba de la burbuja del bot)
+          // BOTÓN DE WHATSAPP (arriba de la burbuja del bot)
           Consumer(
             builder: (context, ref, _) {
               final botConfig = ref.watch(botConfigProvider).asData?.value;
@@ -619,14 +620,13 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
                 right: padRight,
                 child: AnimatedScale(
                   scale: _showBubbles ? 1.0 : 0.0,
-                  duration: const Duration(milliseconds: 300),
+                  duration: const Duration(milliseconds: 250),
                   curve: _showBubbles ? Curves.easeOutBack : Curves.easeInCubic,
                   child: AnimatedOpacity(
                     opacity: _showBubbles ? 1.0 : 0.0,
-                    duration: const Duration(milliseconds: 250),
-                    child: Visibility(
-                      visible: _showBubbles,
-                      maintainState: true,
+                    duration: const Duration(milliseconds: 200),
+                    child: IgnorePointer(
+                      ignoring: !_showBubbles,
                       child: WhatsAppButton(
                         phoneNumber: botConfig.telefono!,
                         isDarkMode: botConfig.isDarkMode,
@@ -638,7 +638,7 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
             },
           ),
 
-          // ⬅️ OVERLAY DESHABILITADO: Solo usamos el snackbar del HTML padre (centro de pantalla)
+          // OVERLAY DESHABILITADO: Solo usamos el snackbar del HTML padre (centro de pantalla)
           // El GlobalConnectivityOverlay era redundante con el snackbar
           // const GlobalConnectivityOverlay(),
         ],
@@ -676,6 +676,7 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
           duration: const Duration(milliseconds: 250),
           curve: Curves.easeOutCubic,
           child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
             onTap: () => ref.read(chatOpenProvider.notifier).set(true),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 250),
