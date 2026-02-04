@@ -379,28 +379,13 @@ class _ProfessionalInputFieldState extends State<_ProfessionalInputField> {
     widget.controller.addListener(() {
       setState(() => _hasText = widget.controller.text.trim().isNotEmpty);
     });
-    
-    // ⬅️ NUEVO: Enfocar automáticamente cuando el widget se inicializa
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && widget.isOnline && !widget.isLoading) {
-        _focusNode.requestFocus();
-      }
-    });
+    // ⬅️ No enfocar al abrir el chat: el teclado solo debe abrirse cuando el usuario toca el input.
   }
 
   @override
   void didUpdateWidget(_ProfessionalInputField oldWidget) {
     super.didUpdateWidget(oldWidget);
-    
-    // ⬅️ NUEVO: Cuando isLoading cambia de true a false, enfocar automáticamente
-    if (oldWidget.isLoading && !widget.isLoading && widget.isOnline) {
-      // Pequeño delay para asegurar que la UI se actualizó
-      Future.delayed(const Duration(milliseconds: 100), () {
-        if (mounted && _focusNode.canRequestFocus) {
-          _focusNode.requestFocus();
-        }
-      });
-    }
+    // ⬅️ No auto-enfocar al terminar de cargar: teclado solo al tocar el input (evita lag en móvil).
   }
 
   @override

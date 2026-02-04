@@ -3,6 +3,7 @@
 
 import 'dart:html' as html;
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:botlode_player/features/player/domain/models/chat_message.dart';
 import 'package:uuid/uuid.dart';
 
@@ -41,83 +42,105 @@ class ChatPersistenceService {
 
   // ⬅️ Crear nuevo sessionId (para reload)
   static String createNewSessionId() {
-    print("🟣 [DEBUG] createNewSessionId() - INICIO");
+    if (kDebugMode) {
+      print("🟣 [DEBUG] createNewSessionId() - INICIO");
+    }
     try {
       final oldSessionId = html.window.localStorage[_sessionIdKey];
-      print("🟣 [DEBUG] createNewSessionId() - sessionId anterior: $oldSessionId");
-      
+      if (kDebugMode) {
+        print("🟣 [DEBUG] createNewSessionId() - sessionId anterior: $oldSessionId");
+      }
       final newSessionId = _uuid.v4();
-      print("🟣 [DEBUG] createNewSessionId() - nuevo sessionId generado: $newSessionId");
-      
+      if (kDebugMode) {
+        print("🟣 [DEBUG] createNewSessionId() - nuevo sessionId generado: $newSessionId");
+      }
       saveSessionId(newSessionId);
-      print("🟣 [DEBUG] createNewSessionId() - sessionId guardado en localStorage");
-      
-      // Guardar timestamp del reset para que el bot sepa que es un nuevo contexto
+      if (kDebugMode) {
+        print("🟣 [DEBUG] createNewSessionId() - sessionId guardado en localStorage");
+      }
       final resetTime = DateTime.now().toIso8601String();
       html.window.localStorage[_lastResetKey] = resetTime;
-      print("🟣 [DEBUG] createNewSessionId() - timestamp de reset guardado: $resetTime");
-      
-      print("🟣 [DEBUG] createNewSessionId() - FIN, retornando: $newSessionId");
+      if (kDebugMode) {
+        print("🟣 [DEBUG] createNewSessionId() - timestamp de reset guardado: $resetTime");
+        print("🟣 [DEBUG] createNewSessionId() - FIN, retornando: $newSessionId");
+      }
       return newSessionId;
     } catch (e) {
-      print("🟣 [DEBUG] createNewSessionId() - ERROR: $e");
+      if (kDebugMode) {
+        print("🟣 [DEBUG] createNewSessionId() - ERROR: $e");
+      }
       final fallbackId = _uuid.v4();
-      print("🟣 [DEBUG] createNewSessionId() - usando fallback: $fallbackId");
+      if (kDebugMode) {
+        print("🟣 [DEBUG] createNewSessionId() - usando fallback: $fallbackId");
+      }
       return fallbackId;
     }
   }
 
   // ⬅️ Obtener mensajes guardados
   static List<ChatMessage> getStoredMessages() {
-    print("🟦 [DEBUG] getStoredMessages() - INICIO");
+    if (kDebugMode) {
+      print("🟦 [DEBUG] getStoredMessages() - INICIO");
+    }
     try {
       final stored = html.window.localStorage[_messagesKey];
-      print("🟦 [DEBUG] getStoredMessages() - valor en localStorage: ${stored != null ? 'existe (${stored.length} chars)' : 'null'}");
-      
+      if (kDebugMode) {
+        print("🟦 [DEBUG] getStoredMessages() - valor en localStorage: ${stored != null ? 'existe (${stored.length} chars)' : 'null'}");
+      }
       if (stored == null || stored.isEmpty) {
-        print("🟦 [DEBUG] getStoredMessages() - localStorage vacío, retornando lista vacía");
+        if (kDebugMode) {
+          print("🟦 [DEBUG] getStoredMessages() - localStorage vacío, retornando lista vacía");
+        }
         return [];
       }
-      
-      print("🟦 [DEBUG] getStoredMessages() - decodificando JSON...");
-      final List<dynamic> decoded = jsonDecode(stored);
-      print("🟦 [DEBUG] getStoredMessages() - JSON decodificado, ${decoded.length} elementos");
-      
-      final messages = decoded.map((json) => ChatMessage.fromJson(json)).toList();
-      print("🟦 [DEBUG] getStoredMessages() - mensajes parseados: ${messages.length}");
-      for (var i = 0; i < messages.length; i++) {
-        print("🟦 [DEBUG] getStoredMessages() - mensaje $i: ${messages[i].text.substring(0, messages[i].text.length > 30 ? 30 : messages[i].text.length)}...");
+      if (kDebugMode) {
+        print("🟦 [DEBUG] getStoredMessages() - decodificando JSON...");
       }
-      
-      print("🟦 [DEBUG] getStoredMessages() - FIN, retornando ${messages.length} mensajes");
+      final List<dynamic> decoded = jsonDecode(stored);
+      if (kDebugMode) {
+        print("🟦 [DEBUG] getStoredMessages() - JSON decodificado, ${decoded.length} elementos");
+      }
+      final messages = decoded.map((json) => ChatMessage.fromJson(json)).toList();
+      if (kDebugMode) {
+        print("🟦 [DEBUG] getStoredMessages() - mensajes parseados: ${messages.length}");
+        print("🟦 [DEBUG] getStoredMessages() - FIN, retornando ${messages.length} mensajes");
+      }
       return messages;
     } catch (e) {
-      print("🟦 [DEBUG] getStoredMessages() - ERROR: $e");
+      if (kDebugMode) {
+        print("🟦 [DEBUG] getStoredMessages() - ERROR: $e");
+      }
       return [];
     }
   }
 
   // ⬅️ Guardar mensajes
   static void saveMessages(List<ChatMessage> messages) {
-    print("🟡 [DEBUG] saveMessages() - INICIO, cantidad: ${messages.length}");
+    if (kDebugMode) {
+      print("🟡 [DEBUG] saveMessages() - INICIO, cantidad: ${messages.length}");
+    }
     try {
       final encoded = jsonEncode(messages.map((m) => m.toJson()).toList());
-      print("🟡 [DEBUG] saveMessages() - JSON generado, longitud: ${encoded.length} caracteres");
+      if (kDebugMode) {
+        print("🟡 [DEBUG] saveMessages() - JSON generado, longitud: ${encoded.length} caracteres");
+      }
       html.window.localStorage[_messagesKey] = encoded;
-      print("🟡 [DEBUG] saveMessages() - mensajes guardados en localStorage");
-      
-      // Verificar que se guardó correctamente
-      final stored = html.window.localStorage[_messagesKey];
-      if (stored != null) {
-        final decoded = jsonDecode(stored) as List;
-        print("🟡 [DEBUG] saveMessages() - verificación: ${decoded.length} mensajes en localStorage");
-      } else {
-        print("🟡 [DEBUG] saveMessages() - ⚠️ ADVERTENCIA: localStorage está vacío después de guardar");
+      if (kDebugMode) {
+        print("🟡 [DEBUG] saveMessages() - mensajes guardados en localStorage");
+        final stored = html.window.localStorage[_messagesKey];
+        if (stored != null) {
+          final decoded = jsonDecode(stored) as List;
+          print("🟡 [DEBUG] saveMessages() - verificación: ${decoded.length} mensajes en localStorage");
+        } else {
+          print("🟡 [DEBUG] saveMessages() - ⚠️ ADVERTENCIA: localStorage está vacío después de guardar");
+        }
+        print("🟡 [DEBUG] saveMessages() - FIN");
       }
     } catch (e) {
-      print("🟡 [DEBUG] saveMessages() - ERROR: $e");
+      if (kDebugMode) {
+        print("🟡 [DEBUG] saveMessages() - ERROR: $e");
+      }
     }
-    print("🟡 [DEBUG] saveMessages() - FIN");
   }
 
   // ⬅️ Limpiar persistencia (solo para reload - NO borra mensajes de BD)
@@ -154,18 +177,25 @@ class ChatPersistenceService {
     try {
       final stored = html.window.localStorage[_chatIdKey];
       if (stored != null && stored.isNotEmpty) {
-        print("🟣 [DEBUG] getOrCreateChatId() - chatId existente: $stored");
+        if (kDebugMode) {
+          print("🟣 [DEBUG] getOrCreateChatId() - chatId existente: $stored");
+        }
         return stored;
       }
-      // Crear nuevo chatId (solo la primera vez)
       final newChatId = _uuid.v4();
       html.window.localStorage[_chatIdKey] = newChatId;
-      print("🟣 [DEBUG] getOrCreateChatId() - nuevo chatId creado: $newChatId");
+      if (kDebugMode) {
+        print("🟣 [DEBUG] getOrCreateChatId() - nuevo chatId creado: $newChatId");
+      }
       return newChatId;
     } catch (e) {
-      print("⚠️ Error obteniendo chatId: $e");
+      if (kDebugMode) {
+        print("⚠️ Error obteniendo chatId: $e");
+      }
       final fallbackId = _uuid.v4();
-      print("🟣 [DEBUG] getOrCreateChatId() - usando fallback: $fallbackId");
+      if (kDebugMode) {
+        print("🟣 [DEBUG] getOrCreateChatId() - usando fallback: $fallbackId");
+      }
       return fallbackId;
     }
   }
@@ -185,14 +215,19 @@ class ChatPersistenceService {
   static String resetChatId() {
     try {
       final oldChatId = html.window.localStorage[_chatIdKey];
-      print("🟣 [DEBUG] resetChatId() - chatId anterior: $oldChatId");
-      
+      if (kDebugMode) {
+        print("🟣 [DEBUG] resetChatId() - chatId anterior: $oldChatId");
+      }
       final newChatId = _uuid.v4();
       html.window.localStorage[_chatIdKey] = newChatId;
-      print("🟣 [DEBUG] resetChatId() - nuevo chatId creado: $newChatId");
+      if (kDebugMode) {
+        print("🟣 [DEBUG] resetChatId() - nuevo chatId creado: $newChatId");
+      }
       return newChatId;
     } catch (e) {
-      print("⚠️ Error reseteando chatId: $e");
+      if (kDebugMode) {
+        print("⚠️ Error reseteando chatId: $e");
+      }
       return _uuid.v4();
     }
   }

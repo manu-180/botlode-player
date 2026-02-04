@@ -535,10 +535,10 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
               ),
           ),
 
-          // BURBUJA FLOTANTE + cartel "Sin conexión" encima cuando chat cerrado y offline
+          // BURBUJA FLOTANTE (mismo tamaño y alineación que WhatsApp)
             Positioned(
-              bottom: isMobile ? 16.0 : 40.0, // ⬅️ RESPONSIVE: Menos espacio en móvil
-              right: isMobile ? 16.0 : 40.0, // ⬅️ RESPONSIVE: Menos espacio en móvil
+              bottom: isMobile ? 16.0 : 40.0,
+              right: isMobile ? 16.0 : 40.0,
               child: AnimatedScale(
                 scale: isOpen ? 0.0 : 1.0,
                 duration: const Duration(milliseconds: 300),
@@ -592,14 +592,14 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
                 return const SizedBox.shrink();
               }
               
-              // ⬅️ Posicionar arriba de la burbuja del bot con separación generosa
-              // Burbuja bot: bottom: 40px, size: 80px
-              // Separación: 16px entre burbujas
-              // WhatsApp button: size: 80px (igual que burbuja del bot)
-              // Cálculo: 40 (base) + 80 (burbuja) + 16 (separación) = 136px
+              // Mismo tamaño (86px) y mismo right que la burbuja; arriba con gap fijo
+              const double kFloatingSize = 86.0;
+              const double kGap = 12.0;
+              final double padBottom = isMobile ? 16.0 : 40.0;
+              final double padRight = isMobile ? 16.0 : 40.0;
               return Positioned(
-                bottom: isMobile ? 112.0 : 136.0, 
-                right: isMobile ? 24.0 : 48.0, // Centrado con la burbuja
+                bottom: padBottom + kFloatingSize + kGap,
+                right: padRight,
                 child: AnimatedScale(
                   scale: isOpen ? 0.0 : 1.0,
                   duration: const Duration(milliseconds: 300),
@@ -638,8 +638,8 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
         final botConfig = ref.watch(botConfigProvider);
         final isDarkMode = botConfig.asData?.value.isDarkMode ?? true;
         
-        const double bubbleSize = 80.0; // Tamaño fijo de la burbuja
-        const double headSize = 68.0; // Tamaño del avatar
+        const double bubbleSize = 86.0; // Igual que WhatsAppButton (alineación perfecta)
+        const double headSize = 72.0;   // Avatar proporcional
         
         // ⬅️ NUEVA ESTRATEGIA: Scale en lugar de expandir horizontalmente
         final double targetScale = _isHovered ? 1.1 : 1.0; // 10% más grande en hover

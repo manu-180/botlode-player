@@ -22,8 +22,8 @@ class WhatsAppButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const double buttonSize = 84.0; // Fijo, un poco más grande que la burbuja del bot
-    const double iconSize = 34.0;
+    const double buttonSize = 86.0; // Igual que la burbuja del bot (alineación perfecta)
+    const double iconSize = 36.0;
 
     final buttonColor = isDarkMode
         ? const Color(0xFF25D366)
