@@ -134,11 +134,17 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
 
     final reversedMessages = chatState.messages.reversed.toList();
 
-    // ⬅️ Padding horizontal responsive: en móvil más margen + safe area para no chocar con bordes
+    // ⬅️ Padding horizontal responsive + detección de teclado
     final mq = MediaQuery.of(context);
     final double horizontalPadding = isMobile
         ? (20.0 + (mq.padding.left > mq.padding.right ? mq.padding.left : mq.padding.right)).clamp(24.0, 40.0)
         : 20.0;
+    
+    // ⬅️ Detectar teclado: cuando viewInsets.bottom > 0, el teclado está visible
+    final isKeyboardVisible = mq.viewInsets.bottom > 0;
+    // ⬅️ Reducir altura del header cuando teclado visible para dar espacio al chat + input
+    // 80px es suficiente para botones (top: 16 + 48) y status (bottom: 12 + ~30)
+    final double headerHeight = isKeyboardVisible ? 80.0 : 200.0;
 
     // --- ESCUCHA DE APERTURA/CIERRE ---
     ref.listen(chatOpenProvider, (previous, isOpen) {
@@ -194,10 +200,10 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                     Positioned.fill(child: Container(color: solidBgColor)),
                     Column(
                       children: [
-                        // HEADER
-                        // ⬅️ NUEVO: Altura ajustada sin necesidad de espacio para appbar
-                        Container(
-                          height: 200, // ⬅️ Altura aumentada para dar más espacio al avatar
+                        // HEADER - Se adapta al teclado (200px normal, 60px con teclado visible)
+                        AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          height: headerHeight,
                           width: double.infinity,
                           decoration: BoxDecoration(
                              color: solidBgColor,
@@ -205,10 +211,18 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                           ),
                           child: Stack(
                             children: [
-                              const Positioned.fill(
-                                child: Padding(
-                                  padding: EdgeInsets.only(bottom: 20),
-                                  child: BotAvatarWidget(), 
+                              // Avatar: oculto cuando teclado visible para ahorrar espacio
+                              AnimatedOpacity(
+                                duration: const Duration(milliseconds: 200),
+                                opacity: isKeyboardVisible ? 0.0 : 1.0,
+                                child: IgnorePointer(
+                                  ignoring: isKeyboardVisible,
+                                  child: const Positioned.fill(
+                                    child: Padding(
+                                      padding: EdgeInsets.only(bottom: 20),
+                                      child: BotAvatarWidget(), 
+                                    ),
+                                  ),
                                 ),
                               ),
                               Positioned(

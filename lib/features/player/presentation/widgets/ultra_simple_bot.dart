@@ -42,6 +42,7 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
   
   // ⬅️ ANIMACIÓN PRO: Controlar visibilidad para que la animación de cierre se vea
   bool _shouldRenderChat = false; // Controla si el chat está en el árbol de widgets
+  bool _showBubbles = false; // Controla cuándo aparecen las burbujas (con delay al cerrar chat)
   
   // ⬅️ ANIMACIÓN PROFESIONAL: Controller para animación personalizada
   late AnimationController _animationController;
@@ -119,8 +120,12 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
         });
         
         // ⬅️ NUEVO: Si el chat ya está abierto al inicializar, marcar como online y renderizar
-        if (ref.read(chatOpenProvider)) {
-          setState(() => _shouldRenderChat = true);
+        final initialIsOpen = ref.read(chatOpenProvider);
+        if (initialIsOpen) {
+          setState(() {
+            _shouldRenderChat = true;
+            _showBubbles = false; // Chat abierto → burbujas ocultas
+          });
           _animationController.value = 1.0; // Saltar animación si ya está abierto
           Future.microtask(() {
             try {
@@ -130,6 +135,9 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
               // Error silenciado
             }
           });
+        } else {
+          // Chat cerrado al iniciar → mostrar burbujas inmediatamente
+          setState(() => _showBubbles = true);
         }
         
         // ⬅️ Estado inicial de WhatsApp para ajustar tamaño del iframe
@@ -262,17 +270,26 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
       
       // ⬅️ ANIMACIÓN PRO: Controlar cuándo el chat está en el árbol de widgets
       if (current) {
-        // Abrir: inmediatamente renderizar para que la animación de entrada se vea
-        setState(() => _shouldRenderChat = true);
+        // Abrir: ocultar burbujas inmediatamente y renderizar chat
+        setState(() {
+          _showBubbles = false; // Burbujas desaparecen al abrir
+          _shouldRenderChat = true;
+        });
         // Iniciar animación de apertura
         _animationController.forward();
       } else {
-        // Cerrar: iniciar animación de cierre
+        // Cerrar: iniciar animación de cierre del chat
         _animationController.reverse();
         // Esperar a que termine la animación (500ms) antes de quitar del árbol
         Future.delayed(const Duration(milliseconds: 500), () {
           if (mounted && !ref.read(chatOpenProvider)) {
             setState(() => _shouldRenderChat = false);
+          }
+        });
+        // Mostrar burbujas con delay (después de que el chat salga)
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted && !ref.read(chatOpenProvider)) {
+            setState(() => _showBubbles = true);
           }
         });
       }
@@ -540,14 +557,14 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
               bottom: isMobile ? 16.0 : 40.0,
               right: isMobile ? 16.0 : 40.0,
               child: AnimatedScale(
-                scale: isOpen ? 0.0 : 1.0,
+                scale: _showBubbles ? 1.0 : 0.0,
                 duration: const Duration(milliseconds: 300),
-                curve: isOpen ? Curves.easeInCubic : Curves.easeOutBack,
+                curve: _showBubbles ? Curves.easeOutBack : Curves.easeInCubic,
                 child: AnimatedOpacity(
-                  opacity: isOpen ? 0.0 : 1.0,
+                  opacity: _showBubbles ? 1.0 : 0.0,
                   duration: const Duration(milliseconds: 250),
                   child: Visibility(
-                    visible: !isOpen,
+                    visible: _showBubbles,
                     maintainState: true,
                     child: MouseRegion(
                       onEnter: (_) => setState(() => _isHovered = true),
@@ -601,14 +618,14 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
                 bottom: padBottom + kFloatingSize + kGap,
                 right: padRight,
                 child: AnimatedScale(
-                  scale: isOpen ? 0.0 : 1.0,
+                  scale: _showBubbles ? 1.0 : 0.0,
                   duration: const Duration(milliseconds: 300),
-                  curve: isOpen ? Curves.easeInCubic : Curves.easeOutBack,
+                  curve: _showBubbles ? Curves.easeOutBack : Curves.easeInCubic,
                   child: AnimatedOpacity(
-                    opacity: isOpen ? 0.0 : 1.0,
+                    opacity: _showBubbles ? 1.0 : 0.0,
                     duration: const Duration(milliseconds: 250),
                     child: Visibility(
-                      visible: !isOpen,
+                      visible: _showBubbles,
                       maintainState: true,
                       child: WhatsAppButton(
                         phoneNumber: botConfig.telefono!,
