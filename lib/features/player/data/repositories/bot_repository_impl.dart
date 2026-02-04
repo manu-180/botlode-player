@@ -20,6 +20,8 @@ class BotRepositoryImpl implements BotRepository {
       isDarkMode: true,
       showOfflineAlert: false,
       initialMessage: null,
+      wpp: false,
+      telefono: null,
     );
 
     if (botId.isEmpty) {

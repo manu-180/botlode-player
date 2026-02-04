@@ -9,8 +9,8 @@ import 'package:botlode_player/features/player/presentation/providers/chat_provi
 import 'package:botlode_player/features/player/presentation/providers/loader_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
 import 'package:botlode_player/features/player/presentation/views/chat_panel_view.dart';
-import 'package:botlode_player/features/player/presentation/widgets/global_connectivity_overlay.dart';
 import 'package:botlode_player/features/player/presentation/widgets/rive_avatar.dart';
+import 'package:botlode_player/features/player/presentation/widgets/whatsapp_button.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -551,8 +551,49 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
               ),
             ),
 
-          // ⬅️ OVERLAY GLOBAL DE CONECTIVIDAD (full-screen, incluso con chat cerrado)
-          const GlobalConnectivityOverlay(),
+          // ⬅️ BOTÓN DE WHATSAPP (arriba de la burbuja del bot)
+          Consumer(
+            builder: (context, ref, _) {
+              final botConfig = ref.watch(botConfigProvider).asData?.value;
+              
+              // Solo mostrar si wpp está habilitado, hay un teléfono y el chat está cerrado
+              if (botConfig == null || 
+                  !botConfig.wpp || 
+                  botConfig.telefono == null || 
+                  botConfig.telefono!.isEmpty ||
+                  isOpen) {
+                return const SizedBox.shrink();
+              }
+              
+              // ⬅️ Posicionar arriba de la burbuja (burbuja está en bottom: 40, size: 80)
+              // WhatsApp button: 64px de alto + 12px de separación = bottom: 136px
+              return Positioned(
+                bottom: isMobile ? 108.0 : 136.0, // 40 + 80 + 16 = 136px (40 + 64 + 4 mobile)
+                right: isMobile ? 24.0 : 48.0, // Centrado con la burbuja (40 + 8)
+                child: AnimatedScale(
+                  scale: isOpen ? 0.0 : 1.0,
+                  duration: const Duration(milliseconds: 300),
+                  curve: isOpen ? Curves.easeInCubic : Curves.easeOutBack,
+                  child: AnimatedOpacity(
+                    opacity: isOpen ? 0.0 : 1.0,
+                    duration: const Duration(milliseconds: 250),
+                    child: Visibility(
+                      visible: !isOpen,
+                      maintainState: true,
+                      child: WhatsAppButton(
+                        phoneNumber: botConfig.telefono!,
+                        isDarkMode: botConfig.isDarkMode,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+
+          // ⬅️ OVERLAY DESHABILITADO: Solo usamos el snackbar del HTML padre (centro de pantalla)
+          // El GlobalConnectivityOverlay era redundante con el snackbar
+          // const GlobalConnectivityOverlay(),
         ],
       ),
     );

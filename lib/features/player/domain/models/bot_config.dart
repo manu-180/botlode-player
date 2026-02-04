@@ -8,6 +8,8 @@ class BotConfig {
   final bool isDarkMode; 
   final bool showOfflineAlert; 
   final String? initialMessage; // ⬅️ Mensaje inicial del bot
+  final bool wpp; // ⬅️ Habilitar botón de WhatsApp
+  final String? telefono; // ⬅️ Número de WhatsApp (ej: '5491134272488')
 
   BotConfig({
     required this.name,
@@ -16,6 +18,8 @@ class BotConfig {
     required this.isDarkMode,
     required this.showOfflineAlert,
     this.initialMessage,
+    required this.wpp,
+    this.telefono,
   });
 
   factory BotConfig.fromJson(Map<String, dynamic> json) {
@@ -29,6 +33,10 @@ class BotConfig {
       showOfflineAlert: _parseBool(json['show_offline_alert'], false),
       // ⬅️ Mensaje inicial: si no existe, usar el por defecto
       initialMessage: json['initial_message'] as String?,
+      // ⬅️ WhatsApp: habilitar botón flotante
+      wpp: _parseBool(json['wpp'], false),
+      // ⬅️ Teléfono de WhatsApp (ej: '5491134272488')
+      telefono: json['telefono'] as String?,
     );
   }
 
