@@ -39,8 +39,8 @@ class BotConfig {
       wpp: _parseBool(json['wpp'], false),
       // ⬅️ Teléfono de WhatsApp (ej: '5491134272488')
       telefono: json['telefono'] as String?,
-      // ⬅️ Tamaño de burbujas (default 86px si no existe en BD)
-      bubbleSize: (json['bubble_size'] as num?)?.toDouble() ?? 86.0,
+      // ⬅️ Tamaño de burbujas (rango 60–100px; default 86 si no existe en BD)
+      bubbleSize: ((json['bubble_size'] as num?)?.toDouble() ?? 86.0).clamp(60.0, 100.0),
     );
   }
 

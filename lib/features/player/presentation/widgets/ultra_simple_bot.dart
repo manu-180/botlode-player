@@ -279,8 +279,15 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
           _showBubbles = false; // Burbujas desaparecen al abrir
           _shouldRenderChat = true;
         });
-        // Iniciar animación de apertura
-        _animationController.forward();
+        // ⬅️ CRÍTICO primera vez: iniciar animación DESPUÉS del primer layout.
+        // Si se llama forward() en el mismo frame, el iframe/contenedor puede no tener
+        // dimensiones reales aún y la animación entra mal; al esperar un frame
+        // el panel ya tiene tamaño correcto y la slide desde la derecha se ve bien.
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && ref.read(chatOpenProvider)) {
+            _animationController.forward();
+          }
+        });
       } else {
         // Cerrar: iniciar animación de cierre del chat
         _animationController.reverse();
@@ -558,46 +565,60 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
               ),
           ),
 
-          // BURBUJA FLOTANTE (mismo tamaño y alineación que WhatsApp)
-            Positioned(
-              bottom: isMobile ? 16.0 : 40.0,
-              right: isMobile ? 16.0 : 40.0,
-              child: AnimatedScale(
-                scale: _showBubbles ? 1.0 : 0.0,
-                duration: const Duration(milliseconds: 250),
-                curve: _showBubbles ? Curves.easeOutBack : Curves.easeInCubic,
-                child: AnimatedOpacity(
-                  opacity: _showBubbles ? 1.0 : 0.0,
-                  duration: const Duration(milliseconds: 200),
-                  child: IgnorePointer(
-                    ignoring: !_showBubbles,
-                    child: MouseRegion(
-                      onEnter: (_) => setState(() => _isHovered = true),
-                      onExit: (_) => setState(() => _isHovered = false),
-                      child: Consumer(
-                        builder: (context, ref, _) {
-                          final botConfig = ref.watch(botConfigProvider);
-                          
-                          return botConfig.when(
-                            data: (config) => _buildExpandableBubble(
-                              name: config.name.toUpperCase(),
-                              subtext: "¿En qué te ayudo?",
-                            ),
-                            loading: () => _buildExpandableBubble(
-                              name: "CARGANDO...",
-                              subtext: "",
-                            ),
-                            error: (_, __) => _buildExpandableBubble(
-                              name: "BOT",
-                              subtext: "Haz click para abrir",
-                            ),
-                          );
-                        },
+          // BURBUJA FLOTANTE (posición condicional: más espacio si wpp true para ambas burbujas)
+            Consumer(
+              builder: (context, ref, _) {
+                final screenW = MediaQuery.sizeOf(context).width;
+                final bool isMobileBubble = screenW < 600;
+                final botConfig = ref.watch(botConfigProvider).asData?.value;
+                final bool wpp = botConfig?.wpp ?? false;
+                // wpp true: más margen inferior para que no se corten ambas burbujas (100px)
+                // wpp false: solo espacio para el bot
+                final double padBottom = wpp
+                    ? (isMobileBubble ? 22.0 : 56.0)
+                    : (isMobileBubble ? 12.0 : 24.0);
+                final double padRight = isMobileBubble ? 16.0 : 40.0;
+                return Positioned(
+                  bottom: padBottom,
+                  right: padRight,
+                  child: AnimatedScale(
+                    scale: _showBubbles ? 1.0 : 0.0,
+                    duration: const Duration(milliseconds: 250),
+                    curve: _showBubbles ? Curves.easeOutBack : Curves.easeInCubic,
+                    child: AnimatedOpacity(
+                      opacity: _showBubbles ? 1.0 : 0.0,
+                      duration: const Duration(milliseconds: 200),
+                      child: IgnorePointer(
+                        ignoring: !_showBubbles,
+                        child: MouseRegion(
+                          onEnter: (_) => setState(() => _isHovered = true),
+                          onExit: (_) => setState(() => _isHovered = false),
+                          child: Consumer(
+                            builder: (context, ref, _) {
+                              final botConfig = ref.watch(botConfigProvider);
+                              
+                              return botConfig.when(
+                                data: (config) => _buildExpandableBubble(
+                                  name: config.name.toUpperCase(),
+                                  subtext: "¿En qué te ayudo?",
+                                ),
+                                loading: () => _buildExpandableBubble(
+                                  name: "CARGANDO...",
+                                  subtext: "",
+                                ),
+                                error: (_, __) => _buildExpandableBubble(
+                                  name: "BOT",
+                                  subtext: "Haz click para abrir",
+                                ),
+                              );
+                            },
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ),
+                );
+              },
             ),
 
           // BOTÓN DE WHATSAPP (arriba de la burbuja del bot)
@@ -614,10 +635,10 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
                 return const SizedBox.shrink();
               }
               
-              // ⬅️ Tamaño dinámico desde BD (sync en tiempo real)
+              // ⬅️ Mismo margen que la burbuja del bot (condicional por wpp)
               final double kFloatingSize = botConfig.bubbleSize;
               const double kGap = 12.0;
-              final double padBottom = isMobile ? 16.0 : 40.0;
+              final double padBottom = (isMobile ? 22.0 : 56.0);
               final double padRight = isMobile ? 16.0 : 40.0;
               return Positioned(
                 bottom: padBottom + kFloatingSize + kGap,
