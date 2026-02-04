@@ -44,6 +44,9 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
   bool _shouldRenderChat = false; // Controla si el chat está en el árbol de widgets
   bool _showBubbles = false; // Controla cuándo aparecen las burbujas (con delay al cerrar chat)
   
+  // ⬅️ HIT ZONES: Suscripción a mensajes del HTML padre
+  dynamic _messageSubscription;
+  
   // ⬅️ ANIMACIÓN PROFESIONAL: Controller para animación personalizada
   late AnimationController _animationController;
   late Animation<double> _scaleAnimation;
@@ -55,18 +58,39 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
   void initState() {
     super.initState();
     
-    // ⬅️ SCROLL PASSTHROUGH: Interceptar eventos de scroll y reenviarlos al padre
-    // Esto permite hacer scroll en la página principal aunque el mouse esté sobre el iframe
-    html.window.onWheel.listen((event) {
+    // ⬅️ HIT ZONES: Escuchar mensajes del HTML padre para clicks en las zonas interactivas
+    // Esto permite que el iframe tenga pointer-events: none pero las burbujas sigan siendo clickeables
+    _messageSubscription = html.window.onMessage.listen((event) {
+      if (!mounted) return; // ⬅️ IMPORTANTE: Verificar que el widget siga montado
       try {
-        // Solo reenviar scroll si el chat está CERRADO (burbujas visibles)
-        // Cuando el chat está abierto, el scroll debe funcionar dentro del chat
-        if (!ref.read(chatOpenProvider)) {
-          html.window.parent?.postMessage({
-            'type': 'WHEEL_EVENT',
-            'deltaX': event.deltaX,
-            'deltaY': event.deltaY,
-          }, '*');
+        final data = event.data;
+        if (data is Map) {
+          final type = data['type'];
+          if (type == 'HITZONE_CLICK_BOT') {
+            // Click en la burbuja del bot → abrir chat
+            if (kDebugMode) print('🎯 HITZONE_CLICK_BOT recibido');
+            ref.read(chatOpenProvider.notifier).set(true);
+          } else if (type == 'HITZONE_CLICK_WPP') {
+            // Click en la burbuja de WhatsApp → abrir WhatsApp
+            if (kDebugMode) print('🎯 HITZONE_CLICK_WPP recibido');
+            final botConfig = ref.read(botConfigProvider).asData?.value;
+            if (botConfig?.telefono != null && botConfig!.telefono!.isNotEmpty) {
+              final phone = botConfig.telefono!.replaceAll(RegExp(r'[^\d+]'), '');
+              html.window.open('https://wa.me/$phone', '_blank');
+            }
+          } else if (type == 'HITZONE_ENTER_BOT') {
+            // Hover sobre la burbuja → notificar al padre para expandir
+            if (!_isHovered) {
+              setState(() => _isHovered = true);
+              html.window.parent?.postMessage('CMD_HOVER_START', '*');
+            }
+          } else if (type == 'HITZONE_LEAVE_BOT') {
+            // Hover terminó → notificar al padre para contraer
+            if (_isHovered) {
+              setState(() => _isHovered = false);
+              html.window.parent?.postMessage('CMD_HOVER_END', '*');
+            }
+          }
         }
       } catch (e) {
         // Error silenciado
@@ -174,6 +198,8 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
   void dispose() {
     // ⬅️ NUEVO: Asegurar que se marque como offline al dispose del widget
     _presenceManager?.setOffline();
+    // ⬅️ Cancelar suscripción a mensajes del HTML padre
+    _messageSubscription?.cancel();
     _animationController.dispose();
     super.dispose();
   }
