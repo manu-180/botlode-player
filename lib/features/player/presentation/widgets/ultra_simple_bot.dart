@@ -131,6 +131,9 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
             }
           });
         }
+        
+        // ⬅️ Estado inicial de WhatsApp para ajustar tamaño del iframe
+        Future.microtask(() => _sendWppVisibility(ref));
       } catch (e) {
         // Error silenciado
       }
@@ -145,6 +148,22 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
     super.dispose();
   }
 
+  void _sendWppVisibility(WidgetRef ref) {
+    try {
+      final isOpen = ref.read(chatOpenProvider);
+      final botConfig = ref.read(botConfigProvider).asData?.value;
+      final showWpp = !isOpen && 
+          botConfig != null && 
+          botConfig.wpp && 
+          botConfig.telefono != null && 
+          botConfig.telefono!.isNotEmpty;
+      html.window.parent?.postMessage(
+        showWpp ? 'CMD_WPP_VISIBLE' : 'CMD_WPP_HIDDEN',
+        '*',
+      );
+    } catch (_) {}
+  }
+
   @override
   Widget build(BuildContext context) {
     // ⬅️ CRÍTICO: Usar chatOpenProvider directamente para que StatusIndicator funcione correctamente
@@ -155,6 +174,14 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
     // Esto evita que se dispose inmediatamente después de usarlo
     final presenceManager = ref.watch(presenceManagerProvider);
     _presenceManager = presenceManager; // Actualizar referencia
+    
+    // ⬅️ Enviar CMD_WPP_VISIBLE/HIDDEN para que el HTML ajuste el tamaño del iframe
+    ref.listen(chatOpenProvider, (prev, isOpen) {
+      _sendWppVisibility(ref);
+    });
+    ref.listen(botConfigProvider, (prev, next) {
+      _sendWppVisibility(ref);
+    });
     
     // ⬅️ Enviar showOfflineAlert al HTML cuando la config del bot esté disponible (widget activo = UltraSimpleBot).
     // Así la página padre puede ocultar los snackbars si el bot tiene show_offline_alert = false.
@@ -565,12 +592,13 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
                 return const SizedBox.shrink();
               }
               
-              // ⬅️ Posicionar arriba de la burbuja del bot
+              // ⬅️ Posicionar arriba de la burbuja del bot con separación generosa
               // Burbuja bot: bottom: 40px, size: 80px
-              // WhatsApp button: size: 64px, separación: 8px
-              // Cálculo: 40 (base) + 80 (burbuja) + 8 (separación) = 128px
+              // Separación: 16px entre burbujas
+              // WhatsApp button: size: 64px
+              // Cálculo: 40 (base) + 80 (burbuja) + 16 (separación) = 136px
               return Positioned(
-                bottom: isMobile ? 100.0 : 128.0, 
+                bottom: isMobile ? 112.0 : 136.0, 
                 right: isMobile ? 24.0 : 48.0, // Centrado con la burbuja
                 child: AnimatedScale(
                   scale: isOpen ? 0.0 : 1.0,
