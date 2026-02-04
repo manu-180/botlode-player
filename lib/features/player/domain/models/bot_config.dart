@@ -10,6 +10,7 @@ class BotConfig {
   final String? initialMessage; // ⬅️ Mensaje inicial del bot
   final bool wpp; // ⬅️ Habilitar botón de WhatsApp
   final String? telefono; // ⬅️ Número de WhatsApp (ej: '5491134272488')
+  final double bubbleSize; // ⬅️ Tamaño de burbujas flotantes en píxeles (bot + WhatsApp)
 
   BotConfig({
     required this.name,
@@ -20,6 +21,7 @@ class BotConfig {
     this.initialMessage,
     required this.wpp,
     this.telefono,
+    this.bubbleSize = 86.0, // Default 86px
   });
 
   factory BotConfig.fromJson(Map<String, dynamic> json) {
@@ -37,6 +39,8 @@ class BotConfig {
       wpp: _parseBool(json['wpp'], false),
       // ⬅️ Teléfono de WhatsApp (ej: '5491134272488')
       telefono: json['telefono'] as String?,
+      // ⬅️ Tamaño de burbujas (default 86px si no existe en BD)
+      bubbleSize: (json['bubble_size'] as num?)?.toDouble() ?? 86.0,
     );
   }
 

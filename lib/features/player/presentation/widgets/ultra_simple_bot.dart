@@ -136,8 +136,12 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
             }
           });
         } else {
-          // Chat cerrado al iniciar → mostrar burbujas inmediatamente
-          setState(() => _showBubbles = true);
+          // Chat cerrado al iniciar → esperar un momento y luego mostrar burbujas con animación
+          Future.delayed(const Duration(milliseconds: 800), () {
+            if (mounted && !ref.read(chatOpenProvider)) {
+              setState(() => _showBubbles = true);
+            }
+          });
         }
         
         // ⬅️ Estado inicial de WhatsApp para ajustar tamaño del iframe
@@ -610,8 +614,8 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
                 return const SizedBox.shrink();
               }
               
-              // Mismo tamaño (86px) y mismo right que la burbuja; arriba con gap fijo
-              const double kFloatingSize = 86.0;
+              // ⬅️ Tamaño dinámico desde BD (sync en tiempo real)
+              final double kFloatingSize = botConfig.bubbleSize;
               const double kGap = 12.0;
               final double padBottom = isMobile ? 16.0 : 40.0;
               final double padRight = isMobile ? 16.0 : 40.0;
@@ -630,6 +634,7 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
                       child: WhatsAppButton(
                         phoneNumber: botConfig.telefono!,
                         isDarkMode: botConfig.isDarkMode,
+                        bubbleSize: botConfig.bubbleSize,
                       ),
                     ),
                   ),
@@ -655,8 +660,9 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
         final botConfig = ref.watch(botConfigProvider);
         final isDarkMode = botConfig.asData?.value.isDarkMode ?? true;
         
-        const double bubbleSize = 86.0; // Igual que WhatsAppButton (alineación perfecta)
-        const double headSize = 72.0;   // Avatar proporcional
+        // ⬅️ Tamaño dinámico desde BD (sync en tiempo real)
+        final double bubbleSize = botConfig.asData?.value.bubbleSize ?? 86.0;
+        final double headSize = bubbleSize * 0.837; // Proporción 72/86 ≈ 0.837
         
         // ⬅️ NUEVA ESTRATEGIA: Scale en lugar de expandir horizontalmente
         final double targetScale = _isHovered ? 1.1 : 1.0; // 10% más grande en hover
