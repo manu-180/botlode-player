@@ -149,6 +149,7 @@ class PresenceManager {
     _heartbeatTimer?.cancel();
     if (isOnline) {
       // Si estamos online, iniciamos el latido cada 15 segundos (más rápido para asegurar)
+      // _sendToSupabase ya comprueba navigator.onLine y no envía si no hay red
       _heartbeatTimer = Timer.periodic(const Duration(seconds: 15), (_) {
         if (_shouldBeOnline) _sendToSupabase(true);
       });
@@ -162,6 +163,9 @@ class PresenceManager {
   }
 
   Future<void> _sendToSupabase(bool status) async {
+    // ⬅️ No hacer peticiones cuando no hay red: evita ERR_INTERNET_DISCONNECTED en consola
+    if (!(html.window.navigator.onLine ?? true)) return;
+
     try {
       // ⬅️ Hora de Argentina (UTC-3): restar 3 horas y asegurar que se guarde como hora local
       final nowLocal = DateTime.now().toLocal();
@@ -190,10 +194,10 @@ class PresenceManager {
         }, onConflict: 'session_id');
       }
     } catch (e) {
-      // REINTENTO RÁPIDO (Quick Retry Strategy)
-      if (_shouldBeOnline == status) {
+      // Solo reintentar si hay red; si no hay red evita spam de reintentos
+      if ((html.window.navigator.onLine ?? true) && _shouldBeOnline == status) {
         _retryTimer = Timer(const Duration(seconds: 2), () {
-           if (_shouldBeOnline == status) _sendToSupabase(status);
+          if (_shouldBeOnline == status) _sendToSupabase(status);
         });
       }
     }

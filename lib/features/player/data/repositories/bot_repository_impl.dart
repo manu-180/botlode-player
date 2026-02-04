@@ -36,9 +36,22 @@ class BotRepositoryImpl implements BotRepository {
             return BotConfig.fromJson(data.first);
           })
           .handleError((error) {
-            debugPrint("🔴 CRITICAL: Error en stream de configuración: $error");
+            // Errores de red/WebSocket al estar sin conexión: no loguear como CRITICAL
+            final msg = error.toString().toLowerCase();
+            final isConnectionError = msg.contains('realtime') ||
+                msg.contains('websocket') ||
+                msg.contains('channelerror') ||
+                msg.contains('1006') ||
+                msg.contains('connection');
+            if (isConnectionError) {
+              if (kDebugMode) {
+                debugPrint("🟡 Realtime sin conexión (esperado cuando no hay red): $error");
+              }
+            } else {
+              debugPrint("🔴 CRITICAL: Error en stream de configuración: $error");
+            }
             // En caso de error, emitimos la config por defecto para no romper la UI
-            return defaultConfig; 
+            return defaultConfig;
           });
     } catch (e) {
       debugPrint("🔴 CRITICAL: Fallo al inicializar stream: $e");
