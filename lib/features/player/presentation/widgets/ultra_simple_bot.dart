@@ -565,11 +565,13 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
                 return const SizedBox.shrink();
               }
               
-              // ⬅️ Posicionar arriba de la burbuja (burbuja está en bottom: 40, size: 80)
-              // WhatsApp button: 64px de alto + 12px de separación = bottom: 136px
+              // ⬅️ Posicionar arriba de la burbuja del bot
+              // Burbuja bot: bottom: 40px, size: 80px
+              // WhatsApp button: size: 64px, separación: 8px
+              // Cálculo: 40 (base) + 80 (burbuja) + 8 (separación) = 128px
               return Positioned(
-                bottom: isMobile ? 108.0 : 136.0, // 40 + 80 + 16 = 136px (40 + 64 + 4 mobile)
-                right: isMobile ? 24.0 : 48.0, // Centrado con la burbuja (40 + 8)
+                bottom: isMobile ? 100.0 : 128.0, 
+                right: isMobile ? 24.0 : 48.0, // Centrado con la burbuja
                 child: AnimatedScale(
                   scale: isOpen ? 0.0 : 1.0,
                   duration: const Duration(milliseconds: 300),

@@ -1,5 +1,6 @@
 import 'dart:html' as html;
 import 'package:flutter/material.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 /// Botón flotante de WhatsApp épico con efecto WOW
 /// Se posiciona arriba de la burbuja del bot
@@ -20,31 +21,42 @@ class WhatsAppButton extends StatefulWidget {
 class _WhatsAppButtonState extends State<WhatsAppButton> 
     with SingleTickerProviderStateMixin {
   bool _isHovered = false;
-  late AnimationController _pulseController;
-  late Animation<double> _pulseAnimation;
+  late AnimationController _iconController;
+  late Animation<double> _iconRotation;
+  late Animation<double> _iconScale;
 
   @override
   void initState() {
     super.initState();
     
-    // ⬅️ Animación de pulso sutil para llamar la atención
-    _pulseController = AnimationController(
+    // ⬅️ Animación épica SOLO del ícono (rotación + escala sutil)
+    _iconController = AnimationController(
       duration: const Duration(milliseconds: 2000),
       vsync: this,
     )..repeat(reverse: true);
     
-    _pulseAnimation = Tween<double>(
-      begin: 1.0,
-      end: 1.08,
+    // Rotación muy sutil del ícono
+    _iconRotation = Tween<double>(
+      begin: -0.05, // -3 grados
+      end: 0.05,    // +3 grados
     ).animate(CurvedAnimation(
-      parent: _pulseController,
+      parent: _iconController,
+      curve: Curves.easeInOut,
+    ));
+    
+    // Escala muy sutil del ícono
+    _iconScale = Tween<double>(
+      begin: 0.95,
+      end: 1.05,
+    ).animate(CurvedAnimation(
+      parent: _iconController,
       curve: Curves.easeInOut,
     ));
   }
 
   @override
   void dispose() {
-    _pulseController.dispose();
+    _iconController.dispose();
     super.dispose();
   }
 
@@ -61,86 +73,79 @@ class _WhatsAppButtonState extends State<WhatsAppButton>
 
   @override
   Widget build(BuildContext context) {
-    const double buttonSize = 64.0; // Tamaño del botón
-    const double iconSize = 32.0; // Tamaño del ícono
+    const double buttonSize = 64.0; // Tamaño del botón (mismo que la burbuja bot: 80)
+    const double iconSize = 28.0; // Tamaño del ícono
     
-    // ⬅️ NUEVA ESTRATEGIA: Scale en lugar de expandir
-    final double targetScale = _isHovered ? 1.15 : 1.0; // 15% más grande en hover
-    final double targetBlur = _isHovered ? 20.0 : 12.0; // Shadow más pronunciado en hover
+    // ⬅️ MISMO COMPORTAMIENTO QUE LA BURBUJA DEL BOT: Solo hover, sin pulso automático
+    final double targetScale = _isHovered ? 1.1 : 1.0; // 10% más grande en hover (igual que bot)
+    final double targetBlur = _isHovered ? 15.0 : 10.0; // Shadow igual que bot
     
     // ⬅️ Color de WhatsApp oficial con adaptación al tema
     final buttonColor = widget.isDarkMode 
         ? const Color(0xFF25D366) // Verde WhatsApp
         : const Color(0xFF20BA5A); // Verde más oscuro para light mode
     
-    final borderColor = Colors.white.withOpacity(0.2);
+    final borderColor = Colors.white.withOpacity(0.15);
     
     return MouseRegion(
       onEnter: (_) => setState(() => _isHovered = true),
       onExit: (_) => setState(() => _isHovered = false),
-      child: AnimatedBuilder(
-        animation: _pulseAnimation,
-        builder: (context, child) {
-          return AnimatedScale(
-            scale: _isHovered ? targetScale : _pulseAnimation.value,
+      child: AnimatedScale(
+        scale: targetScale,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOutCubic,
+        child: GestureDetector(
+          onTap: _openWhatsApp,
+          child: AnimatedContainer(
             duration: const Duration(milliseconds: 250),
             curve: Curves.easeOutCubic,
-            child: GestureDetector(
-              onTap: _openWhatsApp,
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 250),
-                curve: Curves.easeOutCubic,
-                width: buttonSize,
-                height: buttonSize,
-                decoration: BoxDecoration(
-                  // ⬅️ Gradiente para efecto más premium
-                  gradient: RadialGradient(
-                    colors: [
-                      buttonColor,
-                      buttonColor.withOpacity(0.85),
-                    ],
-                    stops: const [0.0, 1.0],
-                  ),
-                  borderRadius: BorderRadius.circular(buttonSize / 2),
-                  border: Border.all(
-                    color: borderColor,
-                    width: 2.0,
-                  ),
-                  boxShadow: [
-                    // ⬅️ Sombra principal
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.3),
-                      blurRadius: targetBlur,
-                      offset: const Offset(0, 4),
-                    ),
-                    // ⬅️ Glow verde para efecto WOW
-                    BoxShadow(
-                      color: buttonColor.withOpacity(_isHovered ? 0.5 : 0.3),
-                      blurRadius: _isHovered ? 24.0 : 16.0,
-                      offset: const Offset(0, 0),
-                    ),
-                  ],
+            width: buttonSize,
+            height: buttonSize,
+            decoration: BoxDecoration(
+              color: buttonColor,
+              borderRadius: BorderRadius.circular(buttonSize / 2),
+              border: Border.all(
+                color: borderColor,
+                width: 1.0,
+              ),
+              boxShadow: [
+                // ⬅️ Sombra principal (igual que bot)
+                BoxShadow(
+                  color: Colors.black.withOpacity(widget.isDarkMode ? 0.3 : 0.15),
+                  blurRadius: targetBlur,
+                  offset: const Offset(0, 4),
                 ),
-                child: Material(
-                  color: Colors.transparent,
-                  borderRadius: BorderRadius.circular(buttonSize / 2),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(buttonSize / 2),
-                    onTap: _openWhatsApp,
-                    splashColor: Colors.white.withOpacity(0.2),
-                    child: Center(
-                      child: Icon(
-                        Icons.chat,
-                        color: Colors.white,
-                        size: iconSize,
-                      ),
-                    ),
+              ],
+            ),
+            child: Material(
+              color: Colors.transparent,
+              borderRadius: BorderRadius.circular(buttonSize / 2),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(buttonSize / 2),
+                onTap: _openWhatsApp,
+                child: Center(
+                  // ⬅️ ANIMACIÓN ÉPICA SOLO DEL ÍCONO (rotación + escala)
+                  child: AnimatedBuilder(
+                    animation: _iconController,
+                    builder: (context, child) {
+                      return Transform.rotate(
+                        angle: _iconRotation.value,
+                        child: Transform.scale(
+                          scale: _iconScale.value,
+                          child: FaIcon(
+                            FontAwesomeIcons.whatsapp,
+                            color: Colors.white,
+                            size: iconSize,
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
               ),
             ),
-          );
-        },
+          ),
+        ),
       ),
     );
   }
