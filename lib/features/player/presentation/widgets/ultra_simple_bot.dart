@@ -55,6 +55,24 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
   void initState() {
     super.initState();
     
+    // ⬅️ SCROLL PASSTHROUGH: Interceptar eventos de scroll y reenviarlos al padre
+    // Esto permite hacer scroll en la página principal aunque el mouse esté sobre el iframe
+    html.window.onWheel.listen((event) {
+      try {
+        // Solo reenviar scroll si el chat está CERRADO (burbujas visibles)
+        // Cuando el chat está abierto, el scroll debe funcionar dentro del chat
+        if (!ref.read(chatOpenProvider)) {
+          html.window.parent?.postMessage({
+            'type': 'WHEEL_EVENT',
+            'deltaX': event.deltaX,
+            'deltaY': event.deltaY,
+          }, '*');
+        }
+      } catch (e) {
+        // Error silenciado
+      }
+    });
+    
     // ⬅️ ANIMACIÓN PROFESIONAL: Inicializar controller con duración más fluida
     _animationController = AnimationController(
       duration: const Duration(milliseconds: 500),
