@@ -1,6 +1,7 @@
 // ULTRA SIMPLE - Burbuja + Chat COMPLEJO (chat_panel_view) para testing
 import 'dart:html' as html;
 import 'package:botlode_player/core/config/supabase_provider.dart';
+import 'package:botlode_player/core/network/connectivity_provider.dart';
 import 'package:botlode_player/core/services/presence_manager.dart';
 import 'package:botlode_player/core/services/presence_manager_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
@@ -10,6 +11,7 @@ import 'package:botlode_player/features/player/presentation/providers/ui_provide
 import 'package:botlode_player/features/player/presentation/views/chat_panel_view.dart';
 import 'package:botlode_player/features/player/presentation/widgets/global_connectivity_overlay.dart';
 import 'package:botlode_player/features/player/presentation/widgets/rive_avatar.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -34,6 +36,7 @@ class UltraSimpleBot extends ConsumerStatefulWidget {
 class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> 
     with SingleTickerProviderStateMixin {
   bool _isHovered = false;
+  bool _wasNetworkOffline = false; // ⬅️ Para enviar NETWORK_OFFLINE/ONLINE al padre solo una vez por transición
   PresenceManager? _presenceManager; // ⬅️ NUEVO: Mantener referencia al manager
   bool _lastKnownOpenState = false; // ⬅️ NUEVO: Trackear último estado conocido
   
@@ -99,6 +102,22 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
         // 1. Asegurar que chatControllerProvider esté inicializado (necesario para sessionId)
         ref.read(chatControllerProvider);
         
+        // ⬅️ CRÍTICO: Enviar configuración de showOfflineAlert al HTML padre INMEDIATAMENTE
+        // Esto asegura que el script botlode-connectivity.js tenga la configuración antes de cualquier evento de conectividad
+        Future.microtask(() {
+          try {
+            final botConfig = ref.read(botConfigProvider).asData?.value;
+            if (botConfig != null) {
+              html.window.parent?.postMessage({
+                'type': 'BOT_CONFIG',
+                'showOfflineAlert': botConfig.showOfflineAlert,
+              }, '*');
+            }
+          } catch (e) {
+            // Error silenciado
+          }
+        });
+        
         // ⬅️ NUEVO: Si el chat ya está abierto al inicializar, marcar como online y renderizar
         if (ref.read(chatOpenProvider)) {
           setState(() => _shouldRenderChat = true);
@@ -146,7 +165,67 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
           'type': 'BOT_CONFIG',
           'showOfflineAlert': show,
         }, '*');
-      } catch (_) {}
+        
+        if (kDebugMode) {
+          print('🛰 [Config] Enviado BOT_CONFIG al HTML padre: showOfflineAlert=$show');
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          print('⚠️ [Config] Error al enviar BOT_CONFIG: $e');
+        }
+      }
+    });
+
+    // ⬅️ LISTENER GLOBAL: Conectividad (se ejecuta aunque el chat esté cerrado).
+    // Solo envía NETWORK_OFFLINE/NETWORK_ONLINE al padre si en la tabla del bot show_offline_alert = true.
+    // ⚠️ CRÍTICO: Este listener funciona tanto en modo burbuja como con chat abierto
+    ref.listen(connectivityProvider, (prev, online) {
+      final showOfflineAlert = ref.read(botConfigProvider).asData?.value.showOfflineAlert ?? false;
+      
+      // ⬅️ DEBUG: Log para verificar detección de cambio de conectividad
+      if (kDebugMode) {
+        print('🛰 [Conectividad] Estado: ${online ? "ONLINE" : "OFFLINE"}, showOfflineAlert: $showOfflineAlert, chatOpen: $isOpen');
+      }
+      
+      if (!showOfflineAlert) return;
+      
+      try {
+        if (!online) {
+          if (_wasNetworkOffline) return;
+          _wasNetworkOffline = true;
+          
+          // ⬅️ CRÍTICO: Enviar mensajes al HTML padre para que muestre el snackbar
+          // Esto funciona incluso cuando el iframe es pequeño (modo burbuja 140x140px)
+          html.window.parent?.postMessage('NETWORK_OFFLINE', '*');
+          html.window.parent?.postMessage({
+            'type': 'connectivity',
+            'online': false,
+            'source': 'botlode_player',
+          }, '*');
+          
+          if (kDebugMode) {
+            print('🛰 [Conectividad] Enviados mensajes NETWORK_OFFLINE al HTML padre');
+          }
+        } else {
+          if (!_wasNetworkOffline) return;
+          _wasNetworkOffline = false;
+          
+          html.window.parent?.postMessage('NETWORK_ONLINE', '*');
+          html.window.parent?.postMessage({
+            'type': 'connectivity',
+            'online': true,
+            'source': 'botlode_player',
+          }, '*');
+          
+          if (kDebugMode) {
+            print('🛰 [Conectividad] Enviados mensajes NETWORK_ONLINE al HTML padre');
+          }
+        }
+      } catch (e) {
+        if (kDebugMode) {
+          print('⚠️ [Conectividad] Error al enviar mensaje al HTML padre: $e');
+        }
+      }
     });
 
     // ⬅️ Sincronizar estado online/offline con el historial
@@ -429,7 +508,7 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
               ),
           ),
 
-          // BURBUJA FLOTANTE
+          // BURBUJA FLOTANTE + cartel "Sin conexión" encima cuando chat cerrado y offline
             Positioned(
               bottom: isMobile ? 16.0 : 40.0, // ⬅️ RESPONSIVE: Menos espacio en móvil
               right: isMobile ? 16.0 : 40.0, // ⬅️ RESPONSIVE: Menos espacio en móvil
@@ -443,29 +522,46 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
                   child: Visibility(
                     visible: !isOpen,
                     maintainState: true,
-                    child: MouseRegion(
-                      onEnter: (_) => setState(() => _isHovered = true),
-                      onExit: (_) => setState(() => _isHovered = false),
-                      child: Consumer(
-                        builder: (context, ref, _) {
-                          final botConfig = ref.watch(botConfigProvider);
-                          
-                          return botConfig.when(
-                            data: (config) => _buildExpandableBubble(
-                              name: config.name.toUpperCase(),
-                              subtext: "¿En qué te ayudo?",
-                            ),
-                            loading: () => _buildExpandableBubble(
-                              name: "CARGANDO...",
-                              subtext: "",
-                            ),
-                            error: (_, __) => _buildExpandableBubble(
-                              name: "BOT",
-                              subtext: "Haz click para abrir",
-                            ),
-                          );
-                        },
-                      ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        // ⬅️ Cartel "Sin conexión" en modo burbuja (aviso sin abrir el chat)
+                        Consumer(
+                          builder: (context, ref, _) {
+                            final isOnline = ref.watch(connectivityProvider);
+                            final botConfig = ref.watch(botConfigProvider).asData?.value;
+                            final showOffline = botConfig?.showOfflineAlert ?? false;
+                            if (isOpen || isOnline || !showOffline) return const SizedBox.shrink();
+                            final isDarkMode = botConfig?.isDarkMode ?? true;
+                            return _BubbleOfflineBanner(isDarkMode: isDarkMode);
+                          },
+                        ),
+                        MouseRegion(
+                          onEnter: (_) => setState(() => _isHovered = true),
+                          onExit: (_) => setState(() => _isHovered = false),
+                          child: Consumer(
+                            builder: (context, ref, _) {
+                              final botConfig = ref.watch(botConfigProvider);
+                              
+                              return botConfig.when(
+                                data: (config) => _buildExpandableBubble(
+                                  name: config.name.toUpperCase(),
+                                  subtext: "¿En qué te ayudo?",
+                                ),
+                                loading: () => _buildExpandableBubble(
+                                  name: "CARGANDO...",
+                                  subtext: "",
+                                ),
+                                error: (_, __) => _buildExpandableBubble(
+                                  name: "BOT",
+                                  subtext: "Haz click para abrir",
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -571,6 +667,69 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
         );
 
       },
+    );
+  }
+}
+
+/// Cartel compacto "Sin conexión" que se muestra encima de la burbuja cuando el chat está cerrado.
+/// Así el usuario recibe el aviso sin tener que abrir el chat.
+class _BubbleOfflineBanner extends StatelessWidget {
+  final bool isDarkMode;
+
+  const _BubbleOfflineBanner({required this.isDarkMode});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Material(
+        color: Colors.transparent,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: isDarkMode
+                ? const Color(0xFF2A1810).withOpacity(0.98)
+                : const Color(0xFFFFE8D9).withOpacity(0.98),
+            border: Border.all(
+              color: isDarkMode
+                  ? const Color(0xFFFF8C40).withOpacity(0.5)
+                  : const Color(0xFFE07030).withOpacity(0.6),
+              width: 1,
+            ),
+            borderRadius: BorderRadius.circular(10),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.25),
+                blurRadius: 12,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.wifi_off_rounded,
+                size: 18,
+                color: isDarkMode
+                    ? const Color(0xFFFFB380)
+                    : const Color(0xFFC05020),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Sin conexión',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: isDarkMode
+                      ? const Color(0xFFFFB380)
+                      : const Color(0xFF8B4513),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
