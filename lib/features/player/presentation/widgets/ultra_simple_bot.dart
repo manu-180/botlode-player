@@ -595,7 +595,7 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
               // ⬅️ Posicionar arriba de la burbuja del bot con separación generosa
               // Burbuja bot: bottom: 40px, size: 80px
               // Separación: 16px entre burbujas
-              // WhatsApp button: size: 64px
+              // WhatsApp button: size: 80px (igual que burbuja del bot)
               // Cálculo: 40 (base) + 80 (burbuja) + 16 (separación) = 136px
               return Positioned(
                 bottom: isMobile ? 112.0 : 136.0, 
