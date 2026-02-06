@@ -22,6 +22,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   bool _wasOffline = false;
+  bool _isInputFocused = false; // ⬅️ NUEVO: Detectar foco del input para ocultar Rive en móvil
 
   @override
   void initState() {
@@ -79,10 +80,24 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
     }
   }
 
+  /// Cerrar chat (extraído para reusar en header compacto y completo)
+  void _closeChat() {
+    ref.read(isHoveredExternalProvider.notifier).state = false;
+    try {
+      ref.read(presenceManagerProvider).setOffline();
+    } catch (e) {
+      // Error silenciado
+    }
+    ref.read(chatOpenProvider.notifier).set(false);
+  }
+
   void _sendMessage() {
     final text = _textController.text;
     if (text.trim().isEmpty) return;
     _textController.clear();
+    
+    // ⬅️ NUEVO: Cerrar teclado al enviar mensaje para que vuelva el Rive
+    FocusManager.instance.primaryFocus?.unfocus();
     
     // ⬅️ CRÍTICO: Marcar este chat como activo INMEDIATAMENTE y de forma SÍNCRONA
     // Esto debe hacerse ANTES de enviar el mensaje para que el chat viejo deje de mostrar "EN LÍNEA"
@@ -140,11 +155,11 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
         ? (20.0 + (mq.padding.left > mq.padding.right ? mq.padding.left : mq.padding.right)).clamp(24.0, 40.0)
         : 20.0;
     
-    // ⬅️ Detectar teclado: cuando viewInsets.bottom > 0, el teclado está visible
-    final isKeyboardVisible = mq.viewInsets.bottom > 0;
-    // ⬅️ Reducir altura del header cuando teclado visible para dar espacio al chat + input
-    // 80px es suficiente para botones (top: 16 + 48) y status (bottom: 12 + ~30)
-    final double headerHeight = isKeyboardVisible ? 80.0 : 200.0;
+    // ⬅️ Detectar teclado: en Flutter web/iframe, viewInsets.bottom NO funciona fiablemente.
+    // Usamos el foco del input como indicador de teclado visible en móvil.
+    final isKeyboardLikely = (mq.viewInsets.bottom > 0) || (_isInputFocused && isMobile);
+    // ⬅️ 48px compacto: solo status + botones en una fila. 200px completo: Rive + status + botones
+    final double headerHeight = isKeyboardLikely ? 48.0 : 200.0;
 
     // --- ESCUCHA DE APERTURA/CIERRE ---
     ref.listen(chatOpenProvider, (previous, isOpen) {
@@ -200,79 +215,109 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                     Positioned.fill(child: Container(color: solidBgColor)),
                     Column(
                       children: [
-                        // HEADER - Se adapta al teclado (200px normal, 60px con teclado visible)
+                        // HEADER - Se adapta al teclado:
+                        // ⬅️ Teclado visible (48px): barra compacta [Status] ... [🔄] [✖]
+                        // ⬅️ Teclado oculto (200px): Rive avatar + status abajo-izq + botones arriba-der
                         AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
+                          duration: const Duration(milliseconds: 250),
+                          curve: Curves.easeOutCubic,
                           height: headerHeight,
                           width: double.infinity,
+                          clipBehavior: Clip.hardEdge, // ⬅️ Recortar Rive durante la animación de altura
                           decoration: BoxDecoration(
                              color: solidBgColor,
+                             borderRadius: const BorderRadius.only(
+                               topLeft: Radius.circular(28),
+                               topRight: Radius.circular(28),
+                             ),
                              border: Border(bottom: BorderSide(color: borderColor, width: 1)),
                           ),
-                          child: Stack(
-                            children: [
-                              // Avatar: oculto cuando teclado visible para ahorrar espacio
-                              Positioned.fill(
-                                child: AnimatedOpacity(
-                                  duration: const Duration(milliseconds: 200),
-                                  opacity: isKeyboardVisible ? 0.0 : 1.0,
-                                  child: IgnorePointer(
-                                    ignoring: isKeyboardVisible,
+                          child: isKeyboardLikely
+                            // ══════════════════════════════════════════════════════
+                            // ⬅️ HEADER COMPACTO: Status izquierda, botones derecha
+                            // Sin Rive (sacado del árbol para liberar espacio)
+                            // ══════════════════════════════════════════════════════
+                            ? Padding(
+                                padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
+                                child: Row(
+                                  children: [
+                                    StatusIndicator(
+                                      isLoading: chatState.isLoading, 
+                                      isOnline: isOnline, 
+                                      mood: chatState.currentMood, 
+                                      isDarkMode: isDarkMode,
+                                      currentSessionId: chatState.sessionId,
+                                    ),
+                                    const Spacer(),
+                                    IconButton(
+                                      icon: const Icon(Icons.refresh_rounded, size: 20), 
+                                      onPressed: () => ref.read(chatResetProvider)(),
+                                      color: isDarkMode ? Colors.white70 : Colors.black54,
+                                      tooltip: "Reiniciar",
+                                      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                                      padding: EdgeInsets.zero,
+                                      visualDensity: VisualDensity.compact,
+                                    ),
+                                    const SizedBox(width: 2),
+                                    IconButton(
+                                      icon: const Icon(Icons.close_rounded, size: 20), 
+                                      onPressed: _closeChat,
+                                      color: isDarkMode ? Colors.white70 : Colors.black54,
+                                      tooltip: "Cerrar",
+                                      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+                                      padding: EdgeInsets.zero,
+                                      visualDensity: VisualDensity.compact,
+                                    ),
+                                  ],
+                                ),
+                              )
+                            // ══════════════════════════════════════════════════════
+                            // ⬅️ HEADER COMPLETO: Rive avatar + status + botones
+                            // ══════════════════════════════════════════════════════
+                            : Stack(
+                                children: [
+                                  // Avatar Rive (fondo completo)
+                                  Positioned.fill(
                                     child: const Padding(
                                       padding: EdgeInsets.only(bottom: 20),
                                       child: BotAvatarWidget(), 
                                     ),
                                   ),
-                                ),
-                              ),
-                              Positioned(
-                                top: 16, right: horizontalPadding,
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min, 
-                                  children: [
-                                    IconButton(
-                                      icon: const Icon(Icons.refresh_rounded), 
-                                      onPressed: () => ref.read(chatResetProvider)(),
-                                      color: isDarkMode ? Colors.white70 : Colors.black54,
-                                      tooltip: "Reiniciar",
+                                  // Botones arriba-derecha
+                                  Positioned(
+                                    top: 16, right: horizontalPadding,
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min, 
+                                      children: [
+                                        IconButton(
+                                          icon: const Icon(Icons.refresh_rounded), 
+                                          onPressed: () => ref.read(chatResetProvider)(),
+                                          color: isDarkMode ? Colors.white70 : Colors.black54,
+                                          tooltip: "Reiniciar",
+                                        ),
+                                        const SizedBox(width: 4),
+                                        IconButton(
+                                          icon: const Icon(Icons.close_rounded), 
+                                          onPressed: _closeChat,
+                                          color: isDarkMode ? Colors.white70 : Colors.black54,
+                                          tooltip: "Cerrar",
+                                        ),
+                                      ],
                                     ),
-                                    const SizedBox(width: 4),
-                                    IconButton(
-                                      icon: const Icon(Icons.close_rounded), 
-                                      onPressed: () {
-                                        // ⬅️ RESETEAR HOVER primero para que la burbuja se cierre inmediatamente
-                                        print('🔍 BOTÓN X - ANTES - hover: ${ref.read(isHoveredExternalProvider)}, chatOpen: ${ref.read(chatOpenProvider)}');
-                                        ref.read(isHoveredExternalProvider.notifier).state = false;
-                                        print('🔍 BOTÓN X - DESPUÉS reset hover: ${ref.read(isHoveredExternalProvider)}');
-                                        
-                                        // Cierre manual explícito
-                                        try {
-                                          ref.read(presenceManagerProvider).setOffline();
-                                        } catch (e) {
-                                          // Error silenciado
-                                        }
-                                        ref.read(chatOpenProvider.notifier).set(false);
-                                        print('🔍 BOTÓN X - DESPUÉS cerrar chat: ${ref.read(chatOpenProvider)}');
-                                      },
-                                      color: isDarkMode ? Colors.white70 : Colors.black54,
-                                      tooltip: "Cerrar",
+                                  ),
+                                  // Status abajo-izquierda
+                                  Positioned(
+                                    bottom: 12, left: horizontalPadding,
+                                    child: StatusIndicator(
+                                      isLoading: chatState.isLoading, 
+                                      isOnline: isOnline, 
+                                      mood: chatState.currentMood, 
+                                      isDarkMode: isDarkMode,
+                                      currentSessionId: chatState.sessionId,
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
-                              Positioned(
-                                bottom: 12, left: horizontalPadding,
-                                child: StatusIndicator(
-                                  isLoading: chatState.isLoading, 
-                                  isOnline: isOnline, 
-                                  mood: chatState.currentMood, 
-                                  isDarkMode: isDarkMode,
-                                  currentSessionId: chatState.sessionId, // ⬅️ SessionId del chat actual (opcional)
-                                  // ⬅️ isChatOpen y activeSessionId ahora se obtienen directamente de los providers en StatusIndicator
-                                ),
-                              ),
-                            ],
-                          ),
                         ),
                         
                         // BODY (CHAT)
@@ -328,7 +373,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                             ],
                           ),
                           child: _ProfessionalInputField(
-                            isLoading: chatState.isLoading, // ⬅️ NUEVO: Pasar estado de carga
+                            isLoading: chatState.isLoading,
                             controller: _textController,
                             isOnline: isOnline,
                             isDarkMode: isDarkMode,
@@ -337,6 +382,12 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                             inputBorder: inputBorder,
                             inputBorderFocused: inputBorderFocused,
                             onSend: _sendMessage,
+                            onFocusChanged: (focused) {
+                              // ⬅️ NUEVO: Notificar al padre para ocultar/mostrar Rive
+                              if (_isInputFocused != focused) {
+                                setState(() => _isInputFocused = focused);
+                              }
+                            },
                           ),
                         ),
                       ],
@@ -353,13 +404,14 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
 class _ProfessionalInputField extends StatefulWidget {
   final TextEditingController controller;
   final bool isOnline;
-  final bool isLoading; // ⬅️ NUEVO: Para bloquear mientras el bot responde
+  final bool isLoading;
   final bool isDarkMode;
   final Color themeColor;
   final Color inputFill;
   final Color inputBorder;
   final Color inputBorderFocused;
   final VoidCallback onSend;
+  final ValueChanged<bool>? onFocusChanged; // ⬅️ NUEVO: Notificar foco al padre
 
   const _ProfessionalInputField({
     required this.controller,
@@ -371,6 +423,7 @@ class _ProfessionalInputField extends StatefulWidget {
     required this.inputBorder,
     required this.inputBorderFocused,
     required this.onSend,
+    this.onFocusChanged,
   });
 
   @override
@@ -387,7 +440,10 @@ class _ProfessionalInputFieldState extends State<_ProfessionalInputField> {
     super.initState();
     
     _focusNode.addListener(() {
-      setState(() => _isFocused = _focusNode.hasFocus);
+      final hasFocus = _focusNode.hasFocus;
+      setState(() => _isFocused = hasFocus);
+      // ⬅️ NUEVO: Notificar al padre (ChatPanelView) para ocultar/mostrar Rive
+      widget.onFocusChanged?.call(hasFocus);
     });
     
     widget.controller.addListener(() {
@@ -414,40 +470,33 @@ class _ProfessionalInputFieldState extends State<_ProfessionalInputField> {
     final borderColor = _isFocused ? widget.inputBorderFocused : widget.inputBorder;
     final inputOpacity = isInputEnabled ? 1.0 : 0.6; // ⬅️ NUEVO: Reducir opacidad cuando está bloqueado
     
+    // ⬅️ CRÍTICO: NO envolver con GestureDetector(behavior: HitTestBehavior.opaque)
+    // En Flutter web/móvil, el GestureDetector opaque ROBA el tap al TextField,
+    // impidiendo que el teclado se abra. El TextField ya maneja su propio focus.
     return AnimatedOpacity(
       duration: const Duration(milliseconds: 200),
       opacity: inputOpacity,
-      child: GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: isInputEnabled ? () {
-          if (_focusNode.canRequestFocus) {
-            _focusNode.requestFocus();
-          }
-        } : null,
-        child: ClipRRect(
-          // ⬅️ Forzar recorte del borderRadius para que el borde izquierdo se vea redondeado
-          borderRadius: BorderRadius.circular(50),
-          child: Container(
-            decoration: BoxDecoration(
-              color: widget.inputFill,
-              // ⬅️ Bordes completamente redondeados (pill shape)
-              borderRadius: BorderRadius.circular(50),
-              border: Border.all(
-                color: borderColor,
-                width: 1.0,
-              ),
-              boxShadow: _isFocused ? [
-                BoxShadow(
-                  // ⬅️ Sombra neutra que funciona bien en ambos modos (no usa themeColor)
-                  color: widget.isDarkMode 
-                      ? Colors.white.withOpacity(0.05)
-                      : Colors.black.withOpacity(0.08),
-                  blurRadius: 12,
-                  spreadRadius: 0,
-                ),
-              ] : null,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(50),
+        child: Container(
+          decoration: BoxDecoration(
+            color: widget.inputFill,
+            borderRadius: BorderRadius.circular(50),
+            border: Border.all(
+              color: borderColor,
+              width: 1.0,
             ),
-            child: Row(
+            boxShadow: _isFocused ? [
+              BoxShadow(
+                color: widget.isDarkMode 
+                    ? Colors.white.withOpacity(0.05)
+                    : Colors.black.withOpacity(0.08),
+                blurRadius: 12,
+                spreadRadius: 0,
+              ),
+            ] : null,
+          ),
+          child: Row(
             children: [
               const SizedBox(width: 20),
               Expanded(
@@ -541,7 +590,6 @@ class _ProfessionalInputFieldState extends State<_ProfessionalInputField> {
             const SizedBox(width: 6),
           ],
           ),
-        ),
         ),
       ),
     );
