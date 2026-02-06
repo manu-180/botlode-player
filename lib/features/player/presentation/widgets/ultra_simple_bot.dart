@@ -46,7 +46,11 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
   
   // ⬅️ HIT ZONES: Suscripción a mensajes del HTML padre
   dynamic _messageSubscription;
-  
+  // ⬅️ TAP ROBUSTO EN MÓVIL: Listener fallback para taps poco fiables en iframe (Flutter web/iOS)
+  DateTime? _bubblePointerDownTime;
+  Offset? _bubblePointerDownPosition;
+  DateTime? _lastBubbleOpenTime;
+
   // ⬅️ ANIMACIÓN PROFESIONAL: Controller para animación personalizada
   late AnimationController _animationController;
   late Animation<double> _scaleAnimation;
@@ -202,6 +206,18 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
     _messageSubscription?.cancel();
     _animationController.dispose();
     super.dispose();
+  }
+
+  /// Abre el chat desde la burbuja con debounce para evitar doble apertura
+  /// (cuando tanto GestureDetector como Listener detectan el tap).
+  void _openChatFromBubble(WidgetRef ref) {
+    final now = DateTime.now();
+    if (_lastBubbleOpenTime != null &&
+        now.difference(_lastBubbleOpenTime!).inMilliseconds < 450) {
+      return;
+    }
+    _lastBubbleOpenTime = now;
+    ref.read(chatOpenProvider.notifier).set(true);
   }
 
   void _sendWppVisibility(WidgetRef ref) {
@@ -582,7 +598,7 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
                                   borderRadius: BorderRadius.circular(_borderRadiusAnimation.value),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: Colors.black.withOpacity(0.4 * _fadeAnimation.value),
+                                      color: Colors.black.withValues(alpha: 0.4 * _fadeAnimation.value),
                                       blurRadius: 25 * _fadeAnimation.value,
                                       offset: Offset(-5 * _fadeAnimation.value, 0),
                                     ),
@@ -802,12 +818,12 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
                         ),
                       ),
                     ),
-                  ),
-                ),
               ),
             ),
           ),
-        );
+        ),
+      ),
+    );
 
       },
     );
