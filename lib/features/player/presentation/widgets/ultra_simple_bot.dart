@@ -44,6 +44,11 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
   bool _shouldRenderChat = false; // Controla si el chat está en el árbol de widgets
   bool _showBubbles = false; // Controla cuándo aparecen las burbujas (con delay al cerrar chat)
   
+  // ⬅️ TAP ROBUSTO EN MÓVIL: Listener fallback para taps poco fiables en iframe (Flutter web/iOS)
+  DateTime? _bubblePointerDownTime;
+  Offset? _bubblePointerDownPosition;
+  DateTime? _lastBubbleOpenTime;
+  
   // ⬅️ ANIMACIÓN PROFESIONAL: Controller para animación personalizada
   late AnimationController _animationController;
   late Animation<double> _scaleAnimation;
@@ -176,6 +181,18 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
     _presenceManager?.setOffline();
     _animationController.dispose();
     super.dispose();
+  }
+
+  /// Abre el chat desde la burbuja con debounce para evitar doble apertura
+  /// (cuando tanto GestureDetector como Listener detectan el tap).
+  void _openChatFromBubble(WidgetRef ref) {
+    final now = DateTime.now();
+    if (_lastBubbleOpenTime != null &&
+        now.difference(_lastBubbleOpenTime!).inMilliseconds < 450) {
+      return;
+    }
+    _lastBubbleOpenTime = now;
+    ref.read(chatOpenProvider.notifier).set(true);
   }
 
   void _sendWppVisibility(WidgetRef ref) {
@@ -716,72 +733,111 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
             ? Colors.white.withOpacity(0.15)
             : Colors.white.withOpacity(0.2);
         
+        // ⬅️ TAP ROBUSTO: Listener como fallback para móvil/iframe donde GestureDetector falla
+        const double kTapSlopPx = 40.0;
+        const int kTapMaxMs = 500;
+
         return AnimatedScale(
           scale: targetScale,
           duration: const Duration(milliseconds: 250),
           curve: Curves.easeOutCubic,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: () => ref.read(chatOpenProvider.notifier).set(true),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeOutCubic,
-              width: bubbleSize,
-              height: bubbleSize,
-              decoration: BoxDecoration(
-                color: bubbleColor,
-                borderRadius: BorderRadius.circular(bubbleSize / 2),
-                border: Border.all(
-                  color: borderColor,
-                  width: 1.0,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(isDarkMode ? 0.3 : 0.15),
-                    blurRadius: targetBlur,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Material(
-                color: Colors.transparent,
-                borderRadius: BorderRadius.circular(bubbleSize / 2),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(bubbleSize / 2),
-                  onTap: () => ref.read(chatOpenProvider.notifier).set(true),
-                  child: Center(
-                    child: Container(
-                      width: headSize,
-                      height: headSize,
-                      child: ClipOval(
-                        child: Consumer(
-                          builder: (context, ref, _) {
-                            final riveLoader = ref.watch(riveHeadFileLoaderProvider); 
-                            
-                            return riveLoader.when(
-                              data: (_) => const BotAvatarWidget(isBubble: true),
-                              loading: () => const Center(
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
-                                ),
+          child: Listener(
+            behavior: HitTestBehavior.translucent,
+            onPointerDown: (e) {
+              setState(() {
+                _bubblePointerDownTime = DateTime.now();
+                _bubblePointerDownPosition = e.position;
+              });
+            },
+            onPointerUp: (e) {
+              final downTime = _bubblePointerDownTime;
+              final downPos = _bubblePointerDownPosition;
+              setState(() {
+                _bubblePointerDownTime = null;
+                _bubblePointerDownPosition = null;
+              });
+              if (downTime != null && downPos != null) {
+                final elapsed = DateTime.now().difference(downTime).inMilliseconds;
+                final dist = (e.position - downPos).distance;
+                if (elapsed < kTapMaxMs && dist < kTapSlopPx) {
+                  _openChatFromBubble(ref);
+                }
+              }
+            },
+            onPointerCancel: (_) {
+              setState(() {
+                _bubblePointerDownTime = null;
+                _bubblePointerDownPosition = null;
+              });
+            },
+            child: SizedBox(
+              width: bubbleSize + 24,
+              height: bubbleSize + 24,
+              child: Center(
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => _openChatFromBubble(ref),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeOutCubic,
+                    width: bubbleSize,
+                    height: bubbleSize,
+                    decoration: BoxDecoration(
+                      color: bubbleColor,
+                      borderRadius: BorderRadius.circular(bubbleSize / 2),
+                      border: Border.all(
+                        color: borderColor,
+                        width: 1.0,
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(isDarkMode ? 0.3 : 0.15),
+                          blurRadius: targetBlur,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      borderRadius: BorderRadius.circular(bubbleSize / 2),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(bubbleSize / 2),
+                        onTap: () => _openChatFromBubble(ref),
+                        child: Center(
+                          child: Container(
+                            width: headSize,
+                            height: headSize,
+                            child: ClipOval(
+                              child: Consumer(
+                                builder: (context, ref, _) {
+                                  final riveLoader = ref.watch(riveHeadFileLoaderProvider);
+                                  return riveLoader.when(
+                                    data: (_) => const BotAvatarWidget(isBubble: true),
+                                    loading: () => const Center(
+                                      child: CircularProgressIndicator(
+                                        color: Colors.white,
+                                        strokeWidth: 2,
+                                      ),
+                                    ),
+                                    error: (_, __) => const Icon(
+                                      Icons.smart_toy,
+                                      color: Colors.white,
+                                      size: 32,
+                                    ),
+                                  );
+                                },
                               ),
-                              error: (_, __) => const Icon(
-                                Icons.smart_toy,
-                                color: Colors.white,
-                                size: 32,
-                              ),
-                            );
-                          },
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ),
               ),
             ),
           ),
-        );
+        ),
+      ),
+    );
 
       },
     );
