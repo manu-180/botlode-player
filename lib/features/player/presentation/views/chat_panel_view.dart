@@ -82,6 +82,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
 
   /// Cerrar chat (extraído para reusar en header compacto y completo)
   void _closeChat() {
+    ref.read(hideRiveForSpaceProvider.notifier).state = false;
     ref.read(isHoveredExternalProvider.notifier).state = false;
     try {
       ref.read(presenceManagerProvider).setOffline();
@@ -157,9 +158,14 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
     
     // ⬅️ Detectar teclado: en Flutter web/iframe, viewInsets.bottom NO funciona fiablemente.
     // Usamos el foco del input como indicador de teclado visible en móvil.
-    // Solo en móvil: contraer header (ocultar Rive) cuando hay teclado o input enfocado.
-    // En desktop el Rive siempre se mantiene visible.
-    final isKeyboardLikely = isMobile && ((mq.viewInsets.bottom > 0) || _isInputFocused);
+    // Solo en móvil: contraer header (ocultar Rive) cuando hay teclado, input enfocado,
+    // o cuando se abrió desde la burbuja (para ganar espacio; tap en chat lo muestra).
+    // IMPORTANTE: Cuando isLoading, SIEMPRE mostrar Rive para ver la animación de carga
+    // (como en botlode_web demo). En desktop el Rive siempre se mantiene visible.
+    final hideRiveForSpace = ref.watch(hideRiveForSpaceProvider);
+    final isKeyboardLikely = isMobile &&
+        !chatState.isLoading &&
+        ((mq.viewInsets.bottom > 0) || _isInputFocused || hideRiveForSpace);
     // ⬅️ 48px compacto: solo status + botones en una fila. 200px completo: Rive + status + botones
     final double headerHeight = isKeyboardLikely ? 48.0 : 200.0;
 
@@ -322,11 +328,18 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                               ),
                         ),
                         
-                        // BODY (CHAT)
+                        // BODY (CHAT) - Tap en el área muestra el Rive si estaba oculto por abrir desde burbuja
                         Expanded(
-                          child: Container(
-                            color: solidBgColor, 
-                            child: ListView.builder(
+                          child: GestureDetector(
+                            behavior: HitTestBehavior.opaque,
+                            onTap: () {
+                              if (ref.read(hideRiveForSpaceProvider)) {
+                                ref.read(hideRiveForSpaceProvider.notifier).state = false;
+                              }
+                            },
+                            child: Container(
+                              color: solidBgColor, 
+                              child: ListView.builder(
                               controller: _scrollController,
                               reverse: true,
                               padding: EdgeInsets.symmetric(horizontal: horizontalPadding, vertical: 20),
@@ -357,6 +370,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                                 } 
                                 return ChatBubble(message: reversedMessages[index], botThemeColor: themeColor, isDarkMode: isDarkMode);
                               },
+                            ),
                             ),
                           ),
                         ),

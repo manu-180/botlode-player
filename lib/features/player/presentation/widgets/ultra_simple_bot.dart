@@ -108,7 +108,6 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
             // 📱 BLINDAJE v3: El HTML padre pide que forcemos foco desde adentro del iframe.
             // Esto contrarresta iOS Safari que consume el primer tap para dar foco al iframe.
             if (kDebugMode) print('🎯 CMD_ENSURE_FOCUS recibido - Forzando foco del documento');
-            try { html.window.focus(); } catch (_) {}
             try { html.document.body?.focus(); } catch (_) {}
           }
           // HITZONE_CLICK_WPP no necesita fallback String (ya se maneja en BotPlayerApp)
@@ -238,6 +237,8 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
     }
     _lastBubbleOpenTime = now;
     if (kDebugMode) print('🎯✅ _openChatFromBubble: abriendo chat');
+    // ⬅️ Ocultar Rive al abrir para ganar espacio (se muestra al hacer tap en el chat)
+    ref.read(hideRiveForSpaceProvider.notifier).state = true;
     ref.read(chatOpenProvider.notifier).set(true);
   }
 
@@ -360,11 +361,10 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
           _showBubbles = false; // Burbujas desaparecen al abrir
           _shouldRenderChat = true;
         });
-        // 📱 BLINDAJE v3: Focus AGRESIVO al window del iframe para que Flutter reciba
+        // 📱 BLINDAJE v3: Focus AGRESIVO al documento del iframe para que Flutter reciba
         // taps inmediatamente. iOS Safari consume el primer tap para dar foco al iframe;
         // lo contrarrestamos con focus repetido (inmediato, +100ms, +300ms).
         void aggressiveFocus() {
-          try { html.window.focus(); } catch (_) {}
           try { html.document.body?.focus(); } catch (_) {}
         }
         aggressiveFocus();
@@ -384,7 +384,6 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
         // para asegurar que el iframe está listo para recibir taps en el input.
         Future.delayed(const Duration(milliseconds: 550), () {
           if (mounted && ref.read(chatOpenProvider)) {
-            try { html.window.focus(); } catch (_) {}
             try { html.document.body?.focus(); } catch (_) {}
           }
         });
@@ -406,7 +405,9 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
       }
       
       if (previous == true && current == false) {
-        // Chat se cerró: Invalidar activeSessionId SÍNCRONAMENTE y marcar TODOS los chats como offline en BD
+        // Chat se cerró: Resetear hideRiveForSpace y marcar offline
+        ref.read(hideRiveForSpaceProvider.notifier).state = false;
+        // Invalidar activeSessionId SÍNCRONAMENTE y marcar TODOS los chats como offline en BD
         // ⚠️ CRÍTICO: Debe hacerse SÍNCRONAMENTE, no en un Future.microtask
         ref.read(activeSessionIdProvider.notifier).state = null;
         

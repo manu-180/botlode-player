@@ -36,6 +36,10 @@ final hoverLockedProvider = StateProvider<bool>((ref) => false);
 // Solo el chat con este sessionId debe mostrar "EN LÍNEA"
 final activeSessionIdProvider = StateProvider<String?>((ref) => null);
 
+// ⬅️ NUEVO: Ocultar Rive al abrir desde la burbuja (móvil) para ganar espacio.
+// Se activa al hacer click en la burbuja; se desactiva al hacer tap en el área del chat.
+final hideRiveForSpaceProvider = StateProvider<bool>((ref) => false);
+
 // ⬅️ Helper para formatear hora de Argentina (UTC-3) sin zona horaria
 String _formatArgentinaTime() {
   final nowLocal = DateTime.now().toLocal();
