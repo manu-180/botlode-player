@@ -418,6 +418,10 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                                 ref.read(hideRiveForSpaceProvider.notifier).state = false;
                               }
                             },
+                            onInputTapped: () {
+                              // Tap en el input (aunque ya esté enfocado) → ocultar Rive
+                              ref.read(hideRiveForSpaceProvider.notifier).state = true;
+                            },
                           ),
                         ),
                       ],
@@ -443,6 +447,8 @@ class _ProfessionalInputField extends StatefulWidget {
   final VoidCallback onSend;
   /// Notifica (focused, isProgrammatic). isProgrammatic true cuando el foco se dio por respuesta del bot.
   final void Function(bool focused, bool isProgrammatic)? onFocusChanged;
+  /// Se llama cuando el usuario hace tap en el input (aunque ya esté enfocado), para ocultar el Rive.
+  final VoidCallback? onInputTapped;
 
   const _ProfessionalInputField({
     required this.controller,
@@ -455,6 +461,7 @@ class _ProfessionalInputField extends StatefulWidget {
     required this.inputBorderFocused,
     required this.onSend,
     this.onFocusChanged,
+    this.onInputTapped,
   });
 
   @override
@@ -549,11 +556,13 @@ class _ProfessionalInputFieldState extends State<_ProfessionalInputField> {
                 // dar foco al iframe pero sí entrega pointerUp.
                 child: Listener(
                   onPointerDown: (_) {
+                    widget.onInputTapped?.call();
                     if (!_focusNode.hasFocus && isInputEnabled) {
                       _focusNode.requestFocus();
                     }
                   },
                   onPointerUp: (_) {
+                    widget.onInputTapped?.call();
                     // Segundo intento: iOS Safari en iframes puede consumir
                     // pointerDown pero sí entregar pointerUp al contenido.
                     if (!_focusNode.hasFocus && isInputEnabled) {
