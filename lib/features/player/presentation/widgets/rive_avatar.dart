@@ -137,14 +137,16 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       _lookXInput = controller.getNumberInput('LookX');
       _lookYInput = controller.getNumberInput('LookY');
       _errorInput = controller.getBoolInput('Error');
-      _downloadInput = controller.getNumberInput('Download'); // ⬅️ Obtener input Download
+      _downloadInput = controller.getNumberInput('Download'); // ⬅️ Modo "procesando" (como botlode_web)
       
       // ⬅️ NOTA: Para que el círculo cambie de color según el estado emocional,
       // debes configurar en Rive que el color del círculo de "Face download" 
       // se controle mediante el input "Mood". El código ya está listo para esto.
       
       _errorInput?.value = false;
-      _downloadInput?.value = 0.0; // Inicializar en 0 (desactivado)
+      // Sincronizar con estado actual: si ya está pensando, mostrar animación de procesando de una
+      final chatState = ref.read(chatControllerProvider);
+      _downloadInput?.value = chatState.isLoading ? 1.0 : 0.0;
       _moodInput?.value = ref.read(botMoodProvider).toDouble();
       _lookXInput?.value = 50; 
       _lookYInput?.value = 50; 
@@ -158,6 +160,9 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
     final riveFileAsync = widget.isBubble
         ? ref.watch(riveHeadFileLoaderProvider)
         : ref.watch(riveFileLoaderProvider);
+
+    // ⬅️ Reconstruir cuando cambie isLoading para aplicar modo "procesando" al Rive (igual que botlode_web)
+    final chatState = ref.watch(chatControllerProvider);
 
     // Listener para cambios de mood
     ref.listen(botMoodProvider, (prev, next) {
@@ -200,9 +205,8 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       }
     });
 
-    // ⬅️ NUEVO: Inicializar el estado de Download según el estado actual del chat
+    // ⬅️ Aplicar modo "procesando" (Download 1.0) cuando isLoading; 0.0 cuando no (como botlode_web)
     if (_downloadInput != null) {
-      final chatState = ref.read(chatControllerProvider);
       _downloadInput!.value = chatState.isLoading ? 1.0 : 0.0;
     }
 

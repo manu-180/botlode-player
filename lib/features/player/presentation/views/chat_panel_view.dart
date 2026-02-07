@@ -156,16 +156,13 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
         ? (20.0 + (mq.padding.left > mq.padding.right ? mq.padding.left : mq.padding.right)).clamp(24.0, 40.0)
         : 20.0;
     
-    // ⬅️ Detectar teclado: en Flutter web/iframe, viewInsets.bottom NO funciona fiablemente.
-    // Usamos el foco del input como indicador de teclado visible en móvil.
-    // Solo en móvil: contraer header (ocultar Rive) cuando hay teclado, input enfocado,
-    // o cuando se abrió desde la burbuja (para ganar espacio; tap en chat lo muestra).
-    // IMPORTANTE: Cuando isLoading, SIEMPRE mostrar Rive para ver la animación de carga
-    // (como en botlode_web demo). En desktop el Rive siempre se mantiene visible.
+    // ⬅️ Header compacto SOLO cuando el usuario tocó el input o el Rive (hideRiveForSpace).
+    // Si el bot responde y enfocamos el input automáticamente, NO ocultamos el Rive.
+    // IMPORTANTE: Cuando isLoading, SIEMPRE mostrar Rive para ver la animación de carga.
     final hideRiveForSpace = ref.watch(hideRiveForSpaceProvider);
     final isKeyboardLikely = isMobile &&
         !chatState.isLoading &&
-        ((mq.viewInsets.bottom > 0) || _isInputFocused || hideRiveForSpace);
+        hideRiveForSpace;
     // ⬅️ 48px compacto: solo status + botones en una fila. 200px completo: Rive + status + botones
     final double headerHeight = isKeyboardLikely ? 48.0 : 200.0;
 
@@ -404,12 +401,12 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                             inputBorder: inputBorder,
                             inputBorderFocused: inputBorderFocused,
                             onSend: _sendMessage,
-                            onFocusChanged: (focused) {
+                            onFocusChanged: (focused, isProgrammatic) {
                               if (_isInputFocused != focused) {
                                 setState(() => _isInputFocused = focused);
                               }
-                              // Al tocar el input, ocultar Rive para ganar espacio
-                              if (focused) {
+                              // Ocultar Rive solo cuando el usuario toca el input (no cuando enfocamos tras respuesta del bot)
+                              if (focused && !isProgrammatic) {
                                 ref.read(hideRiveForSpaceProvider.notifier).state = true;
                               }
                             },
@@ -436,7 +433,8 @@ class _ProfessionalInputField extends StatefulWidget {
   final Color inputBorder;
   final Color inputBorderFocused;
   final VoidCallback onSend;
-  final ValueChanged<bool>? onFocusChanged; // ⬅️ NUEVO: Notificar foco al padre
+  /// Notifica (focused, isProgrammatic). isProgrammatic true cuando el foco se dio por respuesta del bot.
+  final void Function(bool focused, bool isProgrammatic)? onFocusChanged;
 
   const _ProfessionalInputField({
     required this.controller,
@@ -459,6 +457,7 @@ class _ProfessionalInputFieldState extends State<_ProfessionalInputField> {
   final FocusNode _focusNode = FocusNode();
   bool _isFocused = false;
   bool _hasText = false;
+  bool _programmaticFocusRequested = false;
 
   @override
   void initState() {
@@ -467,20 +466,29 @@ class _ProfessionalInputFieldState extends State<_ProfessionalInputField> {
     _focusNode.addListener(() {
       final hasFocus = _focusNode.hasFocus;
       setState(() => _isFocused = hasFocus);
-      // ⬅️ NUEVO: Notificar al padre (ChatPanelView) para ocultar/mostrar Rive
-      widget.onFocusChanged?.call(hasFocus);
+      widget.onFocusChanged?.call(hasFocus, _programmaticFocusRequested);
+      if (hasFocus) _programmaticFocusRequested = false;
     });
     
     widget.controller.addListener(() {
       setState(() => _hasText = widget.controller.text.trim().isNotEmpty);
     });
-    // ⬅️ No enfocar al abrir el chat: el teclado solo debe abrirse cuando el usuario toca el input.
   }
 
   @override
   void didUpdateWidget(_ProfessionalInputField oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // ⬅️ No auto-enfocar al terminar de cargar: teclado solo al tocar el input (evita lag en móvil).
+    // Cuando el bot termina de responder: enfocar input para poder escribir; el padre no ocultará el Rive (programático).
+    if (oldWidget.isLoading && !widget.isLoading) {
+      _programmaticFocusRequested = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _focusNode.canRequestFocus) {
+          _focusNode.requestFocus();
+        } else {
+          _programmaticFocusRequested = false;
+        }
+      });
+    }
   }
 
   @override
