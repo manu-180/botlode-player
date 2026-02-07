@@ -405,9 +405,12 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                               if (_isInputFocused != focused) {
                                 setState(() => _isInputFocused = focused);
                               }
-                              // Ocultar Rive solo cuando el usuario toca el input (no cuando enfocamos tras respuesta del bot)
                               if (focused && !isProgrammatic) {
+                                // Usuario tocó el input → ocultar Rive para ganar espacio
                                 ref.read(hideRiveForSpaceProvider.notifier).state = true;
+                              } else if (focused && isProgrammatic) {
+                                // Bot respondió y enfocamos el input → mantener Rive visible
+                                ref.read(hideRiveForSpaceProvider.notifier).state = false;
                               }
                             },
                           ),
