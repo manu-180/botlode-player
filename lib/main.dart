@@ -9,6 +9,7 @@ import 'package:botlode_player/core/router/app_router.dart';
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/loader_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -170,11 +171,20 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
   @override
   void initState() {
     super.initState();
+    // 📱 BLINDAJE v2.8: Manejar comandos del HTML padre
+    // Acepta CMD_OPEN, CMD_CLOSE y HITZONE_CLICK_BOT (String fallback)
     html.window.onMessage.listen((event) {
       if (event.data == null) return;
-      final String data = event.data.toString();
+      final data = event.data;
+      // Solo procesar Strings (las Maps se procesan en UltraSimpleBot._messageSubscription)
+      if (data is! String) return;
       if (data == 'CMD_OPEN') ref.read(chatOpenProvider.notifier).set(true);
       else if (data == 'CMD_CLOSE') ref.read(chatOpenProvider.notifier).set(false);
+      else if (data == 'HITZONE_CLICK_BOT') {
+        // ⬅️ Fallback: si UltraSimpleBot no procesó el Map, este String lo abre
+        if (kDebugMode) print('🎯 HITZONE_CLICK_BOT recibido en BotPlayerApp (String fallback)');
+        ref.read(chatOpenProvider.notifier).set(true);
+      }
     });
   }
 

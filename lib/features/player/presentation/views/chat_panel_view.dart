@@ -157,7 +157,9 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
     
     // ⬅️ Detectar teclado: en Flutter web/iframe, viewInsets.bottom NO funciona fiablemente.
     // Usamos el foco del input como indicador de teclado visible en móvil.
-    final isKeyboardLikely = (mq.viewInsets.bottom > 0) || (_isInputFocused && isMobile);
+    // Solo en móvil: contraer header (ocultar Rive) cuando hay teclado o input enfocado.
+    // En desktop el Rive siempre se mantiene visible.
+    final isKeyboardLikely = isMobile && ((mq.viewInsets.bottom > 0) || _isInputFocused);
     // ⬅️ 48px compacto: solo status + botones en una fila. 200px completo: Rive + status + botones
     final double headerHeight = isKeyboardLikely ? 48.0 : 200.0;
 

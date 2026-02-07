@@ -64,16 +64,19 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
     
     // ⬅️ HIT ZONES: Escuchar mensajes del HTML padre para clicks en las zonas interactivas
     // Esto permite que el iframe tenga pointer-events: none pero las burbujas sigan siendo clickeables
+    // 📱 BLINDAJE v2.8: Acepta tanto Map como String para máxima compatibilidad de interop Dart-JS
     _messageSubscription = html.window.onMessage.listen((event) {
       if (!mounted) return; // ⬅️ IMPORTANTE: Verificar que el widget siga montado
       try {
         final data = event.data;
+        
+        // Canal 1: Map estructurado (principal)
         if (data is Map) {
           final type = data['type'];
           if (type == 'HITZONE_CLICK_BOT') {
             // Click en la burbuja del bot → abrir chat
-            if (kDebugMode) print('🎯 HITZONE_CLICK_BOT recibido');
-            ref.read(chatOpenProvider.notifier).set(true);
+            if (kDebugMode) print('🎯 HITZONE_CLICK_BOT recibido (Map)');
+            _openChatFromBubble(ref);
           } else if (type == 'HITZONE_CLICK_WPP') {
             // Click en la burbuja de WhatsApp → abrir WhatsApp
             if (kDebugMode) print('🎯 HITZONE_CLICK_WPP recibido');
@@ -96,8 +99,16 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
             }
           }
         }
+        // Canal 2: String simple (fallback para interop Dart-JS problemática)
+        else if (data is String) {
+          if (data == 'HITZONE_CLICK_BOT') {
+            if (kDebugMode) print('🎯 HITZONE_CLICK_BOT recibido (String fallback)');
+            _openChatFromBubble(ref);
+          }
+          // HITZONE_CLICK_WPP no necesita fallback String (ya se maneja en BotPlayerApp)
+        }
       } catch (e) {
-        // Error silenciado
+        if (kDebugMode) print('⚠️ Error procesando mensaje hitzone: $e');
       }
     });
     
@@ -209,14 +220,17 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
   }
 
   /// Abre el chat desde la burbuja con debounce para evitar doble apertura
-  /// (cuando tanto GestureDetector como Listener detectan el tap).
+  /// (cuando tanto GestureDetector, Listener, Map y String detectan el tap).
+  /// Debounce reducido de 450ms a 200ms para máxima responsividad.
   void _openChatFromBubble(WidgetRef ref) {
     final now = DateTime.now();
     if (_lastBubbleOpenTime != null &&
-        now.difference(_lastBubbleOpenTime!).inMilliseconds < 450) {
+        now.difference(_lastBubbleOpenTime!).inMilliseconds < 200) {
+      if (kDebugMode) print('⏭️ _openChatFromBubble: debounce activo, ignorando');
       return;
     }
     _lastBubbleOpenTime = now;
+    if (kDebugMode) print('🎯✅ _openChatFromBubble: abriendo chat');
     ref.read(chatOpenProvider.notifier).set(true);
   }
 
@@ -769,13 +783,16 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
             ? Colors.white.withOpacity(0.15)
             : Colors.white.withOpacity(0.2);
         
+        // 📱 BLINDAJE v2.8: Solo GestureDetector con _openChatFromBubble (eliminado InkWell duplicado)
+        // GestureDetector con HitTestBehavior.opaque captura taps en toda el área de la burbuja.
+        // El InkWell anterior competía con el GestureDetector causando interferencia de gestos.
         return AnimatedScale(
           scale: targetScale,
           duration: const Duration(milliseconds: 250),
           curve: Curves.easeOutCubic,
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
-            onTap: () => ref.read(chatOpenProvider.notifier).set(true),
+            onTap: () => _openChatFromBubble(ref),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 250),
               curve: Curves.easeOutCubic,
@@ -796,45 +813,37 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
                   ),
                 ],
               ),
-              child: Material(
-                color: Colors.transparent,
-                borderRadius: BorderRadius.circular(bubbleSize / 2),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(bubbleSize / 2),
-                  onTap: () => ref.read(chatOpenProvider.notifier).set(true),
-                  child: Center(
-                    child: Container(
-                      width: headSize,
-                      height: headSize,
-                      child: ClipOval(
-                        child: Consumer(
-                          builder: (context, ref, _) {
-                            final riveLoader = ref.watch(riveHeadFileLoaderProvider); 
-                            
-                            return riveLoader.when(
-                              data: (_) => const BotAvatarWidget(isBubble: true),
-                              loading: () => const Center(
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
-                                ),
-                              ),
-                              error: (_, __) => const Icon(
-                                Icons.smart_toy,
-                                color: Colors.white,
-                                size: 32,
-                              ),
-                            );
-                          },
-                        ),
-                      ),
+              child: Center(
+                child: SizedBox(
+                  width: headSize,
+                  height: headSize,
+                  child: ClipOval(
+                    child: Consumer(
+                      builder: (context, ref, _) {
+                        final riveLoader = ref.watch(riveHeadFileLoaderProvider); 
+                        
+                        return riveLoader.when(
+                          data: (_) => const BotAvatarWidget(isBubble: true),
+                          loading: () => const Center(
+                            child: CircularProgressIndicator(
+                              color: Colors.white,
+                              strokeWidth: 2,
+                            ),
+                          ),
+                          error: (_, __) => const Icon(
+                            Icons.smart_toy,
+                            color: Colors.white,
+                            size: 32,
+                          ),
+                        );
+                      },
                     ),
+                  ),
+                ),
               ),
             ),
           ),
-        ),
-      ),
-    );
+        );
 
       },
     );
