@@ -395,8 +395,8 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
             setState(() => _shouldRenderChat = false);
           }
         });
-        // Mostrar burbujas con delay reducido (350ms) para respuesta más rápida
-        Future.delayed(const Duration(milliseconds: 350), () {
+        // Mostrar burbujas pronto (150ms) para que se vean casi al instante al cerrar
+        Future.delayed(const Duration(milliseconds: 150), () {
           if (mounted && !ref.read(chatOpenProvider)) {
             setState(() => _showBubbles = true);
           }
@@ -699,6 +699,7 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
                       child: IgnorePointer(
                         ignoring: !_showBubbles,
                         child: MouseRegion(
+                          cursor: SystemMouseCursors.click,
                           onEnter: (_) => setState(() => _isHovered = true),
                           onExit: (_) => setState(() => _isHovered = false),
                           child: Consumer(
