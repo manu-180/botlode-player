@@ -502,12 +502,21 @@ class _ProfessionalInputFieldState extends State<_ProfessionalInputField> {
             children: [
               const SizedBox(width: 20),
               Expanded(
-                // 📱 BLINDAJE PRIMER TAP: Listener no participa en gesture arena,
+                // 📱 BLINDAJE v3 PRIMER TAP: Listener no participa en gesture arena,
                 // captura el pointer a nivel bajo y fuerza foco en el TextField.
                 // En iframe, Flutter web a veces no registra el primer tap nativo;
                 // esto garantiza que el teclado se abra al primer toque.
+                // onPointerUp como fallback: iOS puede consumir pointerDown para
+                // dar foco al iframe pero sí entrega pointerUp.
                 child: Listener(
                   onPointerDown: (_) {
+                    if (!_focusNode.hasFocus && isInputEnabled) {
+                      _focusNode.requestFocus();
+                    }
+                  },
+                  onPointerUp: (_) {
+                    // Segundo intento: iOS Safari en iframes puede consumir
+                    // pointerDown pero sí entregar pointerUp al contenido.
                     if (!_focusNode.hasFocus && isInputEnabled) {
                       _focusNode.requestFocus();
                     }

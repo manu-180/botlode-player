@@ -104,6 +104,12 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
           if (data == 'HITZONE_CLICK_BOT') {
             if (kDebugMode) print('🎯 HITZONE_CLICK_BOT recibido (String fallback)');
             _openChatFromBubble(ref);
+          } else if (data == 'CMD_ENSURE_FOCUS') {
+            // 📱 BLINDAJE v3: El HTML padre pide que forcemos foco desde adentro del iframe.
+            // Esto contrarresta iOS Safari que consume el primer tap para dar foco al iframe.
+            if (kDebugMode) print('🎯 CMD_ENSURE_FOCUS recibido - Forzando foco del documento');
+            try { html.window.focus(); } catch (_) {}
+            try { html.document.body?.focus(); } catch (_) {}
           }
           // HITZONE_CLICK_WPP no necesita fallback String (ya se maneja en BotPlayerApp)
         }
@@ -221,11 +227,12 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
 
   /// Abre el chat desde la burbuja con debounce para evitar doble apertura
   /// (cuando tanto GestureDetector, Listener, Map y String detectan el tap).
-  /// Debounce reducido de 450ms a 200ms para máxima responsividad.
+  /// Debounce en 80ms: suficiente para filtrar dobles disparos (Map+String
+  /// llegan en <5ms) sin bloquear taps legítimos del usuario.
   void _openChatFromBubble(WidgetRef ref) {
     final now = DateTime.now();
     if (_lastBubbleOpenTime != null &&
-        now.difference(_lastBubbleOpenTime!).inMilliseconds < 200) {
+        now.difference(_lastBubbleOpenTime!).inMilliseconds < 80) {
       if (kDebugMode) print('⏭️ _openChatFromBubble: debounce activo, ignorando');
       return;
     }
@@ -353,9 +360,16 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
           _showBubbles = false; // Burbujas desaparecen al abrir
           _shouldRenderChat = true;
         });
-        // 📱 BLINDAJE: Focus al window del iframe para que Flutter reciba taps inmediatamente.
-        // Sin esto, el browser puede consumir el primer tap para darle foco al iframe.
-        try { html.document.body?.focus(); } catch (e) {}
+        // 📱 BLINDAJE v3: Focus AGRESIVO al window del iframe para que Flutter reciba
+        // taps inmediatamente. iOS Safari consume el primer tap para dar foco al iframe;
+        // lo contrarrestamos con focus repetido (inmediato, +100ms, +300ms).
+        void aggressiveFocus() {
+          try { html.window.focus(); } catch (_) {}
+          try { html.document.body?.focus(); } catch (_) {}
+        }
+        aggressiveFocus();
+        Future.delayed(const Duration(milliseconds: 100), aggressiveFocus);
+        Future.delayed(const Duration(milliseconds: 300), aggressiveFocus);
         // ⬅️ CRÍTICO primera vez: iniciar animación DESPUÉS del primer layout.
         // Si se llama forward() en el mismo frame, el iframe/contenedor puede no tener
         // dimensiones reales aún y la animación entra mal; al esperar un frame
@@ -363,6 +377,15 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted && ref.read(chatOpenProvider)) {
             _animationController.forward();
+          }
+        });
+        // 📱 BLINDAJE v3: Focus retardado post-animación (550ms).
+        // Cuando la animación del chat completa, forzar foco una última vez
+        // para asegurar que el iframe está listo para recibir taps en el input.
+        Future.delayed(const Duration(milliseconds: 550), () {
+          if (mounted && ref.read(chatOpenProvider)) {
+            try { html.window.focus(); } catch (_) {}
+            try { html.document.body?.focus(); } catch (_) {}
           }
         });
       } else {
