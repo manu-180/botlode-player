@@ -339,6 +339,9 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
           _showBubbles = false; // Burbujas desaparecen al abrir
           _shouldRenderChat = true;
         });
+        // 📱 BLINDAJE: Focus al window del iframe para que Flutter reciba taps inmediatamente.
+        // Sin esto, el browser puede consumir el primer tap para darle foco al iframe.
+        try { html.document.body?.focus(); } catch (e) {}
         // ⬅️ CRÍTICO primera vez: iniciar animación DESPUÉS del primer layout.
         // Si se llama forward() en el mismo frame, el iframe/contenedor puede no tener
         // dimensiones reales aún y la animación entra mal; al esperar un frame
@@ -536,12 +539,17 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
     // ⬅️ Altura generosa: casi toda la pantalla para que el chat no quede petiso
     // - Usa 98% de la altura disponible
     // - Máximo 1400px para pantallas muy altas
-    // - Mínimo 400px para pantallas pequeñas (reducido para móvil con teclado)
+    // - Mínimo 200px (reducido para teclado abierto en iframe embebido)
     // - Resta viewInsets.bottom para que el chat suba cuando aparece el teclado
     final mq = MediaQuery.of(context);
     final double maxAvailableHeight = screenSize.height - 24.0 - mq.viewInsets.bottom;
+    // 📱 Modo compacto: viewport reducido por teclado virtual en iframe embebido
+    // Cuando la página padre redimensiona el iframe vía VisualViewport API,
+    // screenSize.height se reduce. Detectamos esto para minimizar padding superior.
+    final bool isCompactMode = isMobile && maxAvailableHeight < 500;
+    final double topPadMobile = isCompactMode ? 4.0 : 40.0;
     final double calculatedHeight = (maxAvailableHeight * 0.98) - (verticalPadding * 2);
-    final double chatHeight = calculatedHeight.clamp(400.0, 1400.0);
+    final double chatHeight = calculatedHeight.clamp(200.0, 1400.0);
     
     // ⬅️ Fondo transparente; zona fuera del chat deja pasar scroll/touch para scrollear la página
     return Scaffold(
@@ -567,7 +575,7 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
                   right: horizontalPadding, 
                   bottom: verticalPadding,
                   left: isMobile ? horizontalPadding : 0,
-                  top: isMobile ? 40.0 : 0,
+                  top: isMobile ? topPadMobile : 0,
                 ),
                 child: AnimatedBuilder(
                   animation: _animationController,
@@ -580,7 +588,10 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
                           scale: _scaleAnimation.value,
                           alignment: Alignment.centerRight, // ⬅️ Crece desde el centro-derecha (fluido)
                           child: IgnorePointer(
-                            ignoring: !isOpen || _animationController.isAnimating,
+                            // 📱 BLINDAJE: Solo ignorar cuando el chat está CERRADO.
+                            // Antes también bloqueaba durante la animación (500ms),
+                            // lo cual impedía que el primer tap en el input funcionara.
+                            ignoring: !isOpen,
                             child: GestureDetector(
                               onTap: () {}, // Detener propagación
                               child: Container(
@@ -590,7 +601,7 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
                                   maxWidth: chatWidth,
                                   maxHeight: chatHeight,
                                   minWidth: isMobile ? 320.0 : 380.0,
-                                  minHeight: 400.0,
+                                  minHeight: 200.0,
                                 ),
                                 decoration: BoxDecoration(
                                   color: const Color(0xFF181818),

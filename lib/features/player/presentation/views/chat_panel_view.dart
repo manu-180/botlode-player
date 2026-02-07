@@ -500,7 +500,17 @@ class _ProfessionalInputFieldState extends State<_ProfessionalInputField> {
             children: [
               const SizedBox(width: 20),
               Expanded(
-                child: TextField(
+                // 📱 BLINDAJE PRIMER TAP: Listener no participa en gesture arena,
+                // captura el pointer a nivel bajo y fuerza foco en el TextField.
+                // En iframe, Flutter web a veces no registra el primer tap nativo;
+                // esto garantiza que el teclado se abra al primer toque.
+                child: Listener(
+                  onPointerDown: (_) {
+                    if (!_focusNode.hasFocus && isInputEnabled) {
+                      _focusNode.requestFocus();
+                    }
+                  },
+                  child: TextField(
                 controller: widget.controller,
                 focusNode: _focusNode,
                 enabled: isInputEnabled, // ⬅️ NUEVO: Bloquear cuando isLoading es true
@@ -541,6 +551,7 @@ class _ProfessionalInputFieldState extends State<_ProfessionalInputField> {
                   isDense: true,
                 ),
               ),
+              ), // cierra Listener
             ),
             const SizedBox(width: 8),
             // ⬅️ BOTÓN DE ENVIAR - Estilo minimalista y elegante
