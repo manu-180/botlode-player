@@ -237,8 +237,7 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
     }
     _lastBubbleOpenTime = now;
     if (kDebugMode) print('🎯✅ _openChatFromBubble: abriendo chat');
-    // ⬅️ Ocultar Rive al abrir para ganar espacio (se muestra al hacer tap en el chat)
-    ref.read(hideRiveForSpaceProvider.notifier).state = true;
+    // ⬅️ Rive visible por defecto al abrir; se oculta solo al tocar input o el Rive
     ref.read(chatOpenProvider.notifier).set(true);
   }
 

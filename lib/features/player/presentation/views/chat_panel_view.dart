@@ -284,11 +284,17 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                             // ══════════════════════════════════════════════════════
                             : Stack(
                                 children: [
-                                  // Avatar Rive (fondo completo)
+                                  // Avatar Rive (fondo completo); tap en el Rive lo oculta para ganar espacio
                                   Positioned.fill(
-                                    child: const Padding(
-                                      padding: EdgeInsets.only(bottom: 20),
-                                      child: BotAvatarWidget(), 
+                                    child: GestureDetector(
+                                      behavior: HitTestBehavior.opaque,
+                                      onTap: () {
+                                        ref.read(hideRiveForSpaceProvider.notifier).state = true;
+                                      },
+                                      child: const Padding(
+                                        padding: EdgeInsets.only(bottom: 20),
+                                        child: BotAvatarWidget(),
+                                      ),
                                     ),
                                   ),
                                   // Botones arriba-derecha
@@ -399,9 +405,12 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                             inputBorderFocused: inputBorderFocused,
                             onSend: _sendMessage,
                             onFocusChanged: (focused) {
-                              // ⬅️ NUEVO: Notificar al padre para ocultar/mostrar Rive
                               if (_isInputFocused != focused) {
                                 setState(() => _isInputFocused = focused);
+                              }
+                              // Al tocar el input, ocultar Rive para ganar espacio
+                              if (focused) {
+                                ref.read(hideRiveForSpaceProvider.notifier).state = true;
                               }
                             },
                           ),
