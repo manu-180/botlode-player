@@ -199,6 +199,11 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
     ref.listen(chatControllerProvider, (prev, next) {
       if (next.messages.length > (prev?.messages.length ?? 0) && _scrollController.hasClients) _scrollController.jumpTo(0.0);
       if (prev?.currentMood != next.currentMood) ref.read(botMoodProvider.notifier).state = _getMoodIndex(next.currentMood);
+
+      // Al entrar en carga (primer mensaje o cualquier envío), mostrar Rive de una para evitar parpadeo al terminar
+      if (next.isLoading) {
+        ref.read(hideRiveForSpaceProvider.notifier).state = false;
+      }
     });
 
     // ❌ ELIMINAR Theme wrapper Y LayoutBuilder (simplificar render)
