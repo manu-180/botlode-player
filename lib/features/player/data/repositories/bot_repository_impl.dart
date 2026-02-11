@@ -25,8 +25,9 @@ class BotRepositoryImpl implements BotRepository {
         telefono: null,
       );
 
-  /// Fetch único de la fila del bot (para refresco periódico y payload parcial).
-  Future<BotConfig> _fetchBotConfig(String botId) async {
+  /// Fetch único de la fila del bot (para emisión inicial, refresco periódico y payload parcial).
+  /// Si Supabase devuelve vacío (p. ej. por RLS) o error, se retorna defaultConfig y se loguea.
+  Future<BotConfig> _fetchBotConfig(String botId, {bool isInitial = false}) async {
     final defaultConfig = _defaultConfig();
     try {
       final row = await _supabase
@@ -34,14 +35,25 @@ class BotRepositoryImpl implements BotRepository {
           .select()
           .eq('id', botId)
           .maybeSingle();
-      if (row == null) return defaultConfig;
+      if (row == null) {
+        debugPrint(
+          '⚠️ [BotRepo] SUPABASE NO DEVOLVIÓ DATOS (fila vacía). '
+          'Usando DEFAULTS: isDarkMode=true, showOfflineAlert=true. '
+          '¿RLS bloqueando? El player usa anon key; necesita política SELECT pública en tabla bots.',
+        );
+        return defaultConfig;
+      }
       final config = BotConfig.fromJson(row);
       if (kDebugMode) {
-        debugPrint('🔄 [BotRepo] Refresh periódico → theme_mode=${row['theme_mode']} isDarkMode=${config.isDarkMode}');
+        final label = isInitial ? 'Fetch inicial' : 'Refresh periódico';
+        debugPrint('✅ [BotRepo] $label → theme_mode=${row['theme_mode']} isDarkMode=${config.isDarkMode} showOfflineAlert=${config.showOfflineAlert}');
       }
       return config;
     } catch (e) {
-      if (kDebugMode) debugPrint('🔄 [BotRepo] Refresh falló: $e');
+      debugPrint(
+        '⚠️ [BotRepo] ERROR al leer Supabase: $e. '
+        'Usando DEFAULTS (tema dark, notificaciones activas). Revisar RLS o red.',
+      );
       return defaultConfig;
     }
   }
@@ -63,7 +75,13 @@ class BotRepositoryImpl implements BotRepository {
           .eq('id', botId)
           .asyncMap((List<Map<String, dynamic>> data) async {
             if (kDebugMode) debugPrint('📥 [BotRepo] Realtime: ${data.length} item(s)');
-            if (data.isEmpty) return defaultConfig;
+            if (data.isEmpty) {
+              debugPrint(
+                '⚠️ [BotRepo] Realtime devolvió 0 filas. Usando DEFAULTS. '
+                '¿RLS? El anon necesita poder hacer SELECT en bots.',
+              );
+              return defaultConfig;
+            }
             final row = data.first;
             final rawTheme = row['theme_mode'];
             if (kDebugMode) {
@@ -107,10 +125,10 @@ class BotRepositoryImpl implements BotRepository {
 
     // Stream 2: Refresco periódico (fallback si Realtime no emite en UPDATE).
     final refreshStream = Stream.periodic(_kConfigRefreshInterval)
-        .asyncMap((_) => _fetchBotConfig(botId));
+        .asyncMap((_) => _fetchBotConfig(botId, isInitial: false));
 
-    // Emisión inicial inmediata.
-    final initialStream = Stream.fromFuture(_fetchBotConfig(botId));
+    // Emisión inicial inmediata (aquí se verá si Supabase devuelve datos o no).
+    final initialStream = Stream.fromFuture(_fetchBotConfig(botId, isInitial: true));
 
     if (kDebugMode) {
       debugPrint('📥 [BotRepo] getBotConfigStream: Realtime + refresh cada ${_kConfigRefreshInterval.inSeconds}s');
