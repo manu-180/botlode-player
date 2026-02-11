@@ -6,6 +6,8 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.7";
 
 const MODEL_NAME = 'gemini-2.0-flash'; 
 const API_VERSION = 'v1beta';
+const HISTORY_WINDOW = Number(Deno.env.get('BRAIN_HISTORY_LIMIT') || '60');
+const MEMORY_SUMMARY_MAX_CHARS = 1200;
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -38,6 +40,152 @@ function log(level: 'info' | 'warn' | 'error', message: string, data?: any) {
     ...(data && { data }),
   };
   console.log(JSON.stringify(logEntry));
+}
+
+function normalizeSpace(text: string): string {
+  return (text || '').replace(/\s+/g, ' ').trim();
+}
+
+function truncateText(text: string, maxChars: number): string {
+  if (!text) return '';
+  if (text.length <= maxChars) return text;
+  const cut = text.substring(0, maxChars - 1);
+  const lastSpace = cut.lastIndexOf(' ');
+  return `${lastSpace > 40 ? cut.substring(0, lastSpace) : cut}…`;
+}
+
+function detectUserGoal(message: string): string | null {
+  if (!message) return null;
+  const m = message.toLowerCase();
+
+  if (/ventas?|cerrar|convertir|clientes?/.test(m)) return 'Automatizar ventas y conversion';
+  if (/soporte|atenci[oó]n|responder|consultas?/.test(m)) return 'Mejorar atencion y soporte';
+  if (/lead|prospect|contactos?|captar/.test(m)) return 'Captar y calificar leads';
+  if (/precio|costo|plan|planes/.test(m)) return 'Evaluar costo y retorno';
+  if (/integrar|instalar|configurar|t[eé]cnico|tecnico|api|sdk/.test(m)) return 'Entender implementacion tecnica';
+  return null;
+}
+
+function buildMemorySummary(
+  previousSummary: string | null,
+  projectSummary: string | null,
+  currentMessage: string,
+  botReply: string
+): string {
+  const parts: string[] = [];
+  if (previousSummary) parts.push(previousSummary);
+  if (projectSummary) parts.push(`Objetivo: ${normalizeSpace(projectSummary)}`);
+  const detectedGoal = detectUserGoal(currentMessage);
+  if (detectedGoal) parts.push(`Meta detectada: ${detectedGoal}`);
+  parts.push(`Ultimo usuario: ${truncateText(normalizeSpace(currentMessage), 220)}`);
+  parts.push(`Ultima respuesta: ${truncateText(normalizeSpace(botReply), 220)}`);
+  const unique = [...new Set(parts.map(p => normalizeSpace(p)).filter(Boolean))];
+  return truncateText(unique.join(' | '), MEMORY_SUMMARY_MAX_CHARS);
+}
+
+function detectExactMemoryRequest(message: string):
+  | 'first_user_message'
+  | 'first_bot_message'
+  | 'message_count'
+  | 'conversation_summary'
+  | null {
+  const m = (message || '').toLowerCase();
+  if (!m) return null;
+
+  const asksFirstMessage =
+    /(primer|primero|inicial).*(mensaje)/i.test(m) ||
+    /lo primero que te (dije|escrib[ií]|mand[eé])/i.test(m);
+
+  if (asksFirstMessage) {
+    if (/(yo|te|dije|escrib[ií]|mand[eé])/i.test(m)) return 'first_user_message';
+    if (/(vos|bot|me|dijiste|mandaste)/i.test(m)) return 'first_bot_message';
+    return 'first_user_message';
+  }
+
+  if (/cu[aá]ntos?\s+mensajes|cantidad\s+de\s+mensajes|cu[aá]nto\s+hablamos/.test(m)) {
+    return 'message_count';
+  }
+
+  if (/de\s+qu[eé]\s+hablamos|que\s+hablamos|resum[ií]\s+la\s+charla/.test(m)) {
+    return 'conversation_summary';
+  }
+
+  return null;
+}
+
+async function resolveExactMemoryAnswer(
+  supabaseAdmin: any,
+  sessionId: string,
+  botId: string,
+  requestKind: 'first_user_message' | 'first_bot_message' | 'message_count' | 'conversation_summary'
+): Promise<string | null> {
+  try {
+    if (requestKind === 'first_user_message' || requestKind === 'first_bot_message') {
+      const role = requestKind === 'first_user_message' ? 'user' : 'bot';
+      const { data, error } = await supabaseAdmin
+        .from('chat_logs')
+        .select('content')
+        .eq('session_id', sessionId)
+        .eq('bot_id', botId)
+        .eq('role', role)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) return null;
+      if (!data?.content) {
+        return requestKind === 'first_user_message'
+          ? 'Todavia no tengo un mensaje inicial tuyo guardado en esta sesion.'
+          : 'Todavia no tengo un primer mensaje del bot guardado en esta sesion.';
+      }
+
+      return requestKind === 'first_user_message'
+        ? `Tu primer mensaje en esta sesion fue: "${data.content}".`
+        : `Mi primer mensaje en esta sesion fue: "${data.content}".`;
+    }
+
+    if (requestKind === 'message_count') {
+      const { count, error } = await supabaseAdmin
+        .from('chat_logs')
+        .select('session_id', { count: 'exact', head: true })
+        .eq('session_id', sessionId)
+        .eq('bot_id', botId);
+      if (error) return null;
+      return `En esta sesion llevamos ${count ?? 0} mensajes registrados.`;
+    }
+
+    if (requestKind === 'conversation_summary') {
+      const { data: memoryRow } = await supabaseAdmin
+        .from('bot_session_memory')
+        .select('summary')
+        .eq('session_id', sessionId)
+        .eq('bot_id', botId)
+        .maybeSingle();
+
+      if (memoryRow?.summary) {
+        return `Resumen de esta charla: ${memoryRow.summary}`;
+      }
+
+      const { data: recent } = await supabaseAdmin
+        .from('chat_logs')
+        .select('role, content')
+        .eq('session_id', sessionId)
+        .eq('bot_id', botId)
+        .order('created_at', { ascending: false })
+        .limit(6);
+
+      if (!recent || recent.length === 0) {
+        return 'Aun no tengo suficiente historial guardado para resumir esta charla.';
+      }
+
+      const compact = recent.reverse().map((m: any) => `${m.role === 'user' ? 'Usuario' : 'Bot'}: ${truncateText(normalizeSpace(m.content || ''), 120)}`);
+      return `Resumen rapido de la charla: ${compact.join(' | ')}`;
+    }
+  } catch (_e) {
+    return null;
+  }
+
+  return null;
 }
 
 // ⬅️ MEJORA 2: Retry con exponential backoff y mejor manejo de errores
@@ -801,17 +949,25 @@ serve(async (req) => {
       throw new Error("Bot no encontrado");
     }
 
-    // 2. OBTENER HISTORIAL DE CONVERSACIÓN
+    // 2. OBTENER HISTORIAL DE CONVERSACIÓN (ventana ampliada)
     const { data: history, error: historyError } = await supabaseAdmin
       .from('chat_logs')
-      .select('role, content')
+      .select('role, content, created_at')
       .eq('session_id', sessionId)
       .order('created_at', { ascending: false })
-      .limit(12);
+      .limit(HISTORY_WINDOW);
 
     if (historyError) {
       log('warn', 'Error obteniendo historial', { error: historyError });
     }
+
+    // 2.1 MEMORIA PERSISTENTE DE SESION
+    const { data: sessionMemory } = await supabaseAdmin
+      .from('bot_session_memory')
+      .select('summary, first_user_message, message_count, last_detected_goal')
+      .eq('session_id', sessionId)
+      .eq('bot_id', botId)
+      .maybeSingle();
 
     // 3. EXTRAER INFORMACIÓN DEL SYSTEM PROMPT
     const systemPrompt = botConfig.system_prompt || "";
@@ -1194,11 +1350,23 @@ FORMATO JSON OBLIGATORIO:
 
     // 4.1 REFUERZO PARA PRIMER MENSAJE (historial vacío = usuario acaba de abrir el chat)
     const isFirstMessage = !history || history.length === 0;
+    const persistedMemoryBlock = `
+---------------------------------------------------------
+MEMORIA PERSISTENTE DE ESTA SESION (FUENTE DE VERDAD):
+- Primer mensaje del usuario: ${sessionMemory?.first_user_message ? `"${truncateText(sessionMemory.first_user_message, 220)}"` : 'no disponible aun'}
+- Mensajes registrados en esta sesion: ${sessionMemory?.message_count ?? (history?.length ?? 0)}
+- Objetivo detectado: ${sessionMemory?.last_detected_goal || 'aun no definido'}
+- Resumen persistente: ${sessionMemory?.summary || 'sin resumen persistente por ahora'}
+
+REGLA CRITICA DE MEMORIA:
+- Si te preguntan por un dato exacto de la charla (primer mensaje, cantidad de mensajes, etc.), responde SOLO con datos del historial/memoria real.
+- Si un dato no esta disponible, dilo explicitamente. NO inventes memoria.`;
+
     const systemInstructionFinal = isFirstMessage
-      ? systemInstructionText + `
+      ? systemInstructionText + persistedMemoryBlock + `
 ---------------------------------------------------------
 ⚠️ CONTEXTO ACTUAL: Este es el PRIMER mensaje de la conversación. El usuario acaba de escribir. Aplicá la REGLA CRÍTICA "PRIMER MENSAJE / SALUDO INICIAL": respondé de forma que invite a seguir la charla, sin ser cortante ni servicial exagerado.`
-      : systemInstructionText;
+      : systemInstructionText + persistedMemoryBlock;
 
     // 5. PREPARAR HISTORIAL PARA GEMINI
     const historyParts = (history?.reverse() || []).map((msg: any) => ({
@@ -1207,18 +1375,43 @@ FORMATO JSON OBLIGATORIO:
     }));
 
     // 6. INVOCAR A GEMINI CON RETRY
-    const url = `https://generativelanguage.googleapis.com/${API_VERSION}/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
-    const payload = {
-      system_instruction: { parts: [{ text: systemInstructionFinal }] },
-      contents: [...historyParts, { role: "user", parts: [{ text: message }] }],
-      generationConfig: {
-        temperature: 0.3, // ⬅️ Más baja para respuestas más precisas y concisas
-        maxOutputTokens: 150, // ⬅️ REDUCIDO A 150 para forzar respuestas ULTRA CORTAS (1 frase máximo en sales)
-        response_mime_type: "application/json"
-      }
-    };
+    const exactMemoryRequest = detectExactMemoryRequest(message);
+    const exactMemoryAnswer = exactMemoryRequest
+      ? await resolveExactMemoryAnswer(supabaseAdmin, sessionId, botId, exactMemoryRequest)
+      : null;
 
-    const data = await fetchGeminiWithRetry(url, payload);
+    const url = `https://generativelanguage.googleapis.com/${API_VERSION}/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
+    let data: any;
+    if (exactMemoryAnswer) {
+      data = {
+        candidates: [
+          {
+            content: {
+              parts: [
+                {
+                  text: JSON.stringify({
+                    reply: exactMemoryAnswer,
+                    mood: "tech",
+                    intent_score: 35
+                  })
+                }
+              ]
+            }
+          }
+        ]
+      };
+    } else {
+      const payload = {
+        system_instruction: { parts: [{ text: systemInstructionFinal }] },
+        contents: [...historyParts, { role: "user", parts: [{ text: message }] }],
+        generationConfig: {
+          temperature: 0.3, // ⬅️ Más baja para respuestas más precisas y concisas
+          maxOutputTokens: 220, // mayor margen para respuestas tecnicas sin truncar
+          response_mime_type: "application/json"
+        }
+      };
+      data = await fetchGeminiWithRetry(url, payload);
+    }
     
     // 7. EXTRAER CONTACTOS Y REUNIONES DEL MENSAJE DEL USUARIO
     const extractedContacts = extractContactsRegex(message);
@@ -1685,6 +1878,55 @@ FORMATO JSON OBLIGATORIO:
     } catch (e: any) {
       log('error', 'Error guardando mensaje del usuario', { error: e.message });
       // Continuar aunque falle el guardado
+    }
+
+    // 10.1 ACTUALIZAR MEMORIA PERSISTENTE DE SESION
+    try {
+      let firstUserMessage = sessionMemory?.first_user_message || null;
+      if (!firstUserMessage) {
+        const { data: firstUserRow } = await supabaseAdmin
+          .from('chat_logs')
+          .select('content')
+          .eq('session_id', sessionId)
+          .eq('bot_id', botId)
+          .eq('role', 'user')
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .maybeSingle();
+        firstUserMessage = firstUserRow?.content || message;
+      }
+
+      const persistedSummary = buildMemorySummary(
+        sessionMemory?.summary || null,
+        projectSummary,
+        message,
+        parsedResponse.reply
+      );
+
+      const detectedGoal = detectUserGoal(message) || sessionMemory?.last_detected_goal || null;
+      const estimatedMessageCount = Math.max(1, (sessionMemory?.message_count || 0) + 2);
+
+      await supabaseAdmin
+        .from('bot_session_memory')
+        .upsert({
+          session_id: sessionId,
+          bot_id: botId,
+          summary: persistedSummary,
+          first_user_message: truncateText(firstUserMessage || message, 500),
+          last_user_message: truncateText(message, 500),
+          last_bot_reply: truncateText(parsedResponse.reply || '', 500),
+          last_intent_score: parsedResponse.intent_score || 0,
+          last_detected_goal: detectedGoal,
+          message_count: estimatedMessageCount,
+          updated_at: new Date().toISOString(),
+          metadata: {
+            last_mood: parsedResponse.mood || 'neutral',
+            has_contact: hasContact,
+            has_meeting_confirmed: hasMeetingConfirmed,
+          }
+        }, { onConflict: 'session_id,bot_id' });
+    } catch (memoryError: any) {
+      log('warn', 'No se pudo actualizar memoria persistente', { error: memoryError?.message });
     }
 
     // ⬅️ CRÍTICO: Preparar respuesta para devolver INMEDIATAMENTE
