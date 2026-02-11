@@ -906,6 +906,8 @@ serve(async (req) => {
     let chatId = body.chatId; // ⬅️ NUEVO: ID persistente del chat (no cambia con reloads)
     botId = body.botId;
     const message = body.message;
+    // ⬅️ Terminal de botslode (pruebas): no guardar en historial. Por defecto true para player/historial.
+    const saveToHistory = body.saveToHistory !== false;
 
     // Validación de entrada
     validateInput(sessionId, botId, message);
@@ -1847,7 +1849,7 @@ REGLA CRITICA DE MEMORIA:
       });
     }
     
-    if (extractedContacts.length > 0) {
+    if (saveToHistory && extractedContacts.length > 0) {
       try {
         const contactInserts = extractedContacts.map(contact => ({
           session_id: sessionId,
@@ -1874,68 +1876,73 @@ REGLA CRITICA DE MEMORIA:
     }
 
     // 10. GUARDAR MENSAJE DEL USUARIO (antes de devolver respuesta para que historial se actualice)
-    try {
-      await supabaseAdmin.from('chat_logs').insert({
-        session_id: sessionId, 
-        role: 'user', 
-        content: message, 
-        bot_id: botId,
-        intent_score: 0 
-      });
-      // Logging reducido
-      // log('info', 'Mensaje del usuario guardado en historial');
-    } catch (e: any) {
-      log('error', 'Error guardando mensaje del usuario', { error: e.message });
-      // Continuar aunque falle el guardado
+    // ⬅️ Omitir si saveToHistory es false (ej. terminal de botslode)
+    if (saveToHistory) {
+      try {
+        await supabaseAdmin.from('chat_logs').insert({
+          session_id: sessionId, 
+          role: 'user', 
+          content: message, 
+          bot_id: botId,
+          intent_score: 0 
+        });
+        // Logging reducido
+        // log('info', 'Mensaje del usuario guardado en historial');
+      } catch (e: any) {
+        log('error', 'Error guardando mensaje del usuario', { error: e.message });
+        // Continuar aunque falle el guardado
+      }
     }
 
-    // 10.1 ACTUALIZAR MEMORIA PERSISTENTE DE SESION
-    try {
-      let firstUserMessage = sessionMemory?.first_user_message || null;
-      if (!firstUserMessage) {
-        const { data: firstUserRow } = await supabaseAdmin
-          .from('chat_logs')
-          .select('content')
-          .eq('session_id', sessionId)
-          .eq('bot_id', botId)
-          .eq('role', 'user')
-          .order('created_at', { ascending: true })
-          .limit(1)
-          .maybeSingle();
-        firstUserMessage = firstUserRow?.content || message;
+    // 10.1 ACTUALIZAR MEMORIA PERSISTENTE DE SESION (solo si guardamos historial)
+    if (saveToHistory) {
+      try {
+        let firstUserMessage = sessionMemory?.first_user_message || null;
+        if (!firstUserMessage) {
+          const { data: firstUserRow } = await supabaseAdmin
+            .from('chat_logs')
+            .select('content')
+            .eq('session_id', sessionId)
+            .eq('bot_id', botId)
+            .eq('role', 'user')
+            .order('created_at', { ascending: true })
+            .limit(1)
+            .maybeSingle();
+          firstUserMessage = firstUserRow?.content || message;
+        }
+
+        const persistedSummary = buildMemorySummary(
+          sessionMemory?.summary || null,
+          projectSummary,
+          message,
+          parsedResponse.reply
+        );
+
+        const detectedGoal = detectUserGoal(message) || sessionMemory?.last_detected_goal || null;
+        const estimatedMessageCount = Math.max(1, (sessionMemory?.message_count || 0) + 2);
+
+        await supabaseAdmin
+          .from('bot_session_memory')
+          .upsert({
+            session_id: sessionId,
+            bot_id: botId,
+            summary: persistedSummary,
+            first_user_message: truncateText(firstUserMessage || message, 500),
+            last_user_message: truncateText(message, 500),
+            last_bot_reply: truncateText(parsedResponse.reply || '', 500),
+            last_intent_score: parsedResponse.intent_score || 0,
+            last_detected_goal: detectedGoal,
+            message_count: estimatedMessageCount,
+            updated_at: new Date().toISOString(),
+            metadata: {
+              last_mood: parsedResponse.mood || 'neutral',
+              has_contact: hasContact,
+              has_meeting_confirmed: hasMeetingConfirmed,
+            }
+          }, { onConflict: 'session_id,bot_id' });
+      } catch (memoryError: any) {
+        log('warn', 'No se pudo actualizar memoria persistente', { error: memoryError?.message });
       }
-
-      const persistedSummary = buildMemorySummary(
-        sessionMemory?.summary || null,
-        projectSummary,
-        message,
-        parsedResponse.reply
-      );
-
-      const detectedGoal = detectUserGoal(message) || sessionMemory?.last_detected_goal || null;
-      const estimatedMessageCount = Math.max(1, (sessionMemory?.message_count || 0) + 2);
-
-      await supabaseAdmin
-        .from('bot_session_memory')
-        .upsert({
-          session_id: sessionId,
-          bot_id: botId,
-          summary: persistedSummary,
-          first_user_message: truncateText(firstUserMessage || message, 500),
-          last_user_message: truncateText(message, 500),
-          last_bot_reply: truncateText(parsedResponse.reply || '', 500),
-          last_intent_score: parsedResponse.intent_score || 0,
-          last_detected_goal: detectedGoal,
-          message_count: estimatedMessageCount,
-          updated_at: new Date().toISOString(),
-          metadata: {
-            last_mood: parsedResponse.mood || 'neutral',
-            has_contact: hasContact,
-            has_meeting_confirmed: hasMeetingConfirmed,
-          }
-        }, { onConflict: 'session_id,bot_id' });
-    } catch (memoryError: any) {
-      log('warn', 'No se pudo actualizar memoria persistente', { error: memoryError?.message });
     }
 
     // ⬅️ CRÍTICO: Preparar respuesta para devolver INMEDIATAMENTE
@@ -2048,10 +2055,10 @@ REGLA CRITICA DE MEMORIA:
       })(); // ⬅️ Ejecutar en background sin await
     }
 
-    // 14. ACTUALIZAR HEARTBEAT (en background también)
+    // 14. ACTUALIZAR HEARTBEAT (solo si guardamos historial; en background)
     // ⬅️ NUEVA LÓGICA: Usar chatId para identificar la conversación completa
-    // Solo el heartbeat más reciente por chatId estará online
-    (async () => {
+    // Solo el heartbeat más reciente por chatId estará online. Terminal de botslode no actualiza.
+    if (saveToHistory) (async () => {
       try {
         // ⚠️ CRÍTICO: chatId ya está validado arriba (tiene fallback a sessionId si es null)
         // Usar chatId directamente (ya no puede ser null/undefined)

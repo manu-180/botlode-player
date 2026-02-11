@@ -47,8 +47,8 @@ class BotConfig {
       wpp: _parseBool(json['wpp'], false),
       // ⬅️ Teléfono de WhatsApp (ej: '5491134272488')
       telefono: json['telefono'] as String?,
-      // ⬅️ Tamaño de burbujas (rango 70–110px; default 86 si no existe en BD)
-      bubbleSize: ((json['bubble_size'] as num?)?.toDouble() ?? 86.0).clamp(70.0, 110.0),
+      // ⬅️ Tamaño de burbujas (rango 70–120px; default 86 si no existe en BD)
+      bubbleSize: ((json['bubble_size'] as num?)?.toDouble() ?? 86.0).clamp(70.0, 120.0),
       // ⬅️ Bot activo en la fábrica: solo 'active' muestra burbujas; disabled/maintenance/creditSuspended ocultan
       enabled: _parseStatusEnabled(json['status']),
     );

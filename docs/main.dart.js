@@ -8405,7 +8405,7 @@ o=A.aVm(l.i(a,"wpp"),!1)
 n=A.ci(l.i(a,"telefono"))
 m=A.Rb(l.i(a,"bubble_size"))
 if(m==null)m=null
-return new A.eE(r,q,j,s,p,o,n,B.d.cg(m==null?86:m,70,110),A.b7n(l.i(a,"status")))},
+return new A.eE(r,q,j,s,p,o,n,B.d.cg(m==null?86:m,70,120),A.b7n(l.i(a,"status")))},
 b7n(a){if(a==null)return!0
 if(typeof a=="string")return a.toLowerCase()==="active"
 return!0},
