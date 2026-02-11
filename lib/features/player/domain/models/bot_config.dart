@@ -29,7 +29,8 @@ class BotConfig {
     print('🔍 [BotConfig] JSON completo recibido: $json');
     print('🔍 [BotConfig] show_offline_alert raw: ${json['show_offline_alert']} (tipo: ${json['show_offline_alert'].runtimeType})');
     
-    final parsedShowOfflineAlert = _parseBool(json['show_offline_alert'], false);
+    // ⬅️ CAMBIO CRÍTICO: Default TRUE en lugar de false
+    final parsedShowOfflineAlert = _parseBool(json['show_offline_alert'], true);
     print('🔍 [BotConfig] show_offline_alert parseado: $parsedShowOfflineAlert');
     
     return BotConfig(
@@ -38,7 +39,8 @@ class BotConfig {
       systemPrompt: json['system_prompt'] ?? '',
       // Mapeo seguro: Si es null o 'dark', es Dark Mode.
       isDarkMode: (json['theme_mode'] ?? 'dark') == 'dark',
-      // Mapeo seguro: acepta bool o string "true"/"false". Si falta, default false (cada página puede tener su sistema).
+      // Mapeo seguro: acepta bool o string "true"/"false". Si falta o es null, default TRUE.
+      // ⬅️ CAMBIO: Default TRUE para que funcione aunque Supabase envíe null
       showOfflineAlert: parsedShowOfflineAlert,
       // ⬅️ Mensaje inicial: si no existe, usar el por defecto
       initialMessage: json['initial_message'] as String?,
@@ -52,13 +54,27 @@ class BotConfig {
   }
 
   static bool _parseBool(dynamic value, bool defaultValue) {
-    if (value == null) return defaultValue;
-    if (value is bool) return value;
+    print('🔍 [_parseBool] value=$value, tipo=${value.runtimeType}, default=$defaultValue');
+    if (value == null) {
+      print('🔍 [_parseBool] Valor es NULL, usando default: $defaultValue');
+      return defaultValue;
+    }
+    if (value is bool) {
+      print('🔍 [_parseBool] Valor es bool: $value');
+      return value;
+    }
     if (value is String) {
       final lower = value.toLowerCase();
-      if (lower == 'true' || lower == '1') return true;
-      if (lower == 'false' || lower == '0') return false;
+      if (lower == 'true' || lower == '1') {
+        print('🔍 [_parseBool] String "true" detectado');
+        return true;
+      }
+      if (lower == 'false' || lower == '0') {
+        print('🔍 [_parseBool] String "false" detectado');
+        return false;
+      }
     }
+    print('🔍 [_parseBool] Tipo no reconocido, usando default: $defaultValue');
     return defaultValue;
   }
 
