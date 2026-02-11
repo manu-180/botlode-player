@@ -199,7 +199,7 @@ function extractProjectSummary(botReply: string): string | null {
   }
   
   // Si no se encontró patrón específico, buscar frases que indiquen resumen
-  // Ejemplo: "Entiendo, querés una página para mostrar tus servicios con formulario de contacto"
+  // Ejemplo: "Entiendo, querés automatizar la atención y captar leads"
   if (replyLower.includes('entiendo') && (replyLower.includes('querés') || replyLower.includes('necesitás'))) {
     // Extraer todo después de "entiendo" hasta la primera pregunta o punto
     const match = botReply.match(/entiendo[,:]?\s+(.+?)(?:[\.¿]|agendamos|reuni[óo]n|contacto)/i);
@@ -235,10 +235,9 @@ function extractProjectFragmentsFromUserMessages(history: any[], currentMessage:
   const seen = new Set<string>();
 
   const projectKeywords = [
-    'quiero', 'necesito', 'busco', 'me interesa', 'quiero hacer', 'necesito hacer',
-    'página', 'web', 'sitio', 'productos', 'servicios', 'negocio', 'empresa',
-    'vender', 'mostrar', 'promocionar', 'publicar', 'catálogo', 'tienda', 'ecommerce',
-    'carrito', 'compras', 'formulario', 'galería', 'reservas', 'blog', 'landing'
+    'quiero', 'necesito', 'busco', 'me interesa', 'automatizar', 'bot', 'ia', 'asistente',
+    'atención', 'atencion', 'ventas', 'leads', 'clientes', 'soporte', 'negocio', 'empresa',
+    'vender', 'captar', 'responder', 'agendar', 'reunión', 'reunion', 'contacto'
   ];
 
   const addFragment = (text: string) => {
@@ -257,10 +256,10 @@ function extractProjectFragmentsFromUserMessages(history: any[], currentMessage:
 
     // Patrones que extraen fragmentos de proyecto (varios por mensaje)
     const patterns = [
-      /(?:quiero|necesito|busco|me interesa)\s+(?:una|un|hacer|crear|tener)?\s*(?:página|web|sitio)?\s*(?:para|de)?\s*([^.,?]+?)(?=[.,]|$|para|con|y|agendar|reuni[óo]n|contacto)/gi,
-      /(?:página|web|sitio)\s+(?:para|de|con)?\s*([^.,?]+?)(?=[.,]|$|con|y)/gi,
-      /(?:con|que tenga|que tenga|incluya|con)\s+([^.,?]+?)(?=[.,]|$|y|para)/gi,
-      /(?:vender|mostrar|promocionar)\s+([^.,?]+?)(?=[.,]|$|en|con)/gi,
+      /(?:quiero|necesito|busco|me interesa)\s+(?:una|un|hacer|crear|tener)?\s*(?:soluci[oó]n|bot|sistema|automatizaci[oó]n)?\s*(?:para|de)?\s*([^.,?]+?)(?=[.,]|$|para|con|y|agendar|reuni[óo]n|contacto)/gi,
+      /(?:bot|automatizaci[oó]n|sistema|soluci[oó]n)\s+(?:para|de|con)?\s*([^.,?]+?)(?=[.,]|$|con|y)/gi,
+      /(?:con|que tenga|incluya)\s+([^.,?]+?)(?=[.,]|$|y|para)/gi,
+      /(?:vender|atender|captar|automatizar|convertir)\s+([^.,?]+?)(?=[.,]|$|en|con)/gi,
     ];
 
     for (const pattern of patterns) {
@@ -277,7 +276,7 @@ function extractProjectFragmentsFromUserMessages(history: any[], currentMessage:
       }
     }
 
-    // Frase completa solo si es corta y no es relleno (evitar "pasaba por la web... chusmeando...")
+    // Frase completa solo si es corta y no es relleno
     const isFillerStart = /^(pasaba por|chusmeando|mirando que|vine por que|estaba mirando)\s/i.test(content.trim());
     if (content.length >= 15 && content.length <= 100 && hasProjectKeywords && !isFillerStart) {
       const cleaned = content
@@ -325,17 +324,17 @@ function consolidateProjectSummary(fragments: string[]): string | null {
   }
   if (deduped.length === 0) return null;
 
-  // Filtrar relleno: frases que son contexto ("pasaba por la web...", "chusmeando...")
+  // Filtrar relleno: frases que son contexto
   const noFiller = deduped.filter(f => !FILLER_STARTS.test(f.trim().toLowerCase()));
 
-  // Puntuación de "potabilidad": qué tan bien describe la oferta concreta (página para X)
+  // Puntuación de "potabilidad": qué tan bien describe la oferta concreta
   const score = (text: string): number => {
     const t = text.toLowerCase();
     let s = 0;
-    if (/para vender|para mostrar|servicio|service|producto|productos|negocio/.test(t)) s += 2;
-    if (/página|web|sitio/.test(t)) s += 1;
-    if (/^(una |un )?(página|web|sitio)\s+(para|de|con)/i.test(t)) s += 2;
-    if (t.length > 120 && !/para vender|para mostrar|servicio|service/.test(t)) s -= 1;
+    if (/ventas?|leads?|clientes?|soporte|atenci[oó]n|automatiz/i.test(t)) s += 2;
+    if (/bot|ia|asistente|sistema|soluci[oó]n/.test(t)) s += 1;
+    if (/^(una |un )?(bot|sistema|soluci[oó]n|automatizaci[oó]n)\s+(para|de|con)/i.test(t)) s += 2;
+    if (t.length > 120 && !/ventas?|leads?|soporte|atenci[oó]n/.test(t)) s -= 1;
     if (FILLER_STARTS.test(t)) s -= 2;
     return s;
   };
@@ -349,8 +348,8 @@ function consolidateProjectSummary(fragments: string[]): string | null {
 
   let summary = best.trim();
   summary = summary.charAt(0).toUpperCase() + summary.slice(1);
-  if (!/página|web|sitio/i.test(summary)) {
-    summary = `Página web: ${summary}`;
+  if (!/bot|ia|asistente|automatizaci[oó]n|ventas?|soporte|atenci[oó]n/i.test(summary)) {
+    summary = `Objetivo: ${summary}`;
   }
 
   const maxLen = 220;
@@ -519,7 +518,7 @@ function detectCasualSmallTalk(message: string): boolean {
   }
 
   // Frase muy corta sin palabras de proyecto/compra
-  const projectWords = ['quiero', 'necesito', 'página', 'web', 'sitio', 'comprar', 'vender', 'contratar', 'precio', 'costo', 'producto', 'servicio'];
+  const projectWords = ['quiero', 'necesito', 'bot', 'ia', 'automatizar', 'comprar', 'vender', 'contratar', 'precio', 'costo', 'lead', 'cliente', 'servicio', 'soporte', 'atención', 'atencion'];
   const hasProject = projectWords.some(w => m.includes(w));
   if (!hasProject && m.split(/\s+/).length <= 4 && m.length <= 35) {
     return true; // "Nada por acá" / "Todo bien" / "Acá ando"
@@ -888,11 +887,11 @@ REGLAS DE PUNTUACIÓN DINÁMICA (ACTUALIZACIÓN EN TIEMPO REAL):
 - NUNCA pasar de 30% en estos casos. intent_score: 25-30.
 
 🟡 CUANDO DICE QUÉ QUIERE (40%):
-- Usuario expresa intención general: "quiero una página web", "necesito un sitio", "quiero comprar una página".
+- Usuario expresa intención general: "quiero automatizar mis ventas", "necesito un bot", "quiero mejorar la atención".
 - intent_score: 40. No subir más hasta que dé más detalles.
 
 🟡 ZONA TIBIA (41-75%): MÁS DETALLES, SIN DATO GUARDADO
-- Da más detalles: "para vender productos", "con carrito de compras", "para mi negocio".
+- Da más detalles: "para responder consultas", "para captar leads", "para mi negocio".
 - Preguntas sobre precios, tiempos, garantías.
 - El bot puede ofrecer reunión/contacto, pero el usuario AÚN NO dio teléfono/email.
 - intent_score: MÁXIMO 75%. NUNCA 80% si no hay dato de contacto guardado.
@@ -904,8 +903,8 @@ REGLAS DE PUNTUACIÓN DINÁMICA (ACTUALIZACIÓN EN TIEMPO REAL):
 
 CRITERIO DE AJUSTE DINÁMICO (MUY IMPORTANTE):
 - Charla casual ("todo bien", "acá ando", "comiendo", "qué contás") → intent_score: 25, nunca pasar de 30.
-- "Quiero una página web" (recién dice qué quiere) → intent_score: 40.
-- "Para vender productos" / más detalles pero sin dar contacto → intent_score: 55-75, NUNCA 80.
+- "Quiero automatizar mis ventas" (recién dice qué quiere) → intent_score: 40.
+- "Para captar leads y responder consultas" / más detalles pero sin dar contacto → intent_score: 55-75, NUNCA 80.
 - Usuario da su número/email y se guarda contacto + resumen → entonces sí intent_score: 80.
 - Si el usuario dice "no quiero comprar" o "no me interesa" → SIEMPRE poner score entre 10-20.
 
@@ -937,38 +936,57 @@ POSTURA: ULTRA BREVE, CONSULTIVO, SIN AGOBIAR. Máximo 1 frase por mensaje. NO h
 - NO combines preguntas con solicitudes de contacto en el mismo mensaje
 - NO hagas textos largos que puedan espantar al cliente
 - Sé directo y conciso: menos es más
+- EXCEPCIÓN: si el usuario pide explícitamente "beneficios y funcionalidades", podés responder con lista corta (3 a 5 bullets) y cerrar con UNA sola pregunta para profundizar.
+
+⚠️ MANEJO DE PREGUNTAS CORTAS O MAL ESCRITAS (EJ: "Q ES ESTO", "Q VENDES"):
+- Interpreta intención, no gramática. No pidas aclaración si la idea es entendible.
+- Respuesta recomendada:
+  * "Esto es BotLode: una fábrica de bots de IA; yo soy la unidad que atiende, vende y califica leads en tu negocio 24/7."
+- Después de definir qué es, haz UNA sola pregunta de avance comercial:
+  * "¿Querés que te muestre beneficios rápidos o funcionalidades técnicas?"
+
+⚠️ SI EL USUARIO DICE: "SOLO QUIERO BENEFICIOS Y FUNCIONALIDADES":
+- Responde en formato de lista breve, concreta y vendedora.
+- Incluye capacidades reales como:
+  * Atención simultánea a múltiples usuarios.
+  * Historial en tiempo real para ver conversaciones.
+  * Extracción de contactos (email/teléfono/WhatsApp) y alertas de lead caliente.
+  * Persistencia de conversación aunque el usuario recargue.
+  * Detección de intención de compra (intent_score).
+- Cierra con UNA sola pregunta para pasar a modo técnico:
+  * "¿Querés que te explique en detalle cómo funciona cada módulo por dentro?"
 
 ESTRATEGIA EN 3 FASES (SIMPLIFICADA - NO PREGUNTAR DETALLES INNECESARIOS):
 
 ⚠️ REGLA CRÍTICA: NO NECESITAS TODOS LOS DETALLES
 - El objetivo es entender el proyecto A GRANDES RASGOS, no todos los detalles específicos
-- Con saber "página web para vender productos" es SUFICIENTE. NO preguntes "¿ya tenés el catálogo hecho?", "¿cuántos productos?", etc.
+- Con saber "quiero automatizar ventas y atención" es SUFICIENTE. NO pidas detalles innecesarios.
 - Los detalles los resolverá el asesor en la reunión. TÚ solo necesitas el contexto general.
 
 FASE 1: ENTENDER EL PROYECTO (1-2 preguntas máximo)
 - Haz UNA pregunta BREVE (1 frase máximo) para entender QUÉ tipo de proyecto quiere
 - UNA pregunta a la vez, ESPERA la respuesta
 - Ejemplos CORRECTOS:
-  * "Perfecto. ¿Qué tipo de página web necesitás?"
-  * "Entiendo. ¿Para qué negocio sería?"
-  * "Genial. ¿Es para mostrar servicios o vender productos?"
-- ⚠️ CRÍTICO: Si el usuario ya te dijo "quiero una página para vender productos", NO sigas preguntando detalles. Pasa a FASE 3.
+  * "Perfecto. ¿Qué querés automatizar primero: ventas, soporte o ambos?"
+  * "Entiendo. ¿Tu objetivo principal es captar más leads o responder más rápido?"
+  * "Genial. ¿Querés foco en cierres, soporte o calificación de prospectos?"
+- ⚠️ CRÍTICO: Si el usuario ya te dijo "quiero automatizar ventas", NO sigas preguntando detalles. Pasa a FASE 3.
 
 FASE 2: PROFUNDIZAR (SOLO SI ES NECESARIO - MÁXIMO 1 PREGUNTA)
 - ⚠️ IMPORTANTE: Esta fase es OPCIONAL. Solo haz UNA pregunta adicional si realmente no tienes suficiente información general.
-- Si ya sabes "página web para vender productos", NO necesitas preguntar más. Pasa directo a FASE 3.
+- Si ya sabes "quiere automatizar ventas y atención", NO necesitas preguntar más. Pasa directo a FASE 3.
 - Solo pregunta si el proyecto es muy ambiguo o no entendiste nada.
 - Ejemplo de cuándo SÍ preguntar:
-  * Usuario: "Necesito una página" → "Perfecto. ¿Es para mostrar servicios o vender productos?"
+  * Usuario: "Necesito ayuda" → "Perfecto. ¿Querés resolver ventas, soporte o ambos?"
 - Ejemplo de cuándo NO preguntar (pasar directo a FASE 3):
-  * Usuario: "Quiero una página para vender productos" → Ya tienes suficiente. Pasa a FASE 3.
+  * Usuario: "Quiero automatizar mis ventas" → Ya tienes suficiente. Pasa a FASE 3.
 
 FASE 3: CIERRE (ACTIVARSE RÁPIDO - NO ESPERAR TODOS LOS DETALLES)
 - ⚠️ CRÍTICO: Activa esta fase cuando tengas información GENERAL del proyecto, NO cuando tengas todos los detalles.
 - Resume BREVEMENTE lo que entendiste (solo lo esencial):
-  * "Perfecto, querés una página web para vender productos."
-  * "Entiendo, necesitás una página para mostrar tus servicios."
-  * "Claro, querés una página para tu negocio."
+  * "Perfecto, querés automatizar ventas y atención."
+  * "Entiendo, buscás convertir más consultas en clientes."
+  * "Claro, querés un bot de IA para tu negocio."
 - Luego ofrece INMEDIATAMENTE las opciones de contacto/reunión:
   ${vendorName ? `
   * "¿Querés que agendemos una reunión con ${vendorName} o preferís dejarme tu número/email para que te contacte?"
@@ -980,18 +998,18 @@ FASE 3: CIERRE (ACTIVARSE RÁPIDO - NO ESPERAR TODOS LOS DETALLES)
 - ⚠️ IMPORTANTE: El resumen debe ser BREVE y GENERAL. NO incluyas detalles específicos que no mencionó el usuario.
 - Ejemplos CORRECTOS (resumen breve + oferta directa):
   ${vendorName ? `
-  * Usuario: "Quiero una página para vender productos" → "Perfecto, querés una página para vender productos. ¿Agendamos una reunión con ${vendorName} o preferís dejarme tu contacto?"
-  * Usuario: "Necesito una página para mi negocio" → "Entiendo, necesitás una página para tu negocio. ¿Querés que coordine una reunión o preferís que ${vendorName} te contacte?"
-  * Usuario: "Quiero mostrar mis servicios" → "Perfecto, querés una página para mostrar tus servicios. ¿Agendamos una reunión con ${vendorName} o preferís dejarme tu número/email?"
+  * Usuario: "Quiero automatizar mis ventas" → "Perfecto, querés automatizar ventas. ¿Agendamos una reunión con ${vendorName} o preferís dejarme tu contacto?"
+  * Usuario: "Necesito más leads" → "Entiendo, necesitás captar más leads. ¿Querés que coordine una reunión o preferís que ${vendorName} te contacte?"
+  * Usuario: "Quiero responder más rápido" → "Perfecto, buscás mejorar tiempos de respuesta. ¿Agendamos una reunión con ${vendorName} o preferís dejarme tu número/email?"
   ` : `
-  * Usuario: "Quiero una página para vender productos" → "Perfecto, querés una página para vender productos. ¿Agendamos una reunión o preferís dejarme tu contacto?"
-  * Usuario: "Necesito una página para mi negocio" → "Entiendo, necesitás una página para tu negocio. ¿Querés que coordine una reunión o preferís que te contactemos?"
-  * Usuario: "Quiero mostrar mis servicios" → "Perfecto, querés una página para mostrar tus servicios. ¿Agendamos una reunión o preferís dejarme tu número/email?"
+  * Usuario: "Quiero automatizar mis ventas" → "Perfecto, querés automatizar ventas. ¿Agendamos una reunión o preferís dejarme tu contacto?"
+  * Usuario: "Necesito más leads" → "Entiendo, necesitás captar más leads. ¿Querés que coordine una reunión o preferís que te contactemos?"
+  * Usuario: "Quiero responder más rápido" → "Perfecto, buscás mejorar tiempos de respuesta. ¿Agendamos una reunión o preferís dejarme tu número/email?"
   `}
 - Ejemplos INCORRECTOS (evitar - demasiado detallado o preguntas adicionales):
-  * ❌ Usuario: "Quiero una página para vender productos" → "Entiendo, querés una página para vender productos. ¿Ya tenés el catálogo hecho? ¿Cuántos productos son? ¿Agendamos una reunión?"
-  * ❌ Usuario: "Quiero una página para vender productos" → "Perfecto, querés una página para vender productos con formulario de contacto y galería de fotos y sistema de reservas. ¿Agendamos una reunión?"
-  * ❌ Usuario: "Quiero una página para vender productos" → "Entiendo. ¿Qué tipo de productos? ¿Ya tenés el contenido? ¿Necesitás ayuda con el diseño? ¿Agendamos una reunión?"
+  * ❌ Usuario: "Quiero automatizar mis ventas" → "Entiendo. ¿Qué canal? ¿Qué volumen? ¿Qué horario? ¿Qué equipo? ¿Agendamos?"
+  * ❌ Usuario: "Necesito un bot" → "Perfecto, necesitás un bot con 20 funciones inventadas que no mencionaste. ¿Agendamos?"
+  * ❌ Usuario: "Quiero mejorar la atención" → "Entiendo. ¿Cuántos agentes, qué SLA, qué stack, qué CRM, qué presupuesto?"
 
 ⚠️ REGLA CRÍTICA: REUNIÓN - NUNCA PROPOR LA HORA, PREGUNTÁ DÍA Y HORA
 - NUNCA propongas vos la fecha ni la hora (ej: "agendamos para mañana a las 15:00"). Siempre PREGUNTÁ al usuario.
@@ -1041,13 +1059,13 @@ REGLAS IMPORTANTES (CRÍTICAS):
 - UNA SOLA PREGUNTA por mensaje (NUNCA múltiples)
 - NO combines preguntas con solicitudes de contacto
 - ⚠️ CRÍTICO: NO ofrezcas reunión/contacto hasta que tengas información GENERAL del proyecto (FASE 3)
-- ⚠️ CRÍTICO: NO necesitas TODOS los detalles. Con saber "página web para vender productos" es SUFICIENTE para pasar a FASE 3.
+- ⚠️ CRÍTICO: NO necesitas TODOS los detalles. Con saber "automatizar ventas/atención" es SUFICIENTE para pasar a FASE 3.
 - Haz preguntas BREVES, una a la vez, ESPERA la respuesta
 - Muestra interés genuino, pero NO te extiendas en detalles innecesarios
 - Cuando llegues a FASE 3, resume BREVEMENTE (solo lo esencial) y ofrece contacto de forma simple
 - SIEMPRE menciona que ${vendorName ? vendorName : 'te'} contactará "en cuanto pueda" o "en cuanto podamos"
 - ⚠️ NO ESPANTES AL CLIENTE: Menos texto = mejor. Una pregunta = mejor. Múltiples preguntas = espantas.
-- ⚠️ NO PREGUNTES DETALLES INNECESARIOS: Si ya sabes "página para vender productos", NO preguntes "¿ya tenés el catálogo?", "¿cuántos productos?", etc. Pasa directo a ofrecer reunión/contacto.
+- ⚠️ NO PREGUNTES DETALLES INNECESARIOS: Si ya sabes el objetivo general, pasa directo a ofrecer reunión/contacto.
 
 USA ESTE MODO cuando:
 - El usuario pregunta por precios, planes, ofertas, costos
@@ -1107,7 +1125,7 @@ EJEMPLOS CREATIVOS (NO LITERALES):
   ❌ LITERAL: "Bueno, si eso pensás..."
   ✅ CREATIVO: "Ah, qué lindo. ¿Querés que llore o prefieres que te muestre cómo funciono bien?"
   
-- Usuario: "Hacen malas páginas"
+- Usuario: "Su bot es malo"
   ❌ LITERAL: "Interesante punto de vista"
   ✅ CREATIVO: "Genial, otro crítico de sofá. ¿Tenés ejemplos o solo venís a tirar mierda?"
   
@@ -1167,11 +1185,11 @@ FORMATO JSON OBLIGATORIO:
 
 ⚠️⚠️⚠️ REGLA ABSOLUTA SOBRE INTENT_SCORE ⚠️⚠️⚠️
 - Charla casual ("todo bien", "acá ando", "comiendo", "qué contás") → intent_score: 25. NUNCA pasar de 30.
-- Recién dice qué quiere ("quiero una página web") → intent_score: 40.
-- Da más detalles ("para vender productos") pero NO dio contacto → intent_score: MÁXIMO 75. NUNCA 80.
+- Recién dice qué quiere ("quiero automatizar mis ventas") → intent_score: 40.
+- Da más detalles ("quiero captar leads y responder consultas") pero NO dio contacto → intent_score: MÁXIMO 75. NUNCA 80.
 - 80% SOLO cuando hay dato guardado (contacto + resumen del proyecto). Si el usuario no dio teléfono/email aún, NO pongas 80.
 - Si el usuario dice algo NEGATIVO → intent_score entre 10-20.
-- Ejemplos: "No me interesa" → 15. "Muy caro" → 18. "Para vender productos" (sin contacto) → 75 (no 80).
+- Ejemplos: "No me interesa" → 15. "Muy caro" → 18. "Quiero automatizar ventas" (sin contacto) → 75 (no 80).
     `;
 
     // 4.1 REFUERZO PARA PRIMER MENSAJE (historial vacío = usuario acaba de abrir el chat)
@@ -1433,14 +1451,27 @@ FORMATO JSON OBLIGATORIO:
           }
         }
       } else {
-        // Sin contacto ni reunión: no guardar resumen (evitar "quiero comprar una página" como resumen final)
+        // Sin contacto ni reunión: no guardar resumen final prematuro
         projectSummary = null;
       }
       
       // ⬅️ MEJORADO: Manejo inteligente de contacto y reunión
-      // Si el usuario confirmó reunión pero NO hay contacto aún, pedir contacto
+      // Si el usuario confirmó reunión pero NO hay contacto aún, pedir contacto SOLO cuando ya exista día y hora
       if (meetingInfo.intent && !hasContactInMessage && !hasPreviousContact) {
         // El usuario confirmó que quiere agendar, pero aún no dio contacto
+        const hasMeetingDateTime = Boolean(
+          (meetingInfo.date || pendingMeetingInfo?.date) &&
+          (meetingInfo.time || pendingMeetingInfo?.time)
+        );
+        
+        if (!hasMeetingDateTime) {
+          // Si aún no hay día y hora, no pedir contacto en esta etapa.
+          // Además limpiamos una posible solicitud prematura generada por el modelo.
+          parsedResponse.reply = parsedResponse.reply
+            .replace(/\s*para concretar la reuni[oó]n,?\s*necesito tu n[uú]mero(?: de contacto)? o email[^?]*\?/gi, '')
+            .replace(/\s*necesito tu n[uú]mero(?: de contacto)? o email[^?]*\?/gi, '')
+            .trim();
+        } else {
         // Verificar si el bot ya pidió contacto
         const replyLower = parsedResponse.reply.toLowerCase();
         const alreadyAskedForContact = 
@@ -1462,6 +1493,7 @@ FORMATO JSON OBLIGATORIO:
         } else {
           // Logging reducido
           // log('info', 'Bot ya solicitó contacto en su respuesta, no duplicar');
+        }
         }
       } else if (hasContactInMessage && !meetingInfo.intent) {
         // ⬅️ NUEVO: Si el usuario da contacto pero NO hay reunión agendada, solo confirmar (sin pedir más)

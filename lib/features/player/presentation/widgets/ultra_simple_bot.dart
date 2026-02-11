@@ -117,9 +117,9 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
       }
     });
     
-    // ⬅️ ANIMACIÓN PROFESIONAL: Inicializar controller con duración más fluida
+    // ⬅️ ANIMACIÓN PROFESIONAL: Duración rápida al cerrar (200ms) para respuesta inmediata tras click en X
     _animationController = AnimationController(
-      duration: const Duration(milliseconds: 500),
+      duration: const Duration(milliseconds: 200),
       vsync: this,
     );
     
@@ -387,16 +387,16 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
           }
         });
       } else {
-        // Cerrar: iniciar animación de cierre del chat
+        // Cerrar: iniciar animación de cierre del chat (rápida: 200ms)
         _animationController.reverse();
-        // Esperar a que termine la animación (500ms) antes de quitar del árbol
-        Future.delayed(const Duration(milliseconds: 500), () {
+        // Esperar a que termine la animación (200ms) antes de quitar del árbol
+        Future.delayed(const Duration(milliseconds: 200), () {
           if (mounted && !ref.read(chatOpenProvider)) {
             setState(() => _shouldRenderChat = false);
           }
         });
-        // Mostrar burbujas pronto (150ms) para que se vean casi al instante al cerrar
-        Future.delayed(const Duration(milliseconds: 150), () {
+        // Mostrar burbujas casi al instante (50ms) tras click en X
+        Future.delayed(const Duration(milliseconds: 50), () {
           if (mounted && !ref.read(chatOpenProvider)) {
             setState(() => _showBubbles = true);
           }
