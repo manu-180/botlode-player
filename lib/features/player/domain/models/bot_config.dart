@@ -25,20 +25,16 @@ class BotConfig {
   });
 
   factory BotConfig.fromJson(Map<String, dynamic> json) {
-    // 🔍 DEBUG: Log completo del JSON recibido para diagnosticar show_offline_alert
-    print('🔍 [BotConfig] JSON completo recibido: $json');
-    print('🔍 [BotConfig] show_offline_alert raw: ${json['show_offline_alert']} (tipo: ${json['show_offline_alert'].runtimeType})');
-    
-    // ⬅️ CAMBIO CRÍTICO: Default TRUE en lugar de false
+    final rawTheme = json['theme_mode'];
+    final isDark = (rawTheme ?? 'dark') == 'dark';
+    // ignore: avoid_print
+    print('🎨 [BotConfig] theme_mode(raw)=$rawTheme → isDarkMode=$isDark');
     final parsedShowOfflineAlert = _parseBool(json['show_offline_alert'], true);
-    print('🔍 [BotConfig] show_offline_alert parseado: $parsedShowOfflineAlert');
-    
     return BotConfig(
       name: json['name'] ?? 'Unit 01',
       themeColor: _parseColor(json['tech_color']),
       systemPrompt: json['system_prompt'] ?? '',
-      // Mapeo seguro: Si es null o 'dark', es Dark Mode.
-      isDarkMode: (json['theme_mode'] ?? 'dark') == 'dark',
+      isDarkMode: isDark,
       // Mapeo seguro: acepta bool o string "true"/"false". Si falta o es null, default TRUE.
       // ⬅️ CAMBIO: Default TRUE para que funcione aunque Supabase envíe null
       showOfflineAlert: parsedShowOfflineAlert,

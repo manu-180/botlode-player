@@ -38,16 +38,21 @@ class BotRepositoryImpl implements BotRepository {
           .eq('id', botId)
           .asyncMap((List<Map<String, dynamic>> data) async {
             if (kDebugMode) {
-              debugPrint('🔍 [BotRepository] Stream data recibido: ${data.length} items');
+              debugPrint('📥 [BotRepo] Stream: ${data.length} item(s)');
             }
             if (data.isEmpty) {
-              if (kDebugMode) debugPrint('🔍 [BotRepository] Data vacía, usando defaultConfig');
+              if (kDebugMode) debugPrint('📥 [BotRepo] Data vacía → defaultConfig (isDarkMode=true)');
               return defaultConfig;
             }
             final row = data.first;
+            final rawTheme = row['theme_mode'];
+            if (kDebugMode) {
+              debugPrint('📥 [BotRepo] Payload keys: ${row.keys.join(", ")} | theme_mode(raw)=$rawTheme');
+            }
             // Realtime UPDATE a veces envía solo campos modificados; obtener fila completa para tema y resto de config
             final bool looksPartial = row.length < 5 || !row.containsKey('name');
             if (looksPartial) {
+              if (kDebugMode) debugPrint('📥 [BotRepo] Payload parcial → fetching fila completa...');
               try {
                 final full = await _supabase
                     .from('bots')
@@ -55,14 +60,21 @@ class BotRepositoryImpl implements BotRepository {
                     .eq('id', botId)
                     .maybeSingle();
                 if (full != null) {
-                  if (kDebugMode) debugPrint('🔍 [BotRepository] Fila completa tras UPDATE (theme_mode en tiempo real)');
-                  return BotConfig.fromJson(full);
+                  final config = BotConfig.fromJson(full);
+                  if (kDebugMode) {
+                    debugPrint('📥 [BotRepo] Fila completa OK → theme_mode=${full['theme_mode']} isDarkMode=${config.isDarkMode}');
+                  }
+                  return config;
                 }
-              } catch (_) {
-                // Si falla el select, usar payload parcial (theme_mode puede estar presente)
+              } catch (e) {
+                if (kDebugMode) debugPrint('📥 [BotRepo] Fetch fila completa falló: $e → usando payload parcial');
               }
             }
-            return BotConfig.fromJson(row);
+            final config = BotConfig.fromJson(row);
+            if (kDebugMode) {
+              debugPrint('📥 [BotRepo] Usando payload directo → theme_mode=$rawTheme isDarkMode=${config.isDarkMode}');
+            }
+            return config;
           })
           .handleError((error) {
             // Errores de red/WebSocket al estar sin conexión: no loguear como CRITICAL

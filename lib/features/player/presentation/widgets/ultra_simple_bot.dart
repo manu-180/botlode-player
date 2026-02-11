@@ -279,15 +279,19 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
     // ⬅️ Enviar showOfflineAlert al HTML cuando la config del bot esté disponible (widget activo = UltraSimpleBot).
     // Así la página padre puede ocultar los snackbars si el bot tiene show_offline_alert = false.
     ref.listen(botConfigProvider, (prev, next) {
-      final show = next.asData?.value.showOfflineAlert ?? false;
+      final config = next.asData?.value;
+      final show = config?.showOfflineAlert ?? false;
+      final isDark = config?.isDarkMode ?? true;
+      final themeMode = isDark ? 'dark' : 'light';
       try {
         html.window.parent?.postMessage({
           'type': 'BOT_CONFIG',
           'showOfflineAlert': show,
+          'themeMode': themeMode,
+          'isDarkMode': isDark,
         }, '*');
-        
         if (kDebugMode) {
-          print('🛰 [Config] Enviado BOT_CONFIG al HTML padre: showOfflineAlert=$show');
+          print('🛰 [Config] BOT_CONFIG → padre: showOfflineAlert=$show themeMode=$themeMode isDarkMode=$isDark');
         }
       } catch (e) {
         if (kDebugMode) {
