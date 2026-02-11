@@ -11,6 +11,8 @@ class BotConfig {
   final bool wpp; // ⬅️ Habilitar botón de WhatsApp
   final String? telefono; // ⬅️ Número de WhatsApp (ej: '5491134272488')
   final double bubbleSize; // ⬅️ Tamaño de burbujas flotantes en píxeles (bot + WhatsApp)
+  /// Bot activo en la fábrica (botslode). Si false, el embed debe ocultar burbujas y reservar 0 espacio.
+  final bool enabled;
 
   BotConfig({
     required this.name,
@@ -22,6 +24,7 @@ class BotConfig {
     required this.wpp,
     this.telefono,
     this.bubbleSize = 86.0, // Default 86px
+    this.enabled = true,
   });
 
   factory BotConfig.fromJson(Map<String, dynamic> json) {
@@ -44,9 +47,19 @@ class BotConfig {
       wpp: _parseBool(json['wpp'], false),
       // ⬅️ Teléfono de WhatsApp (ej: '5491134272488')
       telefono: json['telefono'] as String?,
-      // ⬅️ Tamaño de burbujas (rango 60–100px; default 86 si no existe en BD)
-      bubbleSize: ((json['bubble_size'] as num?)?.toDouble() ?? 86.0).clamp(60.0, 100.0),
+      // ⬅️ Tamaño de burbujas (rango 70–110px; default 86 si no existe en BD)
+      bubbleSize: ((json['bubble_size'] as num?)?.toDouble() ?? 86.0).clamp(70.0, 110.0),
+      // ⬅️ Bot activo en la fábrica: solo 'active' muestra burbujas; disabled/maintenance/creditSuspended ocultan
+      enabled: _parseStatusEnabled(json['status']),
     );
+  }
+
+  static bool _parseStatusEnabled(dynamic status) {
+    if (status == null) return true;
+    if (status is String) {
+      return status.toLowerCase() == 'active';
+    }
+    return true;
   }
 
   static bool _parseBool(dynamic value, bool defaultValue) {

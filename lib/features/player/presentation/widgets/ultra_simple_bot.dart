@@ -198,16 +198,23 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
             }
           });
         } else {
-          // Chat cerrado al iniciar → esperar un momento y luego mostrar burbujas con animación
+          // Chat cerrado al iniciar → esperar un momento y luego mostrar burbujas con animación (solo si bot está activo)
           Future.delayed(const Duration(milliseconds: 800), () {
             if (mounted && !ref.read(chatOpenProvider)) {
-              setState(() => _showBubbles = true);
+              final enabled = ref.read(botConfigProvider).asData?.value.enabled ?? true;
+              setState(() => _showBubbles = enabled);
             }
           });
         }
         
-        // ⬅️ Estado inicial de WhatsApp para ajustar tamaño del iframe
-        Future.microtask(() => _sendWppVisibility(ref));
+        // ⬅️ Estado inicial: WhatsApp y estado enabled (para que el HTML reserve 0 si bot desactivado)
+        Future.microtask(() {
+          _sendWppVisibility(ref);
+          final enabled = ref.read(botConfigProvider).asData?.value.enabled ?? true;
+          try {
+            html.window.parent?.postMessage(enabled ? 'CMD_BOT_ENABLED' : 'CMD_BOT_DISABLED', '*');
+          } catch (_) {}
+        });
       } catch (e) {
         // Error silenciado
       }
@@ -274,6 +281,17 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
     });
     ref.listen(botConfigProvider, (prev, next) {
       _sendWppVisibility(ref);
+    });
+    // ⬅️ Bot desactivado en la fábrica: avisar al HTML para que reserve 0 espacio y no muestre burbujas
+    ref.listen(botConfigProvider, (prev, next) {
+      final enabled = next.asData?.value.enabled ?? true;
+      try {
+        html.window.parent?.postMessage(enabled ? 'CMD_BOT_ENABLED' : 'CMD_BOT_DISABLED', '*');
+        if (enabled) _sendWppVisibility(ref);
+        if (kDebugMode) print('🛰 [Bot] ${enabled ? "CMD_BOT_ENABLED" : "CMD_BOT_DISABLED"} → padre');
+      } catch (e) {
+        if (kDebugMode) print('⚠️ [Bot] Error enviando estado enabled: $e');
+      }
     });
     
     // ⬅️ Enviar showOfflineAlert al HTML cuando la config del bot esté disponible (widget activo = UltraSimpleBot).
@@ -678,12 +696,14 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
           ),
 
           // BURBUJA FLOTANTE (posición condicional: más espacio si wpp true para ambas burbujas)
+          // ⬅️ Si el bot está desactivado en la fábrica, no mostrar ninguna burbuja (el HTML reserva 0)
             Consumer(
               builder: (context, ref, _) {
                 final screenW = MediaQuery.sizeOf(context).width;
                 final bool isMobileBubble = screenW < 600;
                 final botConfig = ref.watch(botConfigProvider).asData?.value;
-                final bool wpp = botConfig?.wpp ?? false;
+                if (botConfig == null || !botConfig.enabled) return const SizedBox.shrink();
+                final bool wpp = botConfig.wpp;
                 // wpp true: más margen inferior para que no se corten ambas burbujas (100px)
                 // wpp false: solo espacio para el bot
                 final double padBottom = wpp
@@ -738,10 +758,10 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
           Consumer(
             builder: (context, ref, _) {
               final botConfig = ref.watch(botConfigProvider).asData?.value;
-              
+              // ⬅️ No mostrar si el bot está desactivado en la fábrica
+              if (botConfig == null || !botConfig.enabled) return const SizedBox.shrink();
               // Solo mostrar si wpp está habilitado, hay un teléfono y el chat está cerrado
-              if (botConfig == null || 
-                  !botConfig.wpp || 
+              if (!botConfig.wpp || 
                   botConfig.telefono == null || 
                   botConfig.telefono!.isEmpty ||
                   isOpen) {

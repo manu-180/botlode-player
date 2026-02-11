@@ -23,6 +23,7 @@ class BotRepositoryImpl implements BotRepository {
         initialMessage: null,
         wpp: false,
         telefono: null,
+        enabled: true,
       );
 
   /// Fetch único de la fila del bot (para emisión inicial, refresco periódico y payload parcial).
