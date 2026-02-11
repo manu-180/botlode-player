@@ -1,0 +1,36 @@
+# Informe: Tema del chat (light/dark) en tiempo real
+
+## 1. Objetivo
+Cuando en botslode se cambia el MODO DE INTERFAZ (claro/oscuro) en el detalle de un bot, el chat embebido en prueba.html (botlode_player) debe actualizar su tema en tiempo real.
+
+## 2. Arquitectura
+- prueba.html: embebe iframe botlode-player, recibe postMessage BOT_CONFIG (themeMode, isDarkMode).
+- botlode_player: Flutter web en iframe; stream Supabase tabla bots → BotConfig → isDarkMode → UI.
+- botslode: switch MODO DE INTERFAZ → updateThemeMode → patchBot(id, { theme_mode }) → Supabase.
+- Supabase: tabla bots, columna theme_mode; Realtime debe emitir en UPDATE.
+
+## 3. Flujo del tema
+Botslode PATCH theme_mode → Supabase actualiza fila → Realtime emite (si UPDATE habilitado) →
+getBotConfigStream emite → BotConfig.fromJson → isDarkMode → botConfigProvider notifica →
+ChatPanelView/UltraSimpleBot ref.watch(botConfigProvider) → UI redibuja → postMessage BOT_CONFIG al padre.
+
+## 4. Evidencia (logs)
+- Navegador (prueba.html): "BOT_CONFIG recibido: showOfflineAlert=..., themeMode=dark, isDarkMode=true"
+  → El player SÍ envía config al padre; carga inicial = dark.
+- Los logs [BotRepo] y [BotConfig] corren DENTRO del iframe (Flutter); en consola del padre no se ven.
+- Si al cambiar el switch no llega un nuevo BOT_CONFIG al padre, el stream no está emitiendo (Realtime o suscripción).
+
+## 5. Hipótesis por las que no cambia el tema
+1) Realtime sin UPDATE: en Supabase Database → Replication, tabla bots debe tener UPDATE (no solo INSERT).
+2) Stream solo emite carga inicial y no eventos posteriores.
+3) Payload UPDATE parcial sin theme_mode (por defecto queda dark).
+4) Player y botslode en pestañas distintas; Realtime debe estar conectado en la pestaña del player.
+
+## 6. Soluciones
+A) Supabase: Replication → tabla bots → habilitar UPDATE.
+B) Logs ya añadidos: [BotRepo], [BotConfig], BOT_CONFIG con themeMode/isDarkMode en padre.
+C) Refresco periódico: además del stream, cada 30s hacer select() de la fila del bot y emitir BotConfig (implementado en getBotConfigStream).
+
+## 7. Resumen
+- Origen: theme_mode en Supabase bots. Escritura: botslode patchBot. Lectura: botlode_player getBotConfigStream.
+- UI: ref.watch(botConfigProvider), isDarkMode. Si no cambia: revisar Replication UPDATE y/o usar refresco periódico.

@@ -1,64 +1,79 @@
 // Archivo: lib/features/player/data/repositories/bot_repository_impl.dart
+import 'dart:async';
 import 'dart:ui';
 import 'package:botlode_player/features/player/domain/models/bot_config.dart';
 import 'package:botlode_player/features/player/domain/repositories/bot_repository.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// Intervalo de refresco periódico cuando Realtime no emite (fallback para tema light/dark).
+const Duration _kConfigRefreshInterval = Duration(seconds: 25);
+
 class BotRepositoryImpl implements BotRepository {
   final SupabaseClient _supabase;
 
   BotRepositoryImpl(this._supabase);
 
+  BotConfig _defaultConfig() => BotConfig(
+        name: "Cargando...",
+        themeColor: const Color(0xFFFFC000),
+        systemPrompt: "",
+        isDarkMode: true,
+        showOfflineAlert: true,
+        initialMessage: null,
+        wpp: false,
+        telefono: null,
+      );
+
+  /// Fetch único de la fila del bot (para refresco periódico y payload parcial).
+  Future<BotConfig> _fetchBotConfig(String botId) async {
+    final defaultConfig = _defaultConfig();
+    try {
+      final row = await _supabase
+          .from('bots')
+          .select()
+          .eq('id', botId)
+          .maybeSingle();
+      if (row == null) return defaultConfig;
+      final config = BotConfig.fromJson(row);
+      if (kDebugMode) {
+        debugPrint('🔄 [BotRepo] Refresh periódico → theme_mode=${row['theme_mode']} isDarkMode=${config.isDarkMode}');
+      }
+      return config;
+    } catch (e) {
+      if (kDebugMode) debugPrint('🔄 [BotRepo] Refresh falló: $e');
+      return defaultConfig;
+    }
+  }
+
   @override
   Stream<BotConfig> getBotConfigStream(String botId) {
-    // Configuración "Skeleton" por defecto (Fallback de seguridad).
-    // ⬅️ CAMBIO: showOfflineAlert TRUE por defecto para que funcione aunque falle la carga
-    final defaultConfig = BotConfig(
-      name: "Cargando...",
-      themeColor: const Color(0xFFFFC000),
-      systemPrompt: "",
-      isDarkMode: true,
-      showOfflineAlert: true,
-      initialMessage: null,
-      wpp: false,
-      telefono: null,
-    );
-
+    final defaultConfig = _defaultConfig();
     if (botId.isEmpty) {
       return Stream.value(defaultConfig);
     }
 
-    // Realtime: para que el tema (theme_mode) se actualice en tiempo real al cambiar en botslode,
-    // la tabla "bots" debe tener habilitado UPDATE en Supabase → Database → Replication.
+    // Stream 1: Realtime (Supabase emite en INSERT/UPDATE si está habilitado).
+    // Realtime: tabla "bots" debe tener UPDATE en Supabase → Database → Replication.
+    Stream<BotConfig> realtimeStream;
     try {
-      return _supabase
+      realtimeStream = _supabase
           .from('bots')
           .stream(primaryKey: ['id'])
           .eq('id', botId)
           .asyncMap((List<Map<String, dynamic>> data) async {
-            if (kDebugMode) {
-              debugPrint('📥 [BotRepo] Stream: ${data.length} item(s)');
-            }
-            if (data.isEmpty) {
-              if (kDebugMode) debugPrint('📥 [BotRepo] Data vacía → defaultConfig (isDarkMode=true)');
-              return defaultConfig;
-            }
+            if (kDebugMode) debugPrint('📥 [BotRepo] Realtime: ${data.length} item(s)');
+            if (data.isEmpty) return defaultConfig;
             final row = data.first;
             final rawTheme = row['theme_mode'];
             if (kDebugMode) {
               debugPrint('📥 [BotRepo] Payload keys: ${row.keys.join(", ")} | theme_mode(raw)=$rawTheme');
             }
-            // Realtime UPDATE a veces envía solo campos modificados; obtener fila completa para tema y resto de config
             final bool looksPartial = row.length < 5 || !row.containsKey('name');
             if (looksPartial) {
               if (kDebugMode) debugPrint('📥 [BotRepo] Payload parcial → fetching fila completa...');
               try {
-                final full = await _supabase
-                    .from('bots')
-                    .select()
-                    .eq('id', botId)
-                    .maybeSingle();
+                final full = await _supabase.from('bots').select().eq('id', botId).maybeSingle();
                 if (full != null) {
                   final config = BotConfig.fromJson(full);
                   if (kDebugMode) {
@@ -67,36 +82,65 @@ class BotRepositoryImpl implements BotRepository {
                   return config;
                 }
               } catch (e) {
-                if (kDebugMode) debugPrint('📥 [BotRepo] Fetch fila completa falló: $e → usando payload parcial');
+                if (kDebugMode) debugPrint('📥 [BotRepo] Fetch fila completa falló: $e');
               }
             }
-            final config = BotConfig.fromJson(row);
-            if (kDebugMode) {
-              debugPrint('📥 [BotRepo] Usando payload directo → theme_mode=$rawTheme isDarkMode=${config.isDarkMode}');
-            }
-            return config;
+            return BotConfig.fromJson(row);
           })
           .handleError((error) {
-            // Errores de red/WebSocket al estar sin conexión: no loguear como CRITICAL
             final msg = error.toString().toLowerCase();
             final isConnectionError = msg.contains('realtime') ||
                 msg.contains('websocket') ||
                 msg.contains('channelerror') ||
                 msg.contains('1006') ||
                 msg.contains('connection');
-            if (isConnectionError) {
-              if (kDebugMode) {
-                debugPrint("🟡 Realtime sin conexión (esperado cuando no hay red): $error");
-              }
+            if (isConnectionError && kDebugMode) {
+              debugPrint("🟡 Realtime sin conexión: $error");
             } else {
-              debugPrint("🔴 CRITICAL: Error en stream de configuración: $error");
+              debugPrint("🔴 Error en stream de configuración: $error");
             }
-            // En caso de error, emitimos la config por defecto para no romper la UI
-            return defaultConfig;
           });
     } catch (e) {
-      debugPrint("🔴 CRITICAL: Fallo al inicializar stream: $e");
-      return Stream.value(defaultConfig);
+      debugPrint("🔴 Fallo al crear stream Realtime: $e");
+      realtimeStream = Stream.value(defaultConfig);
     }
+
+    // Stream 2: Refresco periódico (fallback si Realtime no emite en UPDATE).
+    final refreshStream = Stream.periodic(_kConfigRefreshInterval)
+        .asyncMap((_) => _fetchBotConfig(botId));
+
+    // Emisión inicial inmediata.
+    final initialStream = Stream.fromFuture(_fetchBotConfig(botId));
+
+    if (kDebugMode) {
+      debugPrint('📥 [BotRepo] getBotConfigStream: Realtime + refresh cada ${_kConfigRefreshInterval.inSeconds}s');
+    }
+
+    // Combinar: inicial + Realtime + periódico (dart:async no tiene Stream.merge).
+    late StreamSubscription<BotConfig> sub1, sub2, sub3;
+    final controller = StreamController<BotConfig>.broadcast();
+    controller.onListen = () {
+      sub1 = initialStream.listen(
+        controller.add,
+        onError: controller.addError,
+        cancelOnError: false,
+      );
+      sub2 = realtimeStream.listen(
+        controller.add,
+        onError: controller.addError,
+        cancelOnError: false,
+      );
+      sub3 = refreshStream.listen(
+        controller.add,
+        onError: controller.addError,
+        cancelOnError: false,
+      );
+    };
+    controller.onCancel = () async {
+      await sub1.cancel();
+      await sub2.cancel();
+      await sub3.cancel();
+    };
+    return controller.stream;
   }
 }
