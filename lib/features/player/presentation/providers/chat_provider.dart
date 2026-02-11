@@ -1,5 +1,6 @@
 // Archivo: lib/features/player/presentation/providers/chat_provider.dart
 import 'package:botlode_player/core/services/chat_persistence_service.dart';
+import 'package:botlode_player/features/player/domain/models/bot_config.dart';
 import 'package:botlode_player/features/player/domain/models/chat_message.dart';
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/chat_repository_provider.dart';
@@ -78,9 +79,10 @@ class ChatController extends _$ChatController {
     
     // ⬅️ NUEVO: Obtener mensaje inicial del bot (si está disponible)
     String defaultInitialMessage = 'Sistema en línea. ¿En qué puedo ayudarte hoy?';
+    BotConfig? botConfig;
     try {
       final botConfigAsync = ref.watch(botConfigProvider);
-      final botConfig = botConfigAsync.asData?.value;
+      botConfig = botConfigAsync.asData?.value;
       if (botConfig?.initialMessage != null && botConfig!.initialMessage!.trim().isNotEmpty) {
         defaultInitialMessage = botConfig.initialMessage!;
       }
@@ -89,7 +91,7 @@ class ChatController extends _$ChatController {
     }
     
     // Si hay mensajes guardados, usarlos; si no, mensaje inicial del bot
-    final initialMessages = storedMessages.isNotEmpty
+    List<ChatMessage> initialMessages = storedMessages.isNotEmpty
         ? storedMessages
         : [
             ChatMessage(
@@ -100,7 +102,23 @@ class ChatController extends _$ChatController {
             )
           ];
     
-    // Guardar mensajes iniciales
+    // Si solo tenemos el mensaje inicial guardado y el bot tiene otro mensaje inicial, actualizarlo
+    // (así se ve el cambio al editar en botslode sin tener que hacer "Nuevo chat")
+    if (initialMessages.length == 1 &&
+        initialMessages.first.id == 'init' &&
+        initialMessages.first.role == MessageRole.bot &&
+        botConfig?.initialMessage != null &&
+        botConfig!.initialMessage!.trim().isNotEmpty &&
+        initialMessages.first.text != botConfig.initialMessage) {
+      initialMessages = [
+        ChatMessage(
+          id: 'init',
+          text: botConfig.initialMessage!,
+          role: MessageRole.bot,
+          timestamp: initialMessages.first.timestamp,
+        )
+      ];
+    }
     ChatPersistenceService.saveMessages(initialMessages);
     
     // ⬅️ NUEVO: Obtener o crear chatId persistente (NO cambia con reloads)
@@ -215,10 +233,18 @@ class ChatController extends _$ChatController {
     // ⬅️ PASO 2: Limpiar mensajes del localStorage (pantalla en blanco)
     ChatPersistenceService.saveMessages([]);
     
-    // ⬅️ PASO 3: Crear mensaje inicial para el nuevo chat
+    // ⬅️ PASO 3: Crear mensaje inicial para el nuevo chat (usar el del bot, no el por defecto)
+    String initialText = 'Sistema en línea. ¿En qué puedo ayudarte hoy?';
+    try {
+      final botConfigAsync = ref.read(botConfigProvider);
+      final botConfig = botConfigAsync.asData?.value;
+      if (botConfig?.initialMessage != null && botConfig!.initialMessage!.trim().isNotEmpty) {
+        initialText = botConfig.initialMessage!;
+      }
+    } catch (_) {}
     final initialMessage = ChatMessage(
       id: 'init',
-      text: 'Sistema en línea. ¿En qué puedo ayudarte hoy?',
+      text: initialText,
       role: MessageRole.bot,
       timestamp: DateTime.now().subtract(const Duration(hours: 3)), // ⬅️ Hora de Argentina (UTC-3)
     );
