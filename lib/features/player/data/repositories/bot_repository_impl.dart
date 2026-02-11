@@ -34,7 +34,12 @@ class BotRepositoryImpl implements BotRepository {
           .stream(primaryKey: ['id'])
           .eq('id', botId)
           .map((List<Map<String, dynamic>> data) {
-            if (data.isEmpty) return defaultConfig;
+            print('🔍 [BotRepository] Stream data recibido: ${data.length} items');
+            if (data.isEmpty) {
+              print('🔍 [BotRepository] Data vacía, usando defaultConfig');
+              return defaultConfig;
+            }
+            print('🔍 [BotRepository] Parseando config del primer item...');
             return BotConfig.fromJson(data.first);
           })
           .handleError((error) {

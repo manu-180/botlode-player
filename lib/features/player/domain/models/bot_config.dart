@@ -25,6 +25,13 @@ class BotConfig {
   });
 
   factory BotConfig.fromJson(Map<String, dynamic> json) {
+    // 🔍 DEBUG: Log completo del JSON recibido para diagnosticar show_offline_alert
+    print('🔍 [BotConfig] JSON completo recibido: $json');
+    print('🔍 [BotConfig] show_offline_alert raw: ${json['show_offline_alert']} (tipo: ${json['show_offline_alert'].runtimeType})');
+    
+    final parsedShowOfflineAlert = _parseBool(json['show_offline_alert'], false);
+    print('🔍 [BotConfig] show_offline_alert parseado: $parsedShowOfflineAlert');
+    
     return BotConfig(
       name: json['name'] ?? 'Unit 01',
       themeColor: _parseColor(json['tech_color']),
@@ -32,7 +39,7 @@ class BotConfig {
       // Mapeo seguro: Si es null o 'dark', es Dark Mode.
       isDarkMode: (json['theme_mode'] ?? 'dark') == 'dark',
       // Mapeo seguro: acepta bool o string "true"/"false". Si falta, default false (cada página puede tener su sistema).
-      showOfflineAlert: _parseBool(json['show_offline_alert'], false),
+      showOfflineAlert: parsedShowOfflineAlert,
       // ⬅️ Mensaje inicial: si no existe, usar el por defecto
       initialMessage: json['initial_message'] as String?,
       // ⬅️ WhatsApp: habilitar botón flotante
