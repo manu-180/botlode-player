@@ -1956,25 +1956,27 @@ REGLA CRITICA DE MEMORIA:
       status: 200,
     });
 
-    // 12. GUARDAR RESPUESTA DEL BOT EN BACKGROUND (después de devolver respuesta)
+    // 12. GUARDAR RESPUESTA DEL BOT EN BACKGROUND (solo si saveToHistory)
     // El historial se actualizará después, pero el chat en vivo ya tiene la respuesta
-    supabaseAdmin.from('chat_logs').insert({
-      session_id: sessionId, 
-      role: 'bot', 
-      content: parsedResponse.reply, 
-      bot_id: botId, 
-      intent_score: parsedResponse.intent_score || 0 
-    }).then(() => {
-      // Logging reducido - solo en caso de error
-      // log('info', 'Respuesta del bot guardada en historial (background)');
-    }).catch((e: any) => {
-      log('error', 'Error guardando respuesta del bot', { error: e.message });
-    });
+    if (saveToHistory) {
+      supabaseAdmin.from('chat_logs').insert({
+        session_id: sessionId, 
+        role: 'bot', 
+        content: parsedResponse.reply, 
+        bot_id: botId, 
+        intent_score: parsedResponse.intent_score || 0 
+      }).then(() => {
+        // Logging reducido - solo en caso de error
+        // log('info', 'Respuesta del bot guardada en historial (background)');
+      }).catch((e: any) => {
+        log('error', 'Error guardando respuesta del bot', { error: e.message });
+      });
+    }
 
-    // 13. VERIFICAR Y ENVIAR ALERTA DE LEAD (en background, no bloquea respuesta)
+    // 13. VERIFICAR Y ENVIAR ALERTA DE LEAD (solo si guardamos historial; en background)
     // ⬅️ Mover a background para no retrasar la respuesta HTTP
     const intentScore = parsedResponse.intent_score || 0;
-    if (intentScore >= 80) {
+    if (saveToHistory && intentScore >= 80) {
       // Ejecutar en background sin await (no bloquea la respuesta)
       (async () => {
         try {
