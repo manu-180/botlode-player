@@ -1598,9 +1598,10 @@ REGLA CRITICA DE MEMORIA:
         });
       }
 
-      // ⬅️ REGLA DE NEGOCIO: 80% (verde) solo cuando hay dato guardado (contacto + resumen).
-      // Charla casual → 25%. Sin dato guardado → máx 75%. Con contacto/reunión guardado → permitir 80%+.
-      if (detectCasualSmallTalk(message)) {
+      // ⬅️ REGLA DE NEGOCIO: señal de contacto/reunión debe reflejarse en score alto.
+      // Charla casual solo aplica si NO hay señal de contacto/reunión en el turno.
+      const hasHighIntentSignal = hasContactInMessage || hasMeetingConfirmed;
+      if (detectCasualSmallTalk(message) && !hasHighIntentSignal) {
         parsedResponse.intent_score = 25;
         log('info', 'Score fijado a 25% (charla casual)', { messagePreview: message.substring(0, 80) });
       } else if (!(hasContact || hasMeetingConfirmed)) {
@@ -1612,7 +1613,15 @@ REGLA CRITICA DE MEMORIA:
           });
         }
       }
-      // Si hasContact || hasMeetingConfirmed → no capar; 80%+ permitido (email y verde con sentido)
+      // Si el usuario acaba de dejar contacto (o ya confirmó reunión), elevar a mínimo 80.
+      if (hasHighIntentSignal && parsedResponse.intent_score < 80) {
+        parsedResponse.intent_score = 80;
+        log('info', 'Score elevado a 80% por señal de contacto/reunión', {
+          hasContactInMessage,
+          hasMeetingConfirmed,
+          messagePreview: message.substring(0, 80),
+        });
+      }
       
       // ⬅️ REFACTOR: Resumen del proyecto SOLO cuando hay contacto o reunión confirmada.
       // Durante la conversación NO guardamos la primera frase como resumen; recopilamos fragmentos
