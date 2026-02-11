@@ -29,19 +29,40 @@ class BotRepositoryImpl implements BotRepository {
       return Stream.value(defaultConfig);
     }
 
+    // Realtime: para que el tema (theme_mode) se actualice en tiempo real al cambiar en botslode,
+    // la tabla "bots" debe tener habilitado UPDATE en Supabase → Database → Replication.
     try {
       return _supabase
           .from('bots')
           .stream(primaryKey: ['id'])
           .eq('id', botId)
-          .map((List<Map<String, dynamic>> data) {
-            print('🔍 [BotRepository] Stream data recibido: ${data.length} items');
+          .asyncMap((List<Map<String, dynamic>> data) async {
+            if (kDebugMode) {
+              debugPrint('🔍 [BotRepository] Stream data recibido: ${data.length} items');
+            }
             if (data.isEmpty) {
-              print('🔍 [BotRepository] Data vacía, usando defaultConfig');
+              if (kDebugMode) debugPrint('🔍 [BotRepository] Data vacía, usando defaultConfig');
               return defaultConfig;
             }
-            print('🔍 [BotRepository] Parseando config del primer item...');
-            return BotConfig.fromJson(data.first);
+            final row = data.first;
+            // Realtime UPDATE a veces envía solo campos modificados; obtener fila completa para tema y resto de config
+            final bool looksPartial = row.length < 5 || !row.containsKey('name');
+            if (looksPartial) {
+              try {
+                final full = await _supabase
+                    .from('bots')
+                    .select()
+                    .eq('id', botId)
+                    .maybeSingle();
+                if (full != null) {
+                  if (kDebugMode) debugPrint('🔍 [BotRepository] Fila completa tras UPDATE (theme_mode en tiempo real)');
+                  return BotConfig.fromJson(full);
+                }
+              } catch (_) {
+                // Si falla el select, usar payload parcial (theme_mode puede estar presente)
+              }
+            }
+            return BotConfig.fromJson(row);
           })
           .handleError((error) {
             // Errores de red/WebSocket al estar sin conexión: no loguear como CRITICAL
