@@ -44,9 +44,6 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
     
     // ⬅️ CRÍTICO: El hover solo debe aplicarse cuando el chat está CERRADO Y no está bloqueado
     final isHovered = !isOpen && isHoveredRaw && !hoverLocked;
-    
-    // 🔍 DEBUG: Log de estados
-    print('🔍 BUILD floating_bot_widget - isOpen: $isOpen, isHoveredRaw: $isHoveredRaw, hoverLocked: $hoverLocked, isHovered: $isHovered');
 
     final bool showOfflineAlert =
         botConfigAsync.asData?.value.showOfflineAlert ?? false;
@@ -61,14 +58,10 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
       }
       
       // ⬅️ RESETEAR HOVER: Siempre que el chat cambie de estado (abre o cierra), resetear hover
-      print('🔍 LISTENER chatOpenProvider - previous: $previous, next: $next, RESETEANDO HOVER a false');
       ref.read(isHoveredExternalProvider.notifier).state = false;
-      print('🔍 HOVER después de reset: ${ref.read(isHoveredExternalProvider)}');
-      
       // ⬅️ BLOQUEAR HOVER: Cuando el chat se cierra, bloquear hover hasta que el mouse salga
       if (previous == true && next == false) {
         ref.read(hoverLockedProvider.notifier).state = true;
-        print('🔒 HOVER BLOQUEADO - El mouse debe salir de la burbuja para reactivar hover');
       }
       
       if (previous == true && next == false) {
@@ -303,25 +296,16 @@ class _FloatingBotWidgetState extends ConsumerState<FloatingBotWidget> {
             child: MouseRegion(
               onEnter: (_) {
                 final hoverLocked = ref.read(hoverLockedProvider);
-                print('🔍 MouseRegion ENTER - isOpen: $isOpen, hoverLocked: $hoverLocked');
-                // ⬅️ Solo activar hover si no está bloqueado
                 if (!hoverLocked) {
                   ref.read(isHoveredExternalProvider.notifier).state = true;
-                  print('🔍 MouseRegion ENTER - hover activado: ${ref.read(isHoveredExternalProvider)}');
-                } else {
-                  print('🔒 MouseRegion ENTER - hover bloqueado, no se activa');
                 }
               },
               onExit: (_) {
                 final hoverLocked = ref.read(hoverLockedProvider);
-                print('🔍 MouseRegion EXIT - isOpen: $isOpen, hoverLocked: $hoverLocked');
                 ref.read(isHoveredExternalProvider.notifier).state = false;
-                // ⬅️ Desbloquear hover cuando el mouse sale
                 if (hoverLocked) {
                   ref.read(hoverLockedProvider.notifier).state = false;
-                  print('🔓 HOVER DESBLOQUEADO - Ahora el hover puede activarse nuevamente');
                 }
-                print('🔍 MouseRegion EXIT - hover ahora: ${ref.read(isHoveredExternalProvider)}');
               },
               child: AnimatedScale(
                 scale: isOpen ? 0.0 : 1.0, 

@@ -202,8 +202,6 @@ class _ChatInputState extends State<_ChatInput> {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
     
-    // TODO: Aquí conectaremos el envío real en pasos futuros
-    print('📤 Mensaje enviado: $text');
     _controller.clear();
   }
   

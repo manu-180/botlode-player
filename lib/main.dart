@@ -182,7 +182,6 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
       else if (data == 'CMD_CLOSE') ref.read(chatOpenProvider.notifier).set(false);
       else if (data == 'HITZONE_CLICK_BOT') {
         // ⬅️ Fallback: si UltraSimpleBot no procesó el Map, este String lo abre
-        if (kDebugMode) print('🎯 HITZONE_CLICK_BOT recibido en BotPlayerApp (String fallback)');
         ref.read(chatOpenProvider.notifier).set(true);
       }
     });

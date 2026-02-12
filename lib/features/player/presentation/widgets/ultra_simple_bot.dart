@@ -11,7 +11,6 @@ import 'package:botlode_player/features/player/presentation/providers/ui_provide
 import 'package:botlode_player/features/player/presentation/views/chat_panel_view.dart';
 import 'package:botlode_player/features/player/presentation/widgets/rive_avatar.dart';
 import 'package:botlode_player/features/player/presentation/widgets/whatsapp_button.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -75,11 +74,9 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
           final type = data['type'];
           if (type == 'HITZONE_CLICK_BOT') {
             // Click en la burbuja del bot → abrir chat
-            if (kDebugMode) print('🎯 HITZONE_CLICK_BOT recibido (Map)');
             _openChatFromBubble(ref);
           } else if (type == 'HITZONE_CLICK_WPP') {
             // Click en la burbuja de WhatsApp → abrir WhatsApp
-            if (kDebugMode) print('🎯 HITZONE_CLICK_WPP recibido');
             final botConfig = ref.read(botConfigProvider).asData?.value;
             if (botConfig?.telefono != null && botConfig!.telefono!.isNotEmpty) {
               final phone = botConfig.telefono!.replaceAll(RegExp(r'[^\d+]'), '');
@@ -102,19 +99,14 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
         // Canal 2: String simple (fallback para interop Dart-JS problemática)
         else if (data is String) {
           if (data == 'HITZONE_CLICK_BOT') {
-            if (kDebugMode) print('🎯 HITZONE_CLICK_BOT recibido (String fallback)');
             _openChatFromBubble(ref);
           } else if (data == 'CMD_ENSURE_FOCUS') {
             // 📱 BLINDAJE v3: El HTML padre pide que forcemos foco desde adentro del iframe.
-            // Esto contrarresta iOS Safari que consume el primer tap para dar foco al iframe.
-            if (kDebugMode) print('🎯 CMD_ENSURE_FOCUS recibido - Forzando foco del documento');
             try { html.document.body?.focus(); } catch (_) {}
           }
           // HITZONE_CLICK_WPP no necesita fallback String (ya se maneja en BotPlayerApp)
         }
-      } catch (e) {
-        if (kDebugMode) print('⚠️ Error procesando mensaje hitzone: $e');
-      }
+      } catch (_) {}
     });
     
     // ⬅️ ANIMACIÓN PROFESIONAL: Duración rápida al cerrar (200ms) para respuesta inmediata tras click en X
@@ -239,11 +231,9 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
     final now = DateTime.now();
     if (_lastBubbleOpenTime != null &&
         now.difference(_lastBubbleOpenTime!).inMilliseconds < 80) {
-      if (kDebugMode) print('⏭️ _openChatFromBubble: debounce activo, ignorando');
       return;
     }
     _lastBubbleOpenTime = now;
-    if (kDebugMode) print('🎯✅ _openChatFromBubble: abriendo chat');
     // ⬅️ Rive visible por defecto al abrir; se oculta solo al tocar input o el Rive
     ref.read(chatOpenProvider.notifier).set(true);
   }
@@ -288,10 +278,7 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
       try {
         html.window.parent?.postMessage(enabled ? 'CMD_BOT_ENABLED' : 'CMD_BOT_DISABLED', '*');
         if (enabled) _sendWppVisibility(ref);
-        if (kDebugMode) print('🛰 [Bot] ${enabled ? "CMD_BOT_ENABLED" : "CMD_BOT_DISABLED"} → padre');
-      } catch (e) {
-        if (kDebugMode) print('⚠️ [Bot] Error enviando estado enabled: $e');
-      }
+      } catch (_) {}
     });
     
     // ⬅️ Enviar showOfflineAlert al HTML cuando la config del bot esté disponible (widget activo = UltraSimpleBot).
@@ -308,14 +295,7 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
           'themeMode': themeMode,
           'isDarkMode': isDark,
         }, '*');
-        if (kDebugMode) {
-          print('🛰 [Config] BOT_CONFIG → padre: showOfflineAlert=$show themeMode=$themeMode isDarkMode=$isDark');
-        }
-      } catch (e) {
-        if (kDebugMode) {
-          print('⚠️ [Config] Error al enviar BOT_CONFIG: $e');
-        }
-      }
+      } catch (_) {}
     });
 
     // ⬅️ LISTENER GLOBAL: Conectividad (se ejecuta aunque el chat esté cerrado).
@@ -323,12 +303,6 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
     // ⚠️ CRÍTICO: Este listener funciona tanto en modo burbuja como con chat abierto
     ref.listen(connectivityProvider, (prev, online) {
       final showOfflineAlert = ref.read(botConfigProvider).asData?.value.showOfflineAlert ?? false;
-      
-      // ⬅️ DEBUG: Log para verificar detección de cambio de conectividad
-      if (kDebugMode) {
-        print('🛰 [Conectividad] Estado: ${online ? "ONLINE" : "OFFLINE"}, showOfflineAlert: $showOfflineAlert, chatOpen: $isOpen');
-      }
-      
       if (!showOfflineAlert) return;
       
       try {
@@ -344,10 +318,6 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
             'online': false,
             'source': 'botlode_player',
           }, '*');
-          
-          if (kDebugMode) {
-            print('🛰 [Conectividad] Enviado mensaje NETWORK_OFFLINE al HTML padre');
-          }
         } else {
           if (!_wasNetworkOffline) return;
           _wasNetworkOffline = false;
@@ -358,16 +328,8 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
             'online': true,
             'source': 'botlode_player',
           }, '*');
-          
-          if (kDebugMode) {
-            print('🛰 [Conectividad] Enviado mensaje NETWORK_ONLINE al HTML padre');
-          }
         }
-      } catch (e) {
-        if (kDebugMode) {
-          print('⚠️ [Conectividad] Error al enviar mensaje al HTML padre: $e');
-        }
-      }
+      } catch (_) {}
     });
 
     // ⬅️ Sincronizar estado online/offline con el historial
@@ -558,19 +520,13 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
             // ⬅️ NO llamar a setOnline() aquí - la reclamación de sesión ya se hizo
             // Solo iniciar el heartbeat periódico DESPUÉS de que la reclamación se complete
             await Future.delayed(const Duration(milliseconds: 500));
-            
-            print("🟢 Chat Abierto (UltraSimple) -> Iniciando heartbeat periódico (reclamación ya completada)");
-            // ⬅️ Solo iniciar el heartbeat, pero NO actualizar is_online (ya está actualizado por la reclamación)
             presenceManager.setOnline();
             _lastKnownOpenState = true;
           } else {
-            print("🔴 Chat Cerrado (UltraSimple) -> Enviando OFFLINE");
             presenceManager.setOffline();
             _lastKnownOpenState = false;
           }
-        } catch (e) {
-          print("⚠️ Error al acceder a PresenceManager (UltraSimple): $e");
-        }
+        } catch (_) {}
       });
     });
     

@@ -3,15 +3,9 @@
 // sin StreamController ni delays. El UI reacciona en el mismo tick que
 // el navegador dispara onOnline/onOffline.
 import 'dart:html' as html;
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-void _logConnectivity(String message) {
-  if (kDebugMode) {
-    // ignore: avoid_print
-    print('🛰 [connectivity] $message');
-  }
-}
+void _logConnectivity(String message) {}
 
 /// Estado de conectividad: true = online, false = offline.
 /// Actualización síncrona en el mismo tick que window.onOnline/onOffline.

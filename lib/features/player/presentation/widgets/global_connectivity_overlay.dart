@@ -1,16 +1,10 @@
 import 'package:botlode_player/core/network/connectivity_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-void _logOverlay(String message) {
-  if (kDebugMode) {
-    // ignore: avoid_print
-    print('🛰 [GlobalConnectivityOverlay] $message');
-  }
-}
+void _logOverlay(String message) {}
 
 /// Overlay de conectividad: muestra cartel "Sin conexión" cuando está offline.
 /// SOLO se muestra cuando el chat está ABIERTO (iframe grande).

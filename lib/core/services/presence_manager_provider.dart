@@ -20,9 +20,7 @@ final presenceManagerProvider = Provider.autoDispose<PresenceManager>((ref) {
     botId: botId,
   );
   
-  // Cleanup cuando el provider se dispose
   ref.onDispose(() {
-    print("🧹 PresenceManager disposed, enviando OFFLINE");
     manager.setOffline();
   });
 

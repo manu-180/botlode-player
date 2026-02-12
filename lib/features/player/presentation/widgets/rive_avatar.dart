@@ -150,8 +150,6 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       _moodInput?.value = ref.read(botMoodProvider).toDouble();
       _lookXInput?.value = 50; 
       _lookYInput?.value = 50; 
-    } else {
-      print("⚠️ No se encontró State Machine en el archivo Rive");
     }
   }
 

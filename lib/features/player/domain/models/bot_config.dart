@@ -30,8 +30,6 @@ class BotConfig {
   factory BotConfig.fromJson(Map<String, dynamic> json) {
     final rawTheme = json['theme_mode'];
     final isDark = (rawTheme ?? 'dark') == 'dark';
-    // ignore: avoid_print
-    print('🎨 [BotConfig] theme_mode(raw)=$rawTheme → isDarkMode=$isDark');
     final parsedShowOfflineAlert = _parseBool(json['show_offline_alert'], true);
     return BotConfig(
       name: json['name'] ?? 'Unit 01',
@@ -63,27 +61,13 @@ class BotConfig {
   }
 
   static bool _parseBool(dynamic value, bool defaultValue) {
-    print('🔍 [_parseBool] value=$value, tipo=${value.runtimeType}, default=$defaultValue');
-    if (value == null) {
-      print('🔍 [_parseBool] Valor es NULL, usando default: $defaultValue');
-      return defaultValue;
-    }
-    if (value is bool) {
-      print('🔍 [_parseBool] Valor es bool: $value');
-      return value;
-    }
+    if (value == null) return defaultValue;
+    if (value is bool) return value;
     if (value is String) {
       final lower = value.toLowerCase();
-      if (lower == 'true' || lower == '1') {
-        print('🔍 [_parseBool] String "true" detectado');
-        return true;
-      }
-      if (lower == 'false' || lower == '0') {
-        print('🔍 [_parseBool] String "false" detectado');
-        return false;
-      }
+      if (lower == 'true' || lower == '1') return true;
+      if (lower == 'false' || lower == '0') return false;
     }
-    print('🔍 [_parseBool] Tipo no reconocido, usando default: $defaultValue');
     return defaultValue;
   }
 
