@@ -14,7 +14,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-const String DEPLOY_VERSION = "PLAYER PROGRESIVO v5.40 - Animación mejorada: deslizamiento suave sin lag";
+const String DEPLOY_VERSION = "PLAYER v5.41 - BLINDAJE INPUT MÓVIL: Focus multi-intento para iOS/Android";
 
 void main() {
   runZonedGuarded(() async {
@@ -178,13 +178,30 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
       final data = event.data;
       // Solo procesar Strings (las Maps se procesan en UltraSimpleBot._messageSubscription)
       if (data is! String) return;
-      if (data == 'CMD_OPEN') ref.read(chatOpenProvider.notifier).set(true);
+      if (data == 'CMD_OPEN') {
+        ref.read(chatOpenProvider.notifier).set(true);
+        // ⬅️ BLINDAJE: Forzar focus del input 100ms después de abrir
+        Future.delayed(const Duration(milliseconds: 100), () {
+          ref.read(focusChatInputTriggerProvider.notifier).state++;
+        });
+      }
       else if (data == 'CMD_CLOSE') ref.read(chatOpenProvider.notifier).set(false);
       else if (data == 'CMD_FOCUS_INPUT') {
+        // ⬅️ BLINDAJE MÁXIMO: Incrementar múltiples veces con delays para iOS
         ref.read(focusChatInputTriggerProvider.notifier).state++;
+        Future.delayed(const Duration(milliseconds: 50), () {
+          ref.read(focusChatInputTriggerProvider.notifier).state++;
+        });
+        Future.delayed(const Duration(milliseconds: 100), () {
+          ref.read(focusChatInputTriggerProvider.notifier).state++;
+        });
       } else if (data == 'HITZONE_CLICK_BOT') {
         // ⬅️ Fallback: si UltraSimpleBot no procesó el Map, este String lo abre
         ref.read(chatOpenProvider.notifier).set(true);
+        // ⬅️ BLINDAJE: Forzar focus después de abrir desde hitzone
+        Future.delayed(const Duration(milliseconds: 100), () {
+          ref.read(focusChatInputTriggerProvider.notifier).state++;
+        });
       }
     });
   }
