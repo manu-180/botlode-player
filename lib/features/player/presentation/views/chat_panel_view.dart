@@ -490,29 +490,7 @@ class _ProfessionalInputFieldState extends State<_ProfessionalInputField> {
     if (mounted && _focusNode.canRequestFocus) {
       final enabled = widget.isOnline && !widget.isLoading;
       if (enabled) {
-        // ⬅️ BLINDAJE MÁXIMO: Múltiples intentos con delays para iOS/Android
         _focusNode.requestFocus();
-        
-        // Segundo intento después de 50ms
-        Future.delayed(const Duration(milliseconds: 50), () {
-          if (mounted && _focusNode.canRequestFocus) {
-            _focusNode.requestFocus();
-          }
-        });
-        
-        // Tercer intento después de 100ms
-        Future.delayed(const Duration(milliseconds: 100), () {
-          if (mounted && _focusNode.canRequestFocus) {
-            _focusNode.requestFocus();
-          }
-        });
-        
-        // Cuarto intento después de 200ms
-        Future.delayed(const Duration(milliseconds: 200), () {
-          if (mounted && _focusNode.canRequestFocus) {
-            _focusNode.requestFocus();
-          }
-        });
       }
     }
   }
@@ -603,18 +581,7 @@ class _ProfessionalInputFieldState extends State<_ProfessionalInputField> {
                   onPointerDown: (_) {
                     widget.onInputTapped?.call();
                     if (!_focusNode.hasFocus && isInputEnabled) {
-                      // ⬅️ BLINDAJE: Intentos múltiples inmediatos
                       _focusNode.requestFocus();
-                      Future.delayed(const Duration(milliseconds: 10), () {
-                        if (mounted && !_focusNode.hasFocus && isInputEnabled) {
-                          _focusNode.requestFocus();
-                        }
-                      });
-                      Future.delayed(const Duration(milliseconds: 30), () {
-                        if (mounted && !_focusNode.hasFocus && isInputEnabled) {
-                          _focusNode.requestFocus();
-                        }
-                      });
                     }
                   },
                   onPointerUp: (_) {
@@ -623,22 +590,6 @@ class _ProfessionalInputFieldState extends State<_ProfessionalInputField> {
                     // pointerDown pero sí entregar pointerUp al contenido.
                     if (!_focusNode.hasFocus && isInputEnabled) {
                       _focusNode.requestFocus();
-                      // ⬅️ BLINDAJE: Intentos adicionales con delays
-                      Future.delayed(const Duration(milliseconds: 10), () {
-                        if (mounted && !_focusNode.hasFocus && isInputEnabled) {
-                          _focusNode.requestFocus();
-                        }
-                      });
-                      Future.delayed(const Duration(milliseconds: 30), () {
-                        if (mounted && !_focusNode.hasFocus && isInputEnabled) {
-                          _focusNode.requestFocus();
-                        }
-                      });
-                      Future.delayed(const Duration(milliseconds: 60), () {
-                        if (mounted && !_focusNode.hasFocus && isInputEnabled) {
-                          _focusNode.requestFocus();
-                        }
-                      });
                     }
                   },
                   child: TextField(
