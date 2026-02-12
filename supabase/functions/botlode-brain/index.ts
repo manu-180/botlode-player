@@ -531,6 +531,187 @@ async function gatherDateAndTimeFromMessages(
   return { date, time };
 }
 
+type CalendarSettingsRow = {
+  bot_id: string;
+  is_enabled: boolean;
+  meeting_duration_minutes: number;
+  timezone: string;
+};
+
+type CalendarAvailabilityRow = {
+  weekday: number;
+  start_time: string;
+  end_time: string;
+  is_enabled: boolean;
+};
+
+type CalendarMeetingRow = {
+  scheduled_at: string;
+  status: string;
+};
+
+type CalendarSlot = {
+  startsAtIso: string;
+  weekday: number;
+  dateLabel: string;
+  timeLabel: string;
+};
+
+function formatDateYmdInTz(date: Date, timezone: string): string {
+  const formatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  return formatter.format(date);
+}
+
+function weekdayInTz(date: Date, timezone: string): number {
+  const short = new Intl.DateTimeFormat('en-US', { timeZone: timezone, weekday: 'short' }).format(date).toLowerCase();
+  const map: Record<string, number> = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
+  return map[short] ?? 0;
+}
+
+function zonedDateTimeToUtc(dateYmd: string, hour: number, minute: number, timezone: string): Date {
+  const [y, m, d] = dateYmd.split('-').map(Number);
+  const utcGuess = new Date(Date.UTC(y, m - 1, d, hour, minute, 0));
+  const tzAsLocal = new Date(utcGuess.toLocaleString('en-US', { timeZone: timezone }));
+  const diffMs = utcGuess.getTime() - tzAsLocal.getTime();
+  return new Date(utcGuess.getTime() + diffMs);
+}
+
+function parseHHmm(value: string): { hour: number; minute: number } | null {
+  const cleaned = (value || '').trim().toLowerCase();
+  const compact = cleaned
+    .replace(/^a\s+las\s+/i, '')
+    .replace(/\s*hs?\.?$/i, '')
+    .replace(/\./g, ':');
+  const match = compact.match(/^(\d{1,2})(?::(\d{2}))?(?::(\d{2}))?$/);
+  if (!match) return null;
+  const hour = Number(match[1]);
+  const minute = Number(match[2] || '0');
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+  return { hour, minute };
+}
+
+function parseDateTextToYmd(dateText: string | null, timezone: string): string | null {
+  if (!dateText) return null;
+  const raw = dateText.trim().toLowerCase();
+  const now = new Date();
+
+  const weekdayMap: Record<string, number> = {
+    domingo: 0, dom: 0,
+    lunes: 1, lun: 1,
+    martes: 2, mar: 2,
+    miercoles: 3, miércoles: 3, mie: 3, mié: 3,
+    jueves: 4, jue: 4,
+    viernes: 5, vie: 5,
+    sabado: 6, sábado: 6, sab: 6,
+  };
+
+  if (raw === 'hoy') return formatDateYmdInTz(now, timezone);
+  if (raw === 'mañana' || raw === 'manana') {
+    return formatDateYmdInTz(new Date(now.getTime() + 24 * 60 * 60 * 1000), timezone);
+  }
+  if (raw.includes('pasado mañana') || raw.includes('pasado manana')) {
+    return formatDateYmdInTz(new Date(now.getTime() + 48 * 60 * 60 * 1000), timezone);
+  }
+
+  const weekdayKey = raw.replace(/^el\s+/, '');
+  if (weekdayMap[weekdayKey] !== undefined) {
+    const current = weekdayInTz(now, timezone);
+    const target = weekdayMap[weekdayKey];
+    let delta = target - current;
+    if (delta <= 0) delta += 7;
+    return formatDateYmdInTz(new Date(now.getTime() + delta * 24 * 60 * 60 * 1000), timezone);
+  }
+
+  const dateMatch = raw.match(/^(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?$/);
+  if (dateMatch) {
+    const day = Number(dateMatch[1]);
+    const month = Number(dateMatch[2]);
+    let year = Number(dateMatch[3] || '0');
+    if (!year) {
+      year = Number(formatDateYmdInTz(now, timezone).slice(0, 4));
+    }
+    if (year < 100) year += 2000;
+    if (day >= 1 && day <= 31 && month >= 1 && month <= 12) {
+      return `${year.toString().padStart(4, '0')}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+    }
+  }
+
+  return null;
+}
+
+function generateAvailableSlots(params: {
+  timezone: string;
+  durationMinutes: number;
+  availability: CalendarAvailabilityRow[];
+  bookedMeetings: CalendarMeetingRow[];
+  daysAhead: number;
+}): CalendarSlot[] {
+  const { timezone, durationMinutes, availability, bookedMeetings, daysAhead } = params;
+  const now = new Date();
+  const nowMs = now.getTime();
+  const bookedSet = new Set(
+    (bookedMeetings || [])
+      .filter((m) => m.status === 'booked' && !!m.scheduled_at)
+      .map((m) => new Date(m.scheduled_at).toISOString()),
+  );
+
+  const slots: CalendarSlot[] = [];
+  for (let dayOffset = 0; dayOffset <= daysAhead; dayOffset++) {
+    const dayDate = new Date(now.getTime() + dayOffset * 24 * 60 * 60 * 1000);
+    const dateYmd = formatDateYmdInTz(dayDate, timezone);
+    const weekday = weekdayInTz(dayDate, timezone);
+    const windows = availability.filter((a) => a.is_enabled && a.weekday === weekday);
+    if (windows.length === 0) continue;
+
+    for (const window of windows) {
+      const start = parseHHmm(window.start_time);
+      const end = parseHHmm(window.end_time);
+      if (!start || !end) continue;
+
+      let cursor = zonedDateTimeToUtc(dateYmd, start.hour, start.minute, timezone);
+      const endUtc = zonedDateTimeToUtc(dateYmd, end.hour, end.minute, timezone);
+      while (cursor.getTime() + durationMinutes * 60000 <= endUtc.getTime()) {
+        const iso = cursor.toISOString();
+        if (cursor.getTime() > nowMs + 2 * 60 * 1000 && !bookedSet.has(iso)) {
+          const timeLabel = new Intl.DateTimeFormat('es-AR', {
+            timeZone: timezone,
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false,
+          }).format(cursor);
+          const dateLabel = new Intl.DateTimeFormat('es-AR', {
+            timeZone: timezone,
+            weekday: 'long',
+            day: '2-digit',
+            month: '2-digit',
+          }).format(cursor);
+          slots.push({
+            startsAtIso: iso,
+            weekday,
+            dateLabel,
+            timeLabel,
+          });
+        }
+        cursor = new Date(cursor.getTime() + durationMinutes * 60000);
+      }
+    }
+  }
+  return slots.sort((a, b) => a.startsAtIso.localeCompare(b.startsAtIso));
+}
+
+function buildSlotsReply(slots: CalendarSlot[], durationMinutes: number): string {
+  if (slots.length === 0) {
+    return 'En este momento no tengo horarios disponibles para reunión. Si querés, dejame tu contacto y te avisamos cuando se libere un espacio.';
+  }
+  const options = slots.slice(0, 4).map((s, idx) => `${idx + 1}) ${s.dateLabel} a las ${s.timeLabel}`).join(' | ');
+  return `Perfecto. La reunión dura ${durationMinutes} minutos. Tengo estos horarios disponibles: ${options}. Decime cuál preferís.`;
+}
+
 // ⬅️ MEJORA 4: Extracción inteligente de reuniones usando IA (más preciso que regex)
 async function extractMeetingWithAI(
   message: string,
@@ -949,6 +1130,49 @@ serve(async (req) => {
     if (botError || !botConfig) {
       log('error', 'Bot no encontrado', { botId, error: botError });
       throw new Error("Bot no encontrado");
+    }
+
+    // 1.1 CONFIGURACION DE CALENDARIO DEL BOT
+    const { data: calendarSettings } = await supabaseAdmin
+      .from('bot_calendar_settings')
+      .select('bot_id, is_enabled, meeting_duration_minutes, timezone')
+      .eq('bot_id', botId)
+      .maybeSingle();
+
+    const effectiveCalendarSettings: CalendarSettingsRow = {
+      bot_id: botId,
+      is_enabled: calendarSettings?.is_enabled === true,
+      meeting_duration_minutes: calendarSettings?.meeting_duration_minutes || 30,
+      timezone: calendarSettings?.timezone || 'America/Argentina/Buenos_Aires',
+    };
+
+    let availabilityRows: CalendarAvailabilityRow[] = [];
+    let bookedMeetings: CalendarMeetingRow[] = [];
+    let availableSlots: CalendarSlot[] = [];
+
+    if (effectiveCalendarSettings.is_enabled) {
+      const [{ data: availabilityData }, { data: meetingsData }] = await Promise.all([
+        supabaseAdmin
+          .from('bot_calendar_availability')
+          .select('weekday, start_time, end_time, is_enabled')
+          .eq('bot_id', botId),
+        supabaseAdmin
+          .from('bot_meetings')
+          .select('scheduled_at, status')
+          .eq('bot_id', botId)
+          .eq('status', 'booked')
+          .gte('scheduled_at', new Date().toISOString()),
+      ]);
+
+      availabilityRows = (availabilityData || []) as CalendarAvailabilityRow[];
+      bookedMeetings = (meetingsData || []) as CalendarMeetingRow[];
+      availableSlots = generateAvailableSlots({
+        timezone: effectiveCalendarSettings.timezone,
+        durationMinutes: effectiveCalendarSettings.meeting_duration_minutes,
+        availability: availabilityRows,
+        bookedMeetings,
+        daysAhead: 14,
+      });
     }
 
     // 2. OBTENER HISTORIAL DE CONVERSACIÓN (ventana ampliada)
@@ -1426,7 +1650,7 @@ REGLA CRITICA DE MEMORIA:
     );
     
     // Solo agregar reunión si el usuario confirmó Y hay contacto
-    if (meetingInfo.intent && hasContactInThisMessage) {
+    if (effectiveCalendarSettings.is_enabled && meetingInfo.intent && hasContactInThisMessage) {
       let finalDate = meetingInfo.date;
       let finalTime = meetingInfo.time;
       if (!finalDate || !finalTime) {
@@ -1532,7 +1756,7 @@ REGLA CRITICA DE MEMORIA:
     
     // ⬅️ NUEVO: Si encontramos una reunión pendiente (confirmada antes pero sin contacto),
     // y ahora el usuario da contacto, guardar la reunión
-    if (pendingMeetingInfo && hasContactInMessage && !hasPreviousMeeting) {
+    if (effectiveCalendarSettings.is_enabled && pendingMeetingInfo && hasContactInMessage && !hasPreviousMeeting) {
       // Logging reducido
       // log('info', 'Guardando reunión pendiente ahora que hay contacto');
       extractedContacts.push({
@@ -1549,12 +1773,15 @@ REGLA CRITICA DE MEMORIA:
     }
     
     const hasContact = hasContactInMessage || hasPreviousContact; // ⬅️ Contacto en mensaje actual O en BD
+    const userAskedForMeeting = meetingInfo.intent || /\b(reuni[oó]n|agendar|agenda|turno|cita|horario)\b/i.test(message);
+    const hasDateTimeInContext = Boolean((meetingInfo.date || pendingMeetingInfo?.date) && (meetingInfo.time || pendingMeetingInfo?.time));
     
     // ⬅️ Determinar si hay reunión confirmada:
     // 1. El usuario confirmó reunión EN ESTE MENSAJE Y hay contacto EN ESTE MENSAJE, O
     // 2. Ya hay una reunión guardada previamente en BD, O
     // 3. Encontramos una reunión pendiente y ahora hay contacto
-    const hasMeetingConfirmed = (meetingInfo.intent && hasContactInMessage) || hasPreviousMeeting || (pendingMeetingInfo !== null && hasContactInMessage);
+    const hasMeetingConfirmed = effectiveCalendarSettings.is_enabled &&
+      ((meetingInfo.intent && hasContactInMessage) || hasPreviousMeeting || (pendingMeetingInfo !== null && hasContactInMessage));
     
     // Logging reducido - solo en modo debug
     // log('info', 'Estado de contacto/reunión', {
@@ -1573,6 +1800,9 @@ REGLA CRITICA DE MEMORIA:
     
     // ⬅️ CRÍTICO: Declarar projectSummary fuera del try para que esté disponible en todo el scope
     let projectSummary: string | null = null;
+    let bookedMeetingIso: string | null = null;
+    let bookedMeetingLabelDate: string | null = null;
+    let bookedMeetingLabelTime: string | null = null;
     
     let parsedResponse;
     try {
@@ -1586,6 +1816,13 @@ REGLA CRITICA DE MEMORIA:
       }
       if (typeof parsedResponse.intent_score !== 'number' || parsedResponse.intent_score < 0 || parsedResponse.intent_score > 100) {
         parsedResponse.intent_score = Math.max(0, Math.min(100, parsedResponse.intent_score || 0));
+      }
+
+      // Calendario: controlar oferta de reuniones desde configuración del bot
+      if (userAskedForMeeting && !effectiveCalendarSettings.is_enabled) {
+        parsedResponse.reply = 'En este momento el calendario está desactivado para este bot, así que no puedo ofrecer reuniones. Si querés, dejame tu contacto y te avisamos.';
+      } else if (effectiveCalendarSettings.is_enabled && userAskedForMeeting && !hasDateTimeInContext) {
+        parsedResponse.reply = buildSlotsReply(availableSlots, effectiveCalendarSettings.meeting_duration_minutes);
       }
       
       // ⬅️ CRÍTICO: Ajustar intent_score basado en detección de negatividad/desinterés
@@ -1740,6 +1977,85 @@ REGLA CRITICA DE MEMORIA:
         }
       } else if (hasMeetingConfirmed && hasContact) {
         // ⬅️ NUEVO: Si hay reunión Y contacto, confirmar y resumir
+        if (effectiveCalendarSettings.is_enabled) {
+          const { data: existingMeeting } = await supabaseAdmin
+            .from('bot_meetings')
+            .select('scheduled_at, duration_minutes')
+            .eq('bot_id', botId)
+            .eq('session_id', sessionId)
+            .eq('status', 'booked')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (existingMeeting?.scheduled_at) {
+            const existingDate = new Date(existingMeeting.scheduled_at);
+            bookedMeetingIso = existingDate.toISOString();
+            bookedMeetingLabelDate = new Intl.DateTimeFormat('es-AR', {
+              timeZone: effectiveCalendarSettings.timezone,
+              weekday: 'long',
+              day: '2-digit',
+              month: '2-digit',
+            }).format(existingDate);
+            bookedMeetingLabelTime = new Intl.DateTimeFormat('es-AR', {
+              timeZone: effectiveCalendarSettings.timezone,
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: false,
+            }).format(existingDate);
+          } else {
+            const selectedDate = meetingInfo.date || pendingMeetingInfo?.date || null;
+            const selectedTime = meetingInfo.time || pendingMeetingInfo?.time || null;
+            const ymd = parseDateTextToYmd(selectedDate, effectiveCalendarSettings.timezone);
+            const hm = parseHHmm(selectedTime || '');
+
+            if (ymd && hm) {
+              const startsAt = zonedDateTimeToUtc(ymd, hm.hour, hm.minute, effectiveCalendarSettings.timezone);
+              const startsAtIso = startsAt.toISOString();
+              const slotAvailable = availableSlots.some((s) => s.startsAtIso === startsAtIso);
+
+              if (slotAvailable) {
+                const leadPhone = extractedContacts.find((c) => c.type === 'phone' || c.type === 'whatsapp')?.value || null;
+                const { error: bookingError } = await supabaseAdmin
+                  .from('bot_meetings')
+                  .insert({
+                    bot_id: botId,
+                    session_id: sessionId,
+                    lead_phone: leadPhone,
+                    scheduled_at: startsAtIso,
+                    duration_minutes: effectiveCalendarSettings.meeting_duration_minutes,
+                    status: 'booked',
+                    source_message: message.substring(0, 500),
+                    metadata: {
+                      date_text: selectedDate,
+                      time_text: selectedTime,
+                    },
+                  });
+
+                if (!bookingError) {
+                  bookedMeetingIso = startsAtIso;
+                  bookedMeetingLabelDate = new Intl.DateTimeFormat('es-AR', {
+                    timeZone: effectiveCalendarSettings.timezone,
+                    weekday: 'long',
+                    day: '2-digit',
+                    month: '2-digit',
+                  }).format(startsAt);
+                  bookedMeetingLabelTime = new Intl.DateTimeFormat('es-AR', {
+                    timeZone: effectiveCalendarSettings.timezone,
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: false,
+                  }).format(startsAt);
+                } else {
+                  parsedResponse.reply = `Ese horario ya no está disponible. ${buildSlotsReply(availableSlots, effectiveCalendarSettings.meeting_duration_minutes)}`;
+                }
+              } else {
+                parsedResponse.reply = `Ese horario ya está ocupado. ${buildSlotsReply(availableSlots, effectiveCalendarSettings.meeting_duration_minutes)}`;
+              }
+            }
+          }
+        }
+
         const replyLower = parsedResponse.reply.toLowerCase();
         const alreadyConfirmed = 
           replyLower.includes('perfecto') && replyLower.includes('contacto') ||
@@ -1754,8 +2070,8 @@ REGLA CRITICA DE MEMORIA:
         if (!alreadyConfirmed && !isAskingForMore) {
           // Buscar fecha y hora de la reunión (puede estar en el mensaje actual o en pendingMeetingInfo)
           const meetingContact = extractedContacts.find(c => c.type === 'meeting');
-          const meetingDate = meetingContact?.metadata?.date || pendingMeetingInfo?.date || meetingInfo.date || '';
-          const meetingTime = meetingContact?.metadata?.time || pendingMeetingInfo?.time || meetingInfo.time || '';
+          const meetingDate = bookedMeetingLabelDate || meetingContact?.metadata?.date || pendingMeetingInfo?.date || meetingInfo.date || '';
+          const meetingTime = bookedMeetingLabelTime || meetingContact?.metadata?.time || pendingMeetingInfo?.time || meetingInfo.time || '';
           
           let confirmation = '';
           if (meetingDate || meetingTime) {
@@ -1778,8 +2094,8 @@ REGLA CRITICA DE MEMORIA:
             .trim();
           
           const meetingContact = extractedContacts.find(c => c.type === 'meeting');
-          const meetingDate = meetingContact?.metadata?.date || pendingMeetingInfo?.date || meetingInfo.date || '';
-          const meetingTime = meetingContact?.metadata?.time || pendingMeetingInfo?.time || meetingInfo.time || '';
+          const meetingDate = bookedMeetingLabelDate || meetingContact?.metadata?.date || pendingMeetingInfo?.date || meetingInfo.date || '';
+          const meetingTime = bookedMeetingLabelTime || meetingContact?.metadata?.time || pendingMeetingInfo?.time || meetingInfo.time || '';
           
           let confirmation = '';
           if (meetingDate || meetingTime) {
@@ -1794,6 +2110,32 @@ REGLA CRITICA DE MEMORIA:
           }
           
           parsedResponse.reply = parsedResponse.reply.trim() + confirmation;
+        }
+      }
+
+      if (bookedMeetingIso) {
+        const meetingContact = extractedContacts.find((c) => c.type === 'meeting');
+        if (meetingContact) {
+          meetingContact.metadata = {
+            ...(meetingContact.metadata || {}),
+            scheduled_at: bookedMeetingIso,
+            duration_minutes: effectiveCalendarSettings.meeting_duration_minutes,
+            date: meetingContact.metadata?.date || bookedMeetingLabelDate,
+            time: meetingContact.metadata?.time || bookedMeetingLabelTime,
+          };
+        } else {
+          extractedContacts.push({
+            type: 'meeting',
+            value: `Reunión agendada - ${bookedMeetingLabelDate || ''} ${bookedMeetingLabelTime ? `a las ${bookedMeetingLabelTime}` : ''}`.trim(),
+            metadata: {
+              intent: 'meeting_scheduled',
+              date: bookedMeetingLabelDate,
+              time: bookedMeetingLabelTime,
+              scheduled_at: bookedMeetingIso,
+              duration_minutes: effectiveCalendarSettings.meeting_duration_minutes,
+              full_message: message.substring(0, 200),
+            },
+          });
         }
       }
     } catch (e: any) {
