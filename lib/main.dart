@@ -180,7 +180,9 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
       if (data is! String) return;
       if (data == 'CMD_OPEN') ref.read(chatOpenProvider.notifier).set(true);
       else if (data == 'CMD_CLOSE') ref.read(chatOpenProvider.notifier).set(false);
-      else if (data == 'HITZONE_CLICK_BOT') {
+      else if (data == 'CMD_FOCUS_INPUT') {
+        ref.read(focusChatInputTriggerProvider.notifier).state++;
+      } else if (data == 'HITZONE_CLICK_BOT') {
         // ⬅️ Fallback: si UltraSimpleBot no procesó el Map, este String lo abre
         ref.read(chatOpenProvider.notifier).set(true);
       }

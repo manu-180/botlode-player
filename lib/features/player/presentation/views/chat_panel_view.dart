@@ -21,11 +21,13 @@ class ChatPanelView extends ConsumerStatefulWidget {
 class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindingObserver {
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  late final ValueNotifier<int> _focusInputTriggerNotifier;
   bool _wasOffline = false;
   bool _isInputFocused = false; // ⬅️ NUEVO: Detectar foco del input para ocultar Rive en móvil
 
   @override
   void initState() {
+    _focusInputTriggerNotifier = ValueNotifier(0);
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     
@@ -49,6 +51,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
   void dispose() {
     // El PresenceManager se limpia automáticamente via su provider.onDispose
     WidgetsBinding.instance.removeObserver(this);
+    _focusInputTriggerNotifier.dispose();
     _textController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -204,6 +207,11 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
       if (next.isLoading) {
         ref.read(hideRiveForSpaceProvider.notifier).state = false;
       }
+    });
+
+    // ⬅️ BLINDAJE INPUT: HTML padre envía CMD_FOCUS_INPUT al abrir el chat; forzar focus en el input
+    ref.listen(focusChatInputTriggerProvider, (prev, next) {
+      _focusInputTriggerNotifier.value = next;
     });
 
     // ❌ ELIMINAR Theme wrapper Y LayoutBuilder (simplificar render)
@@ -397,6 +405,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                             ],
                           ),
                           child: _ProfessionalInputField(
+                            focusInputTrigger: _focusInputTriggerNotifier,
                             isLoading: chatState.isLoading,
                             controller: _textController,
                             isOnline: isOnline,
@@ -436,6 +445,8 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
 
 // ⬅️ INPUT PROFESIONAL - Diseño moderno y elegante
 class _ProfessionalInputField extends StatefulWidget {
+  /// Cuando cambia (p. ej. CMD_FOCUS_INPUT del HTML padre), fuerza requestFocus en el input.
+  final ValueNotifier<int>? focusInputTrigger;
   final TextEditingController controller;
   final bool isOnline;
   final bool isLoading;
@@ -451,6 +462,7 @@ class _ProfessionalInputField extends StatefulWidget {
   final VoidCallback? onInputTapped;
 
   const _ProfessionalInputField({
+    this.focusInputTrigger,
     required this.controller,
     required this.isOnline,
     required this.isLoading,
@@ -474,10 +486,18 @@ class _ProfessionalInputFieldState extends State<_ProfessionalInputField> {
   bool _hasText = false;
   bool _programmaticFocusRequested = false;
 
+  void _onFocusTriggered() {
+    if (mounted && _focusNode.canRequestFocus) {
+      final enabled = widget.isOnline && !widget.isLoading;
+      if (enabled) _focusNode.requestFocus();
+    }
+  }
+
   @override
   void initState() {
     super.initState();
-    
+    widget.focusInputTrigger?.addListener(_onFocusTriggered);
+
     _focusNode.addListener(() {
       final hasFocus = _focusNode.hasFocus;
       setState(() => _isFocused = hasFocus);
@@ -508,6 +528,7 @@ class _ProfessionalInputFieldState extends State<_ProfessionalInputField> {
 
   @override
   void dispose() {
+    widget.focusInputTrigger?.removeListener(_onFocusTriggered);
     _focusNode.dispose();
     super.dispose();
   }

@@ -40,6 +40,10 @@ final activeSessionIdProvider = StateProvider<String?>((ref) => null);
 // Se activa al hacer click en la burbuja; se desactiva al hacer tap en el área del chat.
 final hideRiveForSpaceProvider = StateProvider<bool>((ref) => false);
 
+// ⬅️ BLINDAJE INPUT: Cuando el HTML padre envía CMD_FOCUS_INPUT (chat abierto en iframe),
+// se incrementa este valor. ChatPanelView lo escucha y fuerza requestFocus en el input.
+final focusChatInputTriggerProvider = StateProvider<int>((ref) => 0);
+
 // ⬅️ Helper para formatear hora de Argentina (UTC-3) sin zona horaria
 String _formatArgentinaTime() {
   final nowLocal = DateTime.now().toLocal();
