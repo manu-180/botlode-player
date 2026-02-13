@@ -712,6 +712,51 @@ function buildSlotsReply(slots: CalendarSlot[], durationMinutes: number): string
   return `Perfecto. La reunión dura ${durationMinutes} minutos. Tengo estos horarios disponibles: ${options}. Decime cuál preferís.`;
 }
 
+/** Pide al usuario que indique día y hora preferidos (sin listar slots). */
+function buildAskPreferredTimeReply(durationMinutes: number): string {
+  return `Perfecto. La reunión dura ${durationMinutes} minutos. ¿Qué día y horario te queda bien? Decime por ejemplo «mañana a las 15» o «el lunes a las 10» y te confirmo si está disponible.`;
+}
+
+/** Ofrece el horario exacto que pidió el usuario (está libre). */
+function buildOfferExactSlotReply(slot: CalendarSlot): string {
+  return `Perfecto, tengo ese horario libre. Quedamos para el ${slot.dateLabel} a las ${slot.timeLabel}. Para confirmar necesito tu número o email. ¿Me lo dejás?`;
+}
+
+/** Ofrece el horario más cercano disponible porque el que pidió está ocupado. */
+function buildOfferClosestSlotReply(slot: CalendarSlot): string {
+  return `Ese horario ya está ocupado. El más cercano que tengo es el ${slot.dateLabel} a las ${slot.timeLabel}. ¿Te sirve?`;
+}
+
+/** Formatea scheduled_at en timezone del bot para columnas scheduled_date y scheduled_time. */
+function toLocalDateAndTime(isoString: string, timezone: string): { date: string; time: string } {
+  const d = new Date(isoString);
+  const date = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+  const time = new Intl.DateTimeFormat('en-GB', { timeZone: timezone, hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).format(d);
+  return { date, time };
+}
+
+/** Busca el slot exacto (mismo inicio) o el más cercano al momento pedido. */
+function findExactOrClosestSlot(
+  requestedAtMs: number,
+  slots: CalendarSlot[],
+  durationMinutes: number
+): { exact?: CalendarSlot; closest?: CalendarSlot } | null {
+  if (slots.length === 0) return null;
+  const oneMinuteMs = 60 * 1000;
+  const exact = slots.find((s) => Math.abs(new Date(s.startsAtIso).getTime() - requestedAtMs) < oneMinuteMs);
+  if (exact) return { exact };
+  let best = slots[0];
+  let bestDiff = Math.abs(new Date(best.startsAtIso).getTime() - requestedAtMs);
+  for (let i = 1; i < slots.length; i++) {
+    const diff = Math.abs(new Date(slots[i].startsAtIso).getTime() - requestedAtMs);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      best = slots[i];
+    }
+  }
+  return { closest: best };
+}
+
 // ⬅️ MEJORA 4: Extracción inteligente de reuniones usando IA (más preciso que regex)
 async function extractMeetingWithAI(
   message: string,
@@ -1803,6 +1848,7 @@ REGLA CRITICA DE MEMORIA:
     let bookedMeetingIso: string | null = null;
     let bookedMeetingLabelDate: string | null = null;
     let bookedMeetingLabelTime: string | null = null;
+    let lastOfferedSlot: CalendarSlot | null = null;
     
     let parsedResponse;
     try {
@@ -1818,11 +1864,74 @@ REGLA CRITICA DE MEMORIA:
         parsedResponse.intent_score = Math.max(0, Math.min(100, parsedResponse.intent_score || 0));
       }
 
-      // Calendario: controlar oferta de reuniones desde configuración del bot
+      // Calendario: pedir día/hora preferidos y ofrecer ese horario o el más cercano disponible
       if (userAskedForMeeting && !effectiveCalendarSettings.is_enabled) {
         parsedResponse.reply = 'En este momento el calendario está desactivado para este bot, así que no puedo ofrecer reuniones. Si querés, dejame tu contacto y te avisamos.';
-      } else if (effectiveCalendarSettings.is_enabled && userAskedForMeeting && !hasDateTimeInContext) {
-        parsedResponse.reply = buildSlotsReply(availableSlots, effectiveCalendarSettings.meeting_duration_minutes);
+      } else if (effectiveCalendarSettings.is_enabled && userAskedForMeeting) {
+        const preferredDate = (meetingInfo.date || pendingMeetingInfo?.date) ?? null;
+        const preferredTime = (meetingInfo.time || pendingMeetingInfo?.time) ?? null;
+        const hasDate = Boolean(preferredDate && parseDateTextToYmd(preferredDate, effectiveCalendarSettings.timezone));
+        const hasTime = Boolean(preferredTime && parseHHmm(preferredTime));
+
+        if (!hasDate && !hasTime) {
+          parsedResponse.reply = buildAskPreferredTimeReply(effectiveCalendarSettings.meeting_duration_minutes);
+        } else if (hasDate && !hasTime) {
+          parsedResponse.reply = '¿A qué hora te queda bien ese día? Decime por ejemplo "a las 10" o "a las 15".';
+        } else if (!hasDate && hasTime) {
+          parsedResponse.reply = '¿Qué día te gustaría? Decime por ejemplo mañana, el lunes o el martes.';
+        } else {
+          const ymd = parseDateTextToYmd(preferredDate!, effectiveCalendarSettings.timezone);
+          const hm = parseHHmm(preferredTime!);
+          if (ymd && hm) {
+            const requestedAt = zonedDateTimeToUtc(ymd, hm.hour, hm.minute, effectiveCalendarSettings.timezone);
+            const requestedMs = requestedAt.getTime();
+            const result = findExactOrClosestSlot(requestedMs, availableSlots, effectiveCalendarSettings.meeting_duration_minutes);
+            if (result?.exact) {
+              const exactStartMs = new Date(result.exact.startsAtIso).getTime();
+              const exactEndIso = new Date(exactStartMs + 60000).toISOString();
+              const { data: slotTakenNowRows } = await supabaseAdmin
+                .from('bot_meetings')
+                .select('id')
+                .eq('bot_id', botId)
+                .eq('status', 'booked')
+                .gte('scheduled_at', result.exact.startsAtIso)
+                .lt('scheduled_at', exactEndIso);
+              const slotTakenNow = Array.isArray(slotTakenNowRows) && slotTakenNowRows.length > 0;
+              if (slotTakenNow) {
+                const { data: freshBooked } = await supabaseAdmin
+                  .from('bot_meetings')
+                  .select('scheduled_at, status')
+                  .eq('bot_id', botId)
+                  .eq('status', 'booked')
+                  .gte('scheduled_at', new Date().toISOString());
+                const freshSlots = generateAvailableSlots({
+                  timezone: effectiveCalendarSettings.timezone,
+                  durationMinutes: effectiveCalendarSettings.meeting_duration_minutes,
+                  availability: availabilityRows,
+                  bookedMeetings: (freshBooked || []) as CalendarMeetingRow[],
+                  daysAhead: 14,
+                });
+                const nextBest = findExactOrClosestSlot(requestedMs, freshSlots, effectiveCalendarSettings.meeting_duration_minutes);
+                if (nextBest?.closest) {
+                  lastOfferedSlot = nextBest.closest;
+                  parsedResponse.reply = buildOfferClosestSlotReply(nextBest.closest);
+                } else {
+                  lastOfferedSlot = null;
+                  parsedResponse.reply = 'Ese horario ya está ocupado. En este momento no tengo otros horarios disponibles. Si querés, dejame tu contacto y te avisamos cuando se libere un espacio.';
+                }
+              } else {
+                lastOfferedSlot = result.exact;
+                parsedResponse.reply = buildOfferExactSlotReply(result.exact);
+              }
+            } else if (result?.closest) {
+              lastOfferedSlot = result.closest;
+              parsedResponse.reply = buildOfferClosestSlotReply(result.closest);
+            } else {
+              lastOfferedSlot = null;
+              parsedResponse.reply = 'En este momento no tengo horarios disponibles para reunión. Si querés, dejame tu contacto y te avisamos cuando se libere un espacio.';
+            }
+          }
+        }
       }
       
       // ⬅️ CRÍTICO: Ajustar intent_score basado en detección de negatividad/desinterés
@@ -2004,53 +2113,126 @@ REGLA CRITICA DE MEMORIA:
               hour12: false,
             }).format(existingDate);
           } else {
-            const selectedDate = meetingInfo.date || pendingMeetingInfo?.date || null;
-            const selectedTime = meetingInfo.time || pendingMeetingInfo?.time || null;
-            const ymd = parseDateTextToYmd(selectedDate, effectiveCalendarSettings.timezone);
-            const hm = parseHHmm(selectedTime || '');
+            const fromMemory = (sessionMemory?.metadata as any)?.last_offered_calendar_slot as { startsAtIso: string; dateLabel: string; timeLabel: string } | undefined;
+            const useMemorySlot = fromMemory?.startsAtIso && availableSlots.some((s) => s.startsAtIso === fromMemory.startsAtIso);
 
-            if (ymd && hm) {
-              const startsAt = zonedDateTimeToUtc(ymd, hm.hour, hm.minute, effectiveCalendarSettings.timezone);
-              const startsAtIso = startsAt.toISOString();
+            let startsAtIso: string | null = null;
+            let slotDateLabel: string | null = null;
+            let slotTimeLabel: string | null = null;
+            let dateText: string | null = null;
+            let timeText: string | null = null;
+
+            if (useMemorySlot && fromMemory) {
+              startsAtIso = fromMemory.startsAtIso;
+              slotDateLabel = fromMemory.dateLabel;
+              slotTimeLabel = fromMemory.timeLabel;
+              dateText = fromMemory.dateLabel;
+              timeText = fromMemory.timeLabel;
+            } else {
+              const selectedDate = meetingInfo.date || pendingMeetingInfo?.date || null;
+              const selectedTime = meetingInfo.time || pendingMeetingInfo?.time || null;
+              const ymd = parseDateTextToYmd(selectedDate, effectiveCalendarSettings.timezone);
+              const hm = parseHHmm(selectedTime || '');
+              if (ymd && hm) {
+                const startsAt = zonedDateTimeToUtc(ymd, hm.hour, hm.minute, effectiveCalendarSettings.timezone);
+                startsAtIso = startsAt.toISOString();
+                slotDateLabel = new Intl.DateTimeFormat('es-AR', { timeZone: effectiveCalendarSettings.timezone, weekday: 'long', day: '2-digit', month: '2-digit' }).format(startsAt);
+                slotTimeLabel = new Intl.DateTimeFormat('es-AR', { timeZone: effectiveCalendarSettings.timezone, hour: '2-digit', minute: '2-digit', hour12: false }).format(startsAt);
+                dateText = selectedDate;
+                timeText = selectedTime;
+              }
+            }
+
+            if (startsAtIso) {
               const slotAvailable = availableSlots.some((s) => s.startsAtIso === startsAtIso);
-
-              if (slotAvailable) {
-                const leadPhone = extractedContacts.find((c) => c.type === 'phone' || c.type === 'whatsapp')?.value || null;
-                const { error: bookingError } = await supabaseAdmin
-                  .from('bot_meetings')
-                  .insert({
-                    bot_id: botId,
-                    session_id: sessionId,
-                    lead_phone: leadPhone,
-                    scheduled_at: startsAtIso,
-                    duration_minutes: effectiveCalendarSettings.meeting_duration_minutes,
-                    status: 'booked',
-                    source_message: message.substring(0, 500),
-                    metadata: {
-                      date_text: selectedDate,
-                      time_text: selectedTime,
-                    },
-                  });
-
-                if (!bookingError) {
-                  bookedMeetingIso = startsAtIso;
-                  bookedMeetingLabelDate = new Intl.DateTimeFormat('es-AR', {
-                    timeZone: effectiveCalendarSettings.timezone,
-                    weekday: 'long',
-                    day: '2-digit',
-                    month: '2-digit',
-                  }).format(startsAt);
-                  bookedMeetingLabelTime = new Intl.DateTimeFormat('es-AR', {
-                    timeZone: effectiveCalendarSettings.timezone,
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    hour12: false,
-                  }).format(startsAt);
-                } else {
-                  parsedResponse.reply = `Ese horario ya no está disponible. ${buildSlotsReply(availableSlots, effectiveCalendarSettings.meeting_duration_minutes)}`;
-                }
+              if (!slotAvailable) {
+                parsedResponse.reply = `Ese horario ya está ocupado. ${buildAskPreferredTimeReply(effectiveCalendarSettings.meeting_duration_minutes)}`;
               } else {
-                parsedResponse.reply = `Ese horario ya está ocupado. ${buildSlotsReply(availableSlots, effectiveCalendarSettings.meeting_duration_minutes)}`;
+                const slotStartMs = new Date(startsAtIso).getTime();
+                const slotStartNextMinIso = new Date(slotStartMs + 60000).toISOString();
+                // Verificación en vivo: otro chat pudo haber reservado este slot (rango para evitar diferencias de formato)
+                const { data: overlappingMeetings } = await supabaseAdmin
+                  .from('bot_meetings')
+                  .select('id, scheduled_at, duration_minutes')
+                  .eq('bot_id', botId)
+                  .eq('status', 'booked')
+                  .gte('scheduled_at', startsAtIso)
+                  .lt('scheduled_at', slotStartNextMinIso);
+
+                const alreadyTaken = Array.isArray(overlappingMeetings) && overlappingMeetings.length > 0;
+
+                if (alreadyTaken) {
+                  const requestedMs = new Date(startsAtIso).getTime();
+                  const { data: freshBooked } = await supabaseAdmin
+                    .from('bot_meetings')
+                    .select('scheduled_at, status')
+                    .eq('bot_id', botId)
+                    .eq('status', 'booked')
+                    .gte('scheduled_at', new Date().toISOString());
+                  const freshSlots = generateAvailableSlots({
+                    timezone: effectiveCalendarSettings.timezone,
+                    durationMinutes: effectiveCalendarSettings.meeting_duration_minutes,
+                    availability: availabilityRows,
+                    bookedMeetings: (freshBooked || []) as CalendarMeetingRow[],
+                    daysAhead: 14,
+                  });
+                  const nextBest = findExactOrClosestSlot(requestedMs, freshSlots, effectiveCalendarSettings.meeting_duration_minutes);
+                  if (nextBest?.exact) {
+                    lastOfferedSlot = nextBest.exact;
+                    parsedResponse.reply = `Ese horario ya está ocupado. ${buildOfferExactSlotReply(nextBest.exact)}`;
+                  } else if (nextBest?.closest) {
+                    lastOfferedSlot = nextBest.closest;
+                    parsedResponse.reply = `Ese horario ya está ocupado. ${buildOfferClosestSlotReply(nextBest.closest)}`;
+                  } else {
+                    parsedResponse.reply = `Ese horario ya está ocupado. ${buildAskPreferredTimeReply(effectiveCalendarSettings.meeting_duration_minutes)}`;
+                  }
+                } else {
+                  const leadPhone = extractedContacts.find((c) => c.type === 'phone' || c.type === 'whatsapp')?.value || null;
+                  const { date: scheduledDate, time: scheduledTime } = toLocalDateAndTime(startsAtIso, effectiveCalendarSettings.timezone);
+                  const { error: bookingError } = await supabaseAdmin
+                    .from('bot_meetings')
+                    .insert({
+                      bot_id: botId,
+                      session_id: sessionId,
+                      lead_phone: leadPhone,
+                      scheduled_at: startsAtIso,
+                      scheduled_date: scheduledDate,
+                      scheduled_time: scheduledTime,
+                      duration_minutes: effectiveCalendarSettings.meeting_duration_minutes,
+                      status: 'booked',
+                      source_message: message.substring(0, 500),
+                      metadata: { date_text: dateText, time_text: timeText },
+                    });
+
+                  if (!bookingError) {
+                    bookedMeetingIso = startsAtIso;
+                    bookedMeetingLabelDate = slotDateLabel;
+                    bookedMeetingLabelTime = slotTimeLabel;
+                  } else {
+                    // Cualquier error (p. ej. restricción única: otro chat ya reservó) → ofrecer el más cercano
+                      const requestedMs = new Date(startsAtIso).getTime();
+                      const { data: freshBooked } = await supabaseAdmin
+                        .from('bot_meetings')
+                        .select('scheduled_at, status')
+                        .eq('bot_id', botId)
+                        .eq('status', 'booked')
+                        .gte('scheduled_at', new Date().toISOString());
+                      const freshSlots = generateAvailableSlots({
+                        timezone: effectiveCalendarSettings.timezone,
+                        durationMinutes: effectiveCalendarSettings.meeting_duration_minutes,
+                        availability: availabilityRows,
+                        bookedMeetings: (freshBooked || []) as CalendarMeetingRow[],
+                        daysAhead: 14,
+                      });
+                      const nextBest = findExactOrClosestSlot(requestedMs, freshSlots, effectiveCalendarSettings.meeting_duration_minutes);
+                      if (nextBest?.closest) {
+                        lastOfferedSlot = nextBest.closest;
+                        parsedResponse.reply = `Ese horario ya no está disponible. ${buildOfferClosestSlotReply(nextBest.closest)}`;
+                      } else {
+                        parsedResponse.reply = `Ese horario ya no está disponible. ${buildAskPreferredTimeReply(effectiveCalendarSettings.meeting_duration_minutes)}`;
+                      }
+                  }
+                }
               }
             }
           }
@@ -2280,6 +2462,9 @@ REGLA CRITICA DE MEMORIA:
               last_mood: parsedResponse.mood || 'neutral',
               has_contact: hasContact,
               has_meeting_confirmed: hasMeetingConfirmed,
+              last_offered_calendar_slot: lastOfferedSlot
+                ? { startsAtIso: lastOfferedSlot.startsAtIso, dateLabel: lastOfferedSlot.dateLabel, timeLabel: lastOfferedSlot.timeLabel }
+                : (sessionMemory?.metadata as any)?.last_offered_calendar_slot ?? null,
             }
           }, { onConflict: 'session_id,bot_id' });
       } catch (memoryError: any) {
