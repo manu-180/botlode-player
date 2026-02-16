@@ -1,6 +1,7 @@
 // Archivo: lib/core/config/app_theme.dart
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
+const _fontFamily = 'Oxanium';
 
 class AppTheme {
   // Paleta de Colores Oficial BotsLode
@@ -29,12 +30,11 @@ class AppTheme {
         background: Colors.transparent,
       ),
 
-      // Tipografía Sci-Fi (Oxanium)
-      textTheme: GoogleFonts.oxaniumTextTheme(
-        ThemeData.dark().textTheme.apply(
-          bodyColor: Colors.white,
-          displayColor: Colors.white,
-        ),
+      // Tipografía Sci-Fi (Oxanium) - fuente preloaded en web/index.html
+      textTheme: ThemeData.dark().textTheme.apply(
+        bodyColor: Colors.white,
+        displayColor: Colors.white,
+        fontFamily: _fontFamily,
       ),
 
       // Estilo de Inputs (Campos de texto)

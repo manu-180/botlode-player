@@ -1,15 +1,13 @@
 // Archivo: lib/main.dart
 import 'dart:async';
 import 'dart:html' as html;
-import 'dart:ui';
 import 'package:botlode_player/core/config/app_config.dart';
+import 'package:botlode_player/core/config/supabase_provider.dart';
 import 'package:botlode_player/core/config/app_theme.dart';
 import 'package:botlode_player/core/config/configure_web.dart';
-import 'package:botlode_player/core/router/app_router.dart';
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
-import 'package:botlode_player/features/player/presentation/providers/loader_provider.dart';
+import 'package:botlode_player/features/player/presentation/widgets/ultra_simple_bot.dart';
 import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -20,22 +18,6 @@ void main() {
   runZonedGuarded(() async {
     WidgetsFlutterBinding.ensureInitialized();
     configureUrlStrategy();
-
-    // ✅ NUEVO: Configurar esquema de color para evitar fondos opacos forzados
-    _setupColorScheme();
-
-    // 1. SUPABASE
-    try {
-      await Supabase.initialize(
-        url: AppConfig.supabaseUrl,
-        anonKey: AppConfig.supabaseAnonKey,
-        authOptions: const FlutterAuthClientOptions(
-          authFlowType: AuthFlowType.implicit,
-        ),
-      );
-    } catch (e) {
-      // Error silenciado
-    }
 
     _setupIframeListeners();
 
@@ -50,14 +32,24 @@ void main() {
         currentBotIdProvider.overrideWithValue(finalBotId),
       ],
     );
+
+    // Supabase init en background: no bloquea runApp
+    unawaited(
+      Supabase.initialize(
+        url: AppConfig.supabaseUrl,
+        anonKey: AppConfig.supabaseAnonKey,
+        authOptions: const FlutterAuthClientOptions(
+          authFlowType: AuthFlowType.implicit,
+        ),
+      ).then((_) {
+        container.read(supabaseReadyProvider.notifier).state = true;
+      }).catchError((_) {}),
+    );
     
     // ⬅️ Configurar tracking global DESPUÉS de tener el container
     _setupGlobalMouseTrackingWithProvider(container);
     
-    // ⬅️ Precargar Rive de la burbuja (y cuerpo) para que la primera vez que se abra
-    // la burbuja o el chat el archivo ya esté en memoria y no se muestre CircularProgressIndicator.
-    await container.read(riveHeadFileLoaderProvider.future);
-    await container.read(riveFileLoaderProvider.future);
+    // Rive se carga en background al primer acceso (burbuja/chat). No bloqueamos el arranque.
     
     runApp(
       UncontrolledProviderScope(
@@ -72,21 +64,25 @@ void main() {
 }
 
 void _setupIframeListeners() {
-  // Removida configuración de transparencia para que el chat tenga fondo sólido
-  
-  Future.delayed(const Duration(milliseconds: 500), () {
-      _safePostMessage('CMD_READY');
-      try {
-        html.window.parent?.postMessage({
-          'type': 'DEPLOY_INFO',
-          'source': 'botlode_player',
-          'version': DEPLOY_VERSION,
-        }, '*');
-      } catch (e) {
-        // Error silenciado
-      }
-  });
+  var cmdReadySent = false;
+  void sendReady() {
+    if (cmdReadySent) return;
+    cmdReadySent = true;
+    _safePostMessage('CMD_READY');
+    try {
+      html.window.parent?.postMessage({
+        'type': 'DEPLOY_INFO',
+        'source': 'botlode_player',
+        'version': DEPLOY_VERSION,
+      }, '*');
+    } catch (e) {}
+  }
+  html.window.addEventListener('flutter-first-frame', (_) => sendReady());
+  Future.delayed(const Duration(milliseconds: 300), sendReady);
 }
+
+// Throttle: máximo 60 fps para onMouseMove (reduce CPU)
+const _mouseThrottleMs = 16;
 
 // ✅ LISTENER GLOBAL DE MOUSE (JavaScript nativo) + RIVERPOD
 void _setupGlobalMouseTrackingWithProvider(ProviderContainer container) {
@@ -94,7 +90,12 @@ void _setupGlobalMouseTrackingWithProvider(ProviderContainer container) {
     // ⬅️ ESTRATEGIA DUAL: Local + PostMessage (para iframes)
     
     // 1. Listener LOCAL (funciona cuando NO está en iframe o mouse sobre el iframe)
+    // Throttled a 60fps para reducir carga de CPU
+    var lastMouseUpdate = 0;
     html.document.onMouseMove.listen((event) {
+      final now = DateTime.now().millisecondsSinceEpoch;
+      if (now - lastMouseUpdate < _mouseThrottleMs) return;
+      lastMouseUpdate = now;
       final x = event.client.x.toDouble();
       final y = event.client.y.toDouble();
       container.read(pointerPositionProvider.notifier).state = Offset(x, y);
@@ -106,18 +107,20 @@ void _setupGlobalMouseTrackingWithProvider(ProviderContainer container) {
     });
     
     // 2. Listener de MENSAJES del parent (cuando estamos embebidos en iframe)
-    // El padre envía (x,y) en su viewport; convertimos a coordenadas del iframe
-    // para que coincidan con widgetCenter (RenderBox) y el RIV siga bien el cursor.
+    // Throttled a 60fps para reducir CPU igual que onMouseMove local
+    var lastPostMessageMouseUpdate = 0;
     html.window.onMessage.listen((event) {
       try {
         final data = event.data;
         if (data is Map && data['type'] == 'MOUSE_MOVE') {
+          final now = DateTime.now().millisecondsSinceEpoch;
+          if (now - lastPostMessageMouseUpdate < _mouseThrottleMs) return;
+          lastPostMessageMouseUpdate = now;
           final x = (data['x'] as num).toDouble();
           final y = (data['y'] as num).toDouble();
           final iframeX = data['iframeX'] as num?;
           final iframeY = data['iframeY'] as num?;
           if (iframeX != null && iframeY != null) {
-            // Coordenadas en el viewport del iframe (mismo sistema que RenderBox)
             final localX = x - iframeX.toDouble();
             final localY = y - iframeY.toDouble();
             container.read(pointerPositionProvider.notifier).state = Offset(localX, localY);
@@ -144,20 +147,13 @@ void _safePostMessage(String message) {
   }
 }
 
-// ✅ NUEVO: Función para configurar esquema de color
-void _setupColorScheme() {
-  try {
-    // Verificar si el meta tag de color-scheme existe
-    var metaColorScheme = html.document.querySelector('meta[name="color-scheme"]');
-    if (metaColorScheme == null) {
-      // Crear y agregar el meta tag dinámicamente
-      metaColorScheme = html.MetaElement()
-        ..name = 'color-scheme'
-        ..content = 'light dark';
-      html.document.head?.append(metaColorScheme);
-    }
-  } catch (e) {
-    // Error silenciado
+/// Placeholder transparente mientras Supabase se inicializa en background
+class _SupabaseLoadingPlaceholder extends StatelessWidget {
+  const _SupabaseLoadingPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return const ColoredBox(color: Color(0x00000000));
   }
 }
 
@@ -200,19 +196,17 @@ class _BotPlayerAppState extends ConsumerState<BotPlayerApp> {
     });
 
     ref.listen(chatOpenProvider, (prev, isOpen) {
-      // Enviar mensaje inmediatamente sin delay
-      // Usar scheduleMicrotask para asegurar que se envíe en el próximo frame
-      scheduleMicrotask(() {
-        if (!isOpen) _safePostMessage('CMD_CLOSE');
-        else _safePostMessage('CMD_OPEN');
-      });
+      if (!isOpen) _safePostMessage('CMD_CLOSE');
+      else _safePostMessage('CMD_OPEN');
     });
 
-    return MaterialApp.router(
+    final supabaseReady = ref.watch(supabaseReadyProvider);
+
+    return MaterialApp(
       title: 'BotLode Player',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.darkTheme,
-      routerConfig: appRouter, 
+      home: supabaseReady ? const UltraSimpleBot() : const _SupabaseLoadingPlaceholder(),
     );
   }
 }

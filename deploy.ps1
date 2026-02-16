@@ -3,7 +3,7 @@
 
 # Metodo viejo
 Remove-Item -Recurse -Force docs
-flutter build web
+flutter build web --release --tree-shake-icons -O 4 --no-source-maps
 mkdir docs    
 cp -r build/web/* docs/
 git add .

@@ -216,10 +216,10 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       height: avatarSize,
       child: riveFileAsync.when(
         data: (riveFile) {
-          // ⬅️ NO especificar artboard: usar el artboard por defecto del archivo
-          // Esto funciona tanto para cabezabot.riv como para catbotlode.riv
-          return RiveAnimation.direct(
-            riveFile, fit: BoxFit.contain, onInit: _onRiveInit,
+          return RepaintBoundary(
+            child: RiveAnimation.direct(
+              riveFile, fit: BoxFit.contain, onInit: _onRiveInit,
+            ),
           );
         },
         loading: () => const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFFFFC000)))), 

@@ -1,6 +1,5 @@
 import 'dart:html' as html;
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 /// Botón flotante de WhatsApp con animación de escala al hover (igual que bot).
 /// Se posiciona arriba de la burbuja del bot.
@@ -87,8 +86,8 @@ class _WhatsAppButtonState extends State<WhatsAppButton> {
                 borderRadius: BorderRadius.circular(buttonSize / 2),
                 onTap: () => _openWhatsApp(widget.phoneNumber),
                 child: Center(
-                  child: FaIcon(
-                    FontAwesomeIcons.whatsapp,
+                  child: Icon(
+                    Icons.chat,
                     color: Colors.white,
                     size: iconSize,
                   ),
