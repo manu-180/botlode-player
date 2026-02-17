@@ -557,6 +557,13 @@ type CalendarSlot = {
   timeLabel: string;
 };
 
+/** Normaliza un ISO al inicio del minuto (segundos y ms en 0). Evita doble reserva: mismo slot = mismo valor en BD. */
+function normalizeSlotToMinute(isoString: string): string {
+  const d = new Date(isoString);
+  d.setUTCSeconds(0, 0);
+  return d.toISOString();
+}
+
 function formatDateYmdInTz(date: Date, timezone: string): string {
   const formatter = new Intl.DateTimeFormat('en-CA', {
     timeZone: timezone,
@@ -657,7 +664,7 @@ function generateAvailableSlots(params: {
   const bookedSet = new Set(
     (bookedMeetings || [])
       .filter((m) => m.status === 'booked' && !!m.scheduled_at)
-      .map((m) => new Date(m.scheduled_at).toISOString()),
+      .map((m) => normalizeSlotToMinute(m.scheduled_at)),
   );
 
   const slots: CalendarSlot[] = [];
@@ -676,7 +683,7 @@ function generateAvailableSlots(params: {
       let cursor = zonedDateTimeToUtc(dateYmd, start.hour, start.minute, timezone);
       const endUtc = zonedDateTimeToUtc(dateYmd, end.hour, end.minute, timezone);
       while (cursor.getTime() + durationMinutes * 60000 <= endUtc.getTime()) {
-        const iso = cursor.toISOString();
+        const iso = normalizeSlotToMinute(cursor.toISOString());
         if (cursor.getTime() > nowMs + 2 * 60 * 1000 && !bookedSet.has(iso)) {
           const timeLabel = new Intl.DateTimeFormat('es-AR', {
             timeZone: timezone,
@@ -1887,14 +1894,14 @@ REGLA CRITICA DE MEMORIA:
             const requestedMs = requestedAt.getTime();
             const result = findExactOrClosestSlot(requestedMs, availableSlots, effectiveCalendarSettings.meeting_duration_minutes);
             if (result?.exact) {
-              const exactStartMs = new Date(result.exact.startsAtIso).getTime();
-              const exactEndIso = new Date(exactStartMs + 60000).toISOString();
+              const exactNormalized = normalizeSlotToMinute(result.exact.startsAtIso);
+              const exactEndIso = new Date(new Date(exactNormalized).getTime() + 60000).toISOString();
               const { data: slotTakenNowRows } = await supabaseAdmin
                 .from('bot_meetings')
                 .select('id')
                 .eq('bot_id', botId)
                 .eq('status', 'booked')
-                .gte('scheduled_at', result.exact.startsAtIso)
+                .gte('scheduled_at', exactNormalized)
                 .lt('scheduled_at', exactEndIso);
               const slotTakenNow = Array.isArray(slotTakenNowRows) && slotTakenNowRows.length > 0;
               if (slotTakenNow) {
@@ -2144,19 +2151,19 @@ REGLA CRITICA DE MEMORIA:
             }
 
             if (startsAtIso) {
-              const slotAvailable = availableSlots.some((s) => s.startsAtIso === startsAtIso);
+              const normalizedStart = normalizeSlotToMinute(startsAtIso);
+              const slotAvailable = availableSlots.some((s) => normalizeSlotToMinute(s.startsAtIso) === normalizedStart);
               if (!slotAvailable) {
                 parsedResponse.reply = `Ese horario ya está ocupado. ${buildAskPreferredTimeReply(effectiveCalendarSettings.meeting_duration_minutes)}`;
               } else {
-                const slotStartMs = new Date(startsAtIso).getTime();
-                const slotStartNextMinIso = new Date(slotStartMs + 60000).toISOString();
-                // Verificación en vivo: otro chat pudo haber reservado este slot (rango para evitar diferencias de formato)
+                const slotStartNextMinIso = new Date(new Date(normalizedStart).getTime() + 60000).toISOString();
+                // Verificación en vivo: otro chat pudo haber reservado este slot (mismo minuto normalizado)
                 const { data: overlappingMeetings } = await supabaseAdmin
                   .from('bot_meetings')
                   .select('id, scheduled_at, duration_minutes')
                   .eq('bot_id', botId)
                   .eq('status', 'booked')
-                  .gte('scheduled_at', startsAtIso)
+                  .gte('scheduled_at', normalizedStart)
                   .lt('scheduled_at', slotStartNextMinIso);
 
                 const alreadyTaken = Array.isArray(overlappingMeetings) && overlappingMeetings.length > 0;
@@ -2188,14 +2195,15 @@ REGLA CRITICA DE MEMORIA:
                   }
                 } else {
                   const leadPhone = extractedContacts.find((c) => c.type === 'phone' || c.type === 'whatsapp')?.value || null;
-                  const { date: scheduledDate, time: scheduledTime } = toLocalDateAndTime(startsAtIso, effectiveCalendarSettings.timezone);
+                  const slotToBook = normalizeSlotToMinute(startsAtIso);
+                  const { date: scheduledDate, time: scheduledTime } = toLocalDateAndTime(slotToBook, effectiveCalendarSettings.timezone);
                   const { error: bookingError } = await supabaseAdmin
                     .from('bot_meetings')
                     .insert({
                       bot_id: botId,
                       session_id: sessionId,
                       lead_phone: leadPhone,
-                      scheduled_at: startsAtIso,
+                      scheduled_at: slotToBook,
                       scheduled_date: scheduledDate,
                       scheduled_time: scheduledTime,
                       duration_minutes: effectiveCalendarSettings.meeting_duration_minutes,
@@ -2205,7 +2213,7 @@ REGLA CRITICA DE MEMORIA:
                     });
 
                   if (!bookingError) {
-                    bookedMeetingIso = startsAtIso;
+                    bookedMeetingIso = slotToBook;
                     bookedMeetingLabelDate = slotDateLabel;
                     bookedMeetingLabelTime = slotTimeLabel;
                   } else {
