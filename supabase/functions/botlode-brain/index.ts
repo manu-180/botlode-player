@@ -32,14 +32,10 @@ function log(level: 'info' | 'warn' | 'error', message: string, data?: any) {
   // Solo loggear si el nivel del mensaje es igual o menor al configurado
   if (messagePriority > currentPriority) return;
   
-  const timestamp = new Date().toISOString();
-  const logEntry = {
-    timestamp,
-    level,
-    message,
-    ...(data && { data }),
-  };
-  console.log(JSON.stringify(logEntry));
+  // Logging desactivado en producción; usar LOG_LEVEL env si se necesita diagnóstico
+  // const timestamp = new Date().toISOString();
+  // const logEntry = { timestamp, level, message, ...(data && { data }) };
+  // console.log(JSON.stringify(logEntry));
 }
 
 function normalizeSpace(text: string): string {
@@ -548,6 +544,7 @@ type CalendarAvailabilityRow = {
 type CalendarMeetingRow = {
   scheduled_at: string;
   status: string;
+  duration_minutes?: number;
 };
 
 type CalendarSlot = {
@@ -651,6 +648,31 @@ function parseDateTextToYmd(dateText: string | null, timezone: string): string |
   return null;
 }
 
+/** Extrae el slot ofrecido del último mensaje del bot (fallback si session memory no tiene last_offered). */
+function extractOfferedSlotFromLastBotMessage(history: any[], timezone: string): { startsAtIso: string; dateLabel: string; timeLabel: string } | null {
+  const botMsgs = (history || []).filter((m: any) => m.role === 'assistant' || m.role === 'bot');
+  if (botMsgs.length === 0) return null;
+  const lastBot = botMsgs[botMsgs.length - 1]; // Último mensaje del bot (history ya está en orden cronológico [antiguo...reciente])
+  if (!lastBot?.content) return null;
+  const content = String(lastBot.content);
+  const dateMatch = content.match(/(?:domingo|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado)\s+(\d{1,2})-(\d{2})/i)
+    || content.match(/(\d{1,2})-(\d{2})(?:\s+a las|\s+a\s+las)/i);
+  const timeMatch = content.match(/(\d{1,2}):(\d{2})/);
+  if (!dateMatch || !timeMatch) return null;
+  const day = parseInt(dateMatch[1], 10);
+  const month = parseInt(dateMatch[2], 10);
+  const hour = parseInt(timeMatch[1], 10);
+  const minute = parseInt(timeMatch[2], 10);
+  const year = new Date().getFullYear();
+  if (day < 1 || day > 31 || month < 1 || month > 12 || hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+  const ymd = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  const startsAt = zonedDateTimeToUtc(ymd, hour, minute, timezone);
+  const startsAtIso = normalizeSlotToMinute(startsAt.toISOString());
+  const dateLabel = new Intl.DateTimeFormat('es-AR', { timeZone: timezone, weekday: 'long', day: '2-digit', month: '2-digit' }).format(startsAt);
+  const timeLabel = new Intl.DateTimeFormat('es-AR', { timeZone: timezone, hour: '2-digit', minute: '2-digit', hour12: false }).format(startsAt);
+  return { startsAtIso, dateLabel, timeLabel };
+}
+
 function generateAvailableSlots(params: {
   timezone: string;
   durationMinutes: number;
@@ -661,11 +683,15 @@ function generateAvailableSlots(params: {
   const { timezone, durationMinutes, availability, bookedMeetings, daysAhead } = params;
   const now = new Date();
   const nowMs = now.getTime();
-  const bookedSet = new Set(
-    (bookedMeetings || [])
-      .filter((m) => m.status === 'booked' && !!m.scheduled_at)
-      .map((m) => normalizeSlotToMinute(m.scheduled_at)),
-  );
+  const meetings = (bookedMeetings || [])
+    .filter((m) => m.status === 'booked' && !!m.scheduled_at)
+    .map((m) => ({
+      startMs: new Date(normalizeSlotToMinute(m.scheduled_at)).getTime(),
+      endMs: new Date(normalizeSlotToMinute(m.scheduled_at)).getTime() + (m.duration_minutes ?? durationMinutes) * 60000,
+    }));
+
+  const slotOverlapsMeeting = (slotStartMs: number, slotEndMs: number) =>
+    meetings.some((m) => m.startMs < slotEndMs && m.endMs > slotStartMs);
 
   const slots: CalendarSlot[] = [];
   for (let dayOffset = 0; dayOffset <= daysAhead; dayOffset++) {
@@ -683,8 +709,10 @@ function generateAvailableSlots(params: {
       let cursor = zonedDateTimeToUtc(dateYmd, start.hour, start.minute, timezone);
       const endUtc = zonedDateTimeToUtc(dateYmd, end.hour, end.minute, timezone);
       while (cursor.getTime() + durationMinutes * 60000 <= endUtc.getTime()) {
+        const slotStartMs = cursor.getTime();
+        const slotEndMs = slotStartMs + durationMinutes * 60000;
         const iso = normalizeSlotToMinute(cursor.toISOString());
-        if (cursor.getTime() > nowMs + 2 * 60 * 1000 && !bookedSet.has(iso)) {
+        if (cursor.getTime() > nowMs + 2 * 60 * 1000 && !slotOverlapsMeeting(slotStartMs, slotEndMs)) {
           const timeLabel = new Intl.DateTimeFormat('es-AR', {
             timeZone: timezone,
             hour: '2-digit',
@@ -721,7 +749,7 @@ function buildSlotsReply(slots: CalendarSlot[], durationMinutes: number): string
 
 /** Pide al usuario que indique día y hora preferidos (sin listar slots). */
 function buildAskPreferredTimeReply(durationMinutes: number): string {
-  return `Perfecto. La reunión dura ${durationMinutes} minutos. ¿Qué día y horario te queda bien? Decime por ejemplo «mañana a las 15» o «el lunes a las 10» y te confirmo si está disponible.`;
+   return `Perfecto. La reunión dura ${durationMinutes} minutos. ¿Qué día y horario te queda bien?`;
 }
 
 /** Ofrece el horario exacto que pidió el usuario (está libre). */
@@ -1210,7 +1238,7 @@ serve(async (req) => {
           .eq('bot_id', botId),
         supabaseAdmin
           .from('bot_meetings')
-          .select('scheduled_at, status')
+          .select('scheduled_at, status, duration_minutes')
           .eq('bot_id', botId)
           .eq('status', 'booked')
           .gte('scheduled_at', new Date().toISOString()),
@@ -1218,6 +1246,7 @@ serve(async (req) => {
 
       availabilityRows = (availabilityData || []) as CalendarAvailabilityRow[];
       bookedMeetings = (meetingsData || []) as CalendarMeetingRow[];
+      log('info', '[CALENDAR] Reuniones ya reservadas', { botId, count: bookedMeetings.length, sample: bookedMeetings.slice(0, 3).map(m => m.scheduled_at) });
       availableSlots = generateAvailableSlots({
         timezone: effectiveCalendarSettings.timezone,
         durationMinutes: effectiveCalendarSettings.meeting_duration_minutes,
@@ -1239,10 +1268,10 @@ serve(async (req) => {
       log('warn', 'Error obteniendo historial', { error: historyError });
     }
 
-    // 2.1 MEMORIA PERSISTENTE DE SESION
+    // 2.1 MEMORIA PERSISTENTE DE SESION (metadata incluye last_offered_calendar_slot para confirmar reunión)
     const { data: sessionMemory } = await supabaseAdmin
       .from('bot_session_memory')
-      .select('summary, first_user_message, message_count, last_detected_goal')
+      .select('summary, first_user_message, message_count, last_detected_goal, metadata')
       .eq('session_id', sessionId)
       .eq('bot_id', botId)
       .maybeSingle();
@@ -1826,7 +1855,11 @@ REGLA CRITICA DE MEMORIA:
     
     const hasContact = hasContactInMessage || hasPreviousContact; // ⬅️ Contacto en mensaje actual O en BD
     const userAskedForMeeting = meetingInfo.intent || /\b(reuni[oó]n|agendar|agenda|turno|cita|horario)\b/i.test(message);
-    const hasDateTimeInContext = Boolean((meetingInfo.date || pendingMeetingInfo?.date) && (meetingInfo.time || pendingMeetingInfo?.time));
+    const preferredDate = (meetingInfo.date || pendingMeetingInfo?.date) ?? null;
+    const preferredTime = (meetingInfo.time || pendingMeetingInfo?.time) ?? null;
+    const hasDate = Boolean(preferredDate && parseDateTextToYmd(preferredDate, effectiveCalendarSettings.timezone));
+    const hasTime = Boolean(preferredTime && parseHHmm(preferredTime));
+    const hasDateTimeInContext = hasDate && hasTime;
     
     // ⬅️ Determinar si hay reunión confirmada:
     // 1. El usuario confirmó reunión EN ESTE MENSAJE Y hay contacto EN ESTE MENSAJE, O
@@ -1871,15 +1904,45 @@ REGLA CRITICA DE MEMORIA:
         parsedResponse.intent_score = Math.max(0, Math.min(100, parsedResponse.intent_score || 0));
       }
 
-      // Calendario: pedir día/hora preferidos y ofrecer ese horario o el más cercano disponible
-      if (userAskedForMeeting && !effectiveCalendarSettings.is_enabled) {
-        parsedResponse.reply = 'En este momento el calendario está desactivado para este bot, así que no puedo ofrecer reuniones. Si querés, dejame tu contacto y te avisamos.';
-      } else if (effectiveCalendarSettings.is_enabled && userAskedForMeeting) {
-        const preferredDate = (meetingInfo.date || pendingMeetingInfo?.date) ?? null;
-        const preferredTime = (meetingInfo.time || pendingMeetingInfo?.time) ?? null;
-        const hasDate = Boolean(preferredDate && parseDateTextToYmd(preferredDate, effectiveCalendarSettings.timezone));
-        const hasTime = Boolean(preferredTime && parseHHmm(preferredTime));
+      const fromMemory = (sessionMemory?.metadata as any)?.last_offered_calendar_slot as { startsAtIso: string; dateLabel: string; timeLabel: string } | undefined;
+      const userAcceptsOfferedSlot = effectiveCalendarSettings.is_enabled && fromMemory?.startsAtIso && !hasContactInMessage &&
+        (/\b(si me sirve|me sirve|dale|sip|ok|perfecto|bueno|de acuerdo|genial|va|listo)\b/i.test(message.trim()) ||
+          /^\s*s[ií]\s*[!.]?$/i.test(message.trim()) ||
+          /\b(el\s+que\s+(vos\s+)?dijiste|ese\s+est[aá]|ese\s+me\s+sirve)\b/i.test(message.trim())) &&
+        !/\bno\s+me\s+sirve\b/i.test(message);
 
+      // Usuario acepta el horario ofrecido sin dar contacto aún → confirmar día/hora y pedir contacto (no re-preguntar día/hora)
+      if (userAcceptsOfferedSlot) {
+        const memNorm = normalizeSlotToMinute(fromMemory!.startsAtIso);
+        const slotStillAvailable = availableSlots.some((s) => normalizeSlotToMinute(s.startsAtIso) === memNorm);
+        if (slotStillAvailable) {
+          parsedResponse.reply = vendorName
+            ? `Perfecto, quedamos para el ${fromMemory!.dateLabel} a las ${fromMemory!.timeLabel}. Para confirmar la reunión necesito tu número o email. ¿Me lo dejás?`
+            : `Perfecto, quedamos para el ${fromMemory!.dateLabel} a las ${fromMemory!.timeLabel}. Para confirmar la reunión necesito tu número o email. ¿Me lo dejás?`;
+        } else {
+          const requestedMs = new Date(memNorm).getTime();
+          const nextBest = findExactOrClosestSlot(requestedMs, availableSlots, effectiveCalendarSettings.meeting_duration_minutes);
+          if (nextBest?.closest) {
+            lastOfferedSlot = nextBest.closest;
+            parsedResponse.reply = `Ese horario que te ofrecí ya se ocupó. El más cercano que tengo ahora es el ${nextBest.closest.dateLabel} a las ${nextBest.closest.timeLabel}. ¿Te sirve?`;
+          } else {
+            parsedResponse.reply = 'Ese horario que te ofrecí ya se ocupó. En este momento no tengo otros horarios disponibles. Si querés, dejame tu contacto y te avisamos cuando se libere un espacio.';
+          }
+        }
+      }
+
+      // ⬅️ CRÍTICO: Si el usuario envía contacto tras haber aceptado un slot ofrecido, NO ejecutar
+      // el bloque de calendario (que usaría pendingMeetingInfo con horario equivocado). Ir directo a confirmación.
+      const offeredSlotFromHistory = hasContactInMessage ? extractOfferedSlotFromLastBotMessage(history || [], effectiveCalendarSettings.timezone) : null;
+      const userGivingContactAfterAcceptedSlot = hasContactInMessage && (!!fromMemory?.startsAtIso || !!offeredSlotFromHistory?.startsAtIso);
+
+      // Calendario: SIEMPRE verificar disponibilidad ANTES de pedir contacto. Solo pedir contacto si el horario está libre.
+      if (!userAcceptsOfferedSlot && (userAskedForMeeting || hasDateTimeInContext) && !effectiveCalendarSettings.is_enabled) {
+        parsedResponse.reply = 'En este momento el calendario está desactivado para este bot, así que no puedo ofrecer reuniones. Si querés, dejame tu contacto y te avisamos.';
+      } else if (!userAcceptsOfferedSlot && !userGivingContactAfterAcceptedSlot && effectiveCalendarSettings.is_enabled && (userAskedForMeeting || hasDateTimeInContext)) {
+        if (hasPreviousMeeting) {
+          parsedResponse.reply = 'Ya tenés una reunión agendada en este chat. Para agendar otra, iniciá un chat nuevo usando el botón de reiniciar.';
+        } else {
         if (!hasDate && !hasTime) {
           parsedResponse.reply = buildAskPreferredTimeReply(effectiveCalendarSettings.meeting_duration_minutes);
         } else if (hasDate && !hasTime) {
@@ -1938,6 +2001,7 @@ REGLA CRITICA DE MEMORIA:
               parsedResponse.reply = 'En este momento no tengo horarios disponibles para reunión. Si querés, dejame tu contacto y te avisamos cuando se libere un espacio.';
             }
           }
+        }
         }
       }
       
@@ -2013,8 +2077,273 @@ REGLA CRITICA DE MEMORIA:
       }
       
       // ⬅️ MEJORADO: Manejo inteligente de contacto y reunión
-      // Si el usuario confirmó reunión pero NO hay contacto aún, pedir contacto SOLO cuando ya exista día y hora
-      if (meetingInfo.intent && !hasContactInMessage && !hasPreviousContact) {
+      // ⚠️ CRÍTICO: hasMeetingConfirmed && hasContact debe ir PRIMERO.
+      // Si el usuario dijo "mañana a las 15" y luego envía "1134272488", meetingInfo.intent es false
+      // en el mensaje del teléfono, pero pendingMeetingInfo tiene la reunión. Si pusimos
+      // "hasContactInMessage && !meetingInfo.intent" antes, entrábamos ahí y NUNCA hacíamos el INSERT.
+      if (hasMeetingConfirmed && hasContact) {
+        // ⬅️ Si hay reunión Y contacto → INSERT en bot_meetings + confirmar (prioridad máxima)
+        log('info', '[CALENDAR] hasMeetingConfirmed + hasContact → entrando a bloque confirmación', { sessionId: sessionId.slice(0, 8), hasPreviousMeeting });
+        if (effectiveCalendarSettings.is_enabled) {
+          const { data: existingMeeting } = await supabaseAdmin
+            .from('bot_meetings')
+            .select('scheduled_at, duration_minutes')
+            .eq('bot_id', botId)
+            .eq('session_id', sessionId)
+            .eq('status', 'booked')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (existingMeeting?.scheduled_at) {
+            log('info', '[CALENDAR] Ya existe reunión en BD para esta sesión, no insertamos', { existing: existingMeeting.scheduled_at });
+            const existingDate = new Date(existingMeeting.scheduled_at);
+            bookedMeetingIso = existingDate.toISOString();
+            bookedMeetingLabelDate = new Intl.DateTimeFormat('es-AR', {
+              timeZone: effectiveCalendarSettings.timezone,
+              weekday: 'long',
+              day: '2-digit',
+              month: '2-digit',
+            }).format(existingDate);
+            bookedMeetingLabelTime = new Intl.DateTimeFormat('es-AR', {
+              timeZone: effectiveCalendarSettings.timezone,
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: false,
+            }).format(existingDate);
+          } else {
+            const fromMemory = (sessionMemory?.metadata as any)?.last_offered_calendar_slot as { startsAtIso: string; dateLabel: string; timeLabel: string } | undefined;
+            const memoryNormalized = fromMemory?.startsAtIso ? normalizeSlotToMinute(fromMemory.startsAtIso) : null;
+            const useMemorySlot = memoryNormalized && availableSlots.some((s) => normalizeSlotToMinute(s.startsAtIso) === memoryNormalized);
+            log('info', '[CALENDAR] Sin reunión en BD; memoria', {
+              hasFromMemory: !!fromMemory?.startsAtIso,
+              fromMemorySlot: fromMemory?.startsAtIso ?? null,
+              useMemorySlot,
+              meetingInfoDate: meetingInfo.date ?? null,
+              meetingInfoTime: meetingInfo.time ?? null,
+              pendingDate: pendingMeetingInfo?.date ?? null,
+              pendingTime: pendingMeetingInfo?.time ?? null,
+            });
+
+            let startsAtIso: string | null = null;
+            let slotDateLabel: string | null = null;
+            let slotTimeLabel: string | null = null;
+            let dateText: string | null = null;
+            let timeText: string | null = null;
+            let slotOccupiedOfferSent = false; // cuando el slot ofrecido ya no está libre y ya respondimos
+            const offeredSlot = fromMemory ?? offeredSlotFromHistory ?? null;
+
+            if (useMemorySlot && fromMemory && memoryNormalized) {
+              const matchedSlot = availableSlots.find((s) => normalizeSlotToMinute(s.startsAtIso) === memoryNormalized);
+              if (matchedSlot) {
+                startsAtIso = matchedSlot.startsAtIso;
+                slotDateLabel = matchedSlot.dateLabel;
+                slotTimeLabel = matchedSlot.timeLabel;
+              } else {
+                startsAtIso = memoryNormalized;
+                slotDateLabel = fromMemory.dateLabel;
+                slotTimeLabel = fromMemory.timeLabel;
+              }
+              dateText = fromMemory.dateLabel;
+              timeText = fromMemory.timeLabel;
+              log('info', '[CALENDAR] Usando slot ofrecido desde memoria (usuario aceptó con contacto)', { startsAtIso, slotDateLabel, slotTimeLabel });
+            } else if (offeredSlot?.startsAtIso && hasContactInMessage) {
+              const memNorm = normalizeSlotToMinute(offeredSlot.startsAtIso);
+              const inSlots = availableSlots.some((s) => normalizeSlotToMinute(s.startsAtIso) === memNorm);
+              if (inSlots) {
+                const matched = availableSlots.find((s) => normalizeSlotToMinute(s.startsAtIso) === memNorm);
+                if (matched) {
+                  startsAtIso = matched.startsAtIso;
+                  slotDateLabel = matched.dateLabel;
+                  slotTimeLabel = matched.timeLabel;
+                } else {
+                  startsAtIso = memNorm;
+                  slotDateLabel = offeredSlot.dateLabel;
+                  slotTimeLabel = offeredSlot.timeLabel;
+                }
+                dateText = offeredSlot.dateLabel;
+                timeText = offeredSlot.timeLabel;
+                log('info', '[CALENDAR] Usando slot ofrecido desde historial (usuario dio contacto)', { startsAtIso, slotDateLabel, slotTimeLabel });
+              } else {
+                slotOccupiedOfferSent = true;
+                const requestedMs = new Date(memNorm).getTime();
+                const nextBest = findExactOrClosestSlot(requestedMs, availableSlots, effectiveCalendarSettings.meeting_duration_minutes);
+                if (nextBest?.closest) {
+                  lastOfferedSlot = nextBest.closest;
+                  parsedResponse.reply = `Ese horario que te ofrecí ya se ocupó. El más cercano que tengo ahora es el ${nextBest.closest.dateLabel} a las ${nextBest.closest.timeLabel}. ¿Te sirve? Para confirmar necesito tu número o email. ¿Me lo dejás?`;
+                } else {
+                  parsedResponse.reply = 'Ese horario que te ofrecí ya se ocupó. En este momento no tengo otros horarios disponibles. Si querés, dejame tu contacto y te avisamos cuando se libere un espacio.';
+                }
+              }
+            }
+            if (!slotOccupiedOfferSent && startsAtIso == null) {
+              const selectedDate = (meetingInfo.date || pendingMeetingInfo?.date) ?? null;
+              const selectedTime = (meetingInfo.time || pendingMeetingInfo?.time) ?? null;
+              const ymd = parseDateTextToYmd(selectedDate, effectiveCalendarSettings.timezone);
+              const hm = parseHHmm(selectedTime || '');
+              if (ymd && hm) {
+                const startsAt = zonedDateTimeToUtc(ymd, hm.hour, hm.minute, effectiveCalendarSettings.timezone);
+                startsAtIso = startsAt.toISOString();
+                slotDateLabel = new Intl.DateTimeFormat('es-AR', { timeZone: effectiveCalendarSettings.timezone, weekday: 'long', day: '2-digit', month: '2-digit' }).format(startsAt);
+                slotTimeLabel = new Intl.DateTimeFormat('es-AR', { timeZone: effectiveCalendarSettings.timezone, hour: '2-digit', minute: '2-digit', hour12: false }).format(startsAt);
+                dateText = selectedDate;
+                timeText = selectedTime;
+                log('info', '[CALENDAR] Slot desde mensaje (date/time)', { selectedDate, selectedTime, ymd, hm, startsAtIso });
+              } else {
+                log('warn', '[CALENDAR] No se pudo obtener slot: sin memoria y date/time no parseables', { selectedDate, selectedTime, ymd, hm });
+              }
+            }
+
+            if (startsAtIso) {
+              const normalizedStart = normalizeSlotToMinute(startsAtIso);
+              const slotAvailable = availableSlots.some((s) => normalizeSlotToMinute(s.startsAtIso) === normalizedStart);
+              if (!slotAvailable) {
+                parsedResponse.reply = `Ese horario ya está ocupado. ${buildAskPreferredTimeReply(effectiveCalendarSettings.meeting_duration_minutes)}`;
+              } else {
+                const slotStartNextMinIso = new Date(new Date(normalizedStart).getTime() + 60000).toISOString();
+                const { data: overlappingMeetings } = await supabaseAdmin
+                  .from('bot_meetings')
+                  .select('id, scheduled_at, duration_minutes')
+                  .eq('bot_id', botId)
+                  .eq('status', 'booked')
+                  .gte('scheduled_at', normalizedStart)
+                  .lt('scheduled_at', slotStartNextMinIso);
+
+                const alreadyTaken = Array.isArray(overlappingMeetings) && overlappingMeetings.length > 0;
+
+                if (alreadyTaken) {
+                  const requestedMs = new Date(startsAtIso).getTime();
+                  const { data: freshBooked } = await supabaseAdmin
+                    .from('bot_meetings')
+                    .select('scheduled_at, status, duration_minutes')
+                    .eq('bot_id', botId)
+                    .eq('status', 'booked')
+                    .gte('scheduled_at', new Date().toISOString());
+                  const freshSlots = generateAvailableSlots({
+                    timezone: effectiveCalendarSettings.timezone,
+                    durationMinutes: effectiveCalendarSettings.meeting_duration_minutes,
+                    availability: availabilityRows,
+                    bookedMeetings: (freshBooked || []) as CalendarMeetingRow[],
+                    daysAhead: 14,
+                  });
+                  const nextBest = findExactOrClosestSlot(requestedMs, freshSlots, effectiveCalendarSettings.meeting_duration_minutes);
+                  if (nextBest?.exact) {
+                    lastOfferedSlot = nextBest.exact;
+                    parsedResponse.reply = `Ese horario ya está ocupado. ${buildOfferExactSlotReply(nextBest.exact)}`;
+                  } else if (nextBest?.closest) {
+                    lastOfferedSlot = nextBest.closest;
+                    parsedResponse.reply = `Ese horario ya está ocupado. ${buildOfferClosestSlotReply(nextBest.closest)}`;
+                  } else {
+                    parsedResponse.reply = `Ese horario ya está ocupado. ${buildAskPreferredTimeReply(effectiveCalendarSettings.meeting_duration_minutes)}`;
+                  }
+                } else {
+                  const leadPhone = extractedContacts.find((c) => c.type === 'phone' || c.type === 'whatsapp' || c.type === 'email')?.value || null;
+                  const slotToBook = normalizeSlotToMinute(startsAtIso);
+                  const slotEndIso = new Date(new Date(slotToBook).getTime() + 60000).toISOString();
+                  const { data: lastCheck } = await supabaseAdmin
+                    .from('bot_meetings')
+                    .select('id')
+                    .eq('bot_id', botId)
+                    .eq('status', 'booked')
+                    .gte('scheduled_at', slotToBook)
+                    .lt('scheduled_at', slotEndIso);
+                  if (Array.isArray(lastCheck) && lastCheck.length > 0) {
+                    const requestedMs = new Date(startsAtIso).getTime();
+                    const { data: freshBooked } = await supabaseAdmin
+                      .from('bot_meetings')
+                      .select('scheduled_at, status')
+                      .eq('bot_id', botId)
+                      .eq('status', 'booked')
+                      .gte('scheduled_at', new Date().toISOString());
+                    const freshSlots = generateAvailableSlots({
+                      timezone: effectiveCalendarSettings.timezone,
+                      durationMinutes: effectiveCalendarSettings.meeting_duration_minutes,
+                      availability: availabilityRows,
+                      bookedMeetings: (freshBooked || []) as CalendarMeetingRow[],
+                      daysAhead: 14,
+                    });
+                    const nextBest = findExactOrClosestSlot(requestedMs, freshSlots, effectiveCalendarSettings.meeting_duration_minutes);
+                    if (nextBest?.closest) {
+                      lastOfferedSlot = nextBest.closest;
+                      parsedResponse.reply = `Ese horario ya no está disponible. ${buildOfferClosestSlotReply(nextBest.closest)}`;
+                    } else {
+                      parsedResponse.reply = `Ese horario ya no está disponible. ${buildAskPreferredTimeReply(effectiveCalendarSettings.meeting_duration_minutes)}`;
+                    }
+                  } else {
+                  const { date: scheduledDate, time: scheduledTime } = toLocalDateAndTime(slotToBook, effectiveCalendarSettings.timezone);
+                  log('info', '[CALENDAR] Insertando reunión', { botId, sessionId, slotToBook, scheduledDate, scheduledTime, leadPhone: leadPhone ?? null });
+                  const { error: bookingError } = await supabaseAdmin
+                    .from('bot_meetings')
+                    .insert({
+                      bot_id: botId,
+                      session_id: sessionId,
+                      lead_phone: leadPhone,
+                      scheduled_at: slotToBook,
+                      scheduled_date: scheduledDate,
+                      scheduled_time: scheduledTime,
+                      duration_minutes: effectiveCalendarSettings.meeting_duration_minutes,
+                      status: 'booked',
+                      source_message: message.substring(0, 500),
+                      metadata: { date_text: dateText, time_text: timeText },
+                    });
+
+                  if (!bookingError) {
+                    log('info', '[CALENDAR] Reunión insertada OK', { slotToBook, scheduledDate, scheduledTime });
+                    bookedMeetingIso = slotToBook;
+                    bookedMeetingLabelDate = slotDateLabel;
+                    bookedMeetingLabelTime = slotTimeLabel;
+                  } else {
+                    log('warn', '[CALENDAR] Error al insertar reunión', { error: bookingError?.message, code: bookingError?.code, slotToBook });
+                      const requestedMs = new Date(startsAtIso).getTime();
+                      const { data: freshBooked } = await supabaseAdmin
+                        .from('bot_meetings')
+                        .select('scheduled_at, status')
+                        .eq('bot_id', botId)
+                        .eq('status', 'booked')
+                        .gte('scheduled_at', new Date().toISOString());
+                      const freshSlots = generateAvailableSlots({
+                        timezone: effectiveCalendarSettings.timezone,
+                        durationMinutes: effectiveCalendarSettings.meeting_duration_minutes,
+                        availability: availabilityRows,
+                        bookedMeetings: (freshBooked || []) as CalendarMeetingRow[],
+                        daysAhead: 14,
+                      });
+                      const nextBest = findExactOrClosestSlot(requestedMs, freshSlots, effectiveCalendarSettings.meeting_duration_minutes);
+                      if (nextBest?.closest) {
+                        lastOfferedSlot = nextBest.closest;
+                        parsedResponse.reply = `Ese horario ya no está disponible. ${buildOfferClosestSlotReply(nextBest.closest)}`;
+                      } else {
+                        parsedResponse.reply = `Ese horario ya no está disponible. ${buildAskPreferredTimeReply(effectiveCalendarSettings.meeting_duration_minutes)}`;
+                      }
+                  }
+                  }
+                }
+              }
+            } else {
+              parsedResponse.reply = parsedResponse.reply || 'No pude interpretar el horario. ¿Podrías decirme de nuevo qué día y hora te queda bien?';
+            }
+          }
+          // Confirmación con fecha/hora cuando tenemos reunión guardada
+          if (bookedMeetingIso) {
+            const replyLower = parsedResponse.reply.toLowerCase();
+            const alreadyConfirmed = replyLower.includes('perfecto') && replyLower.includes('contacto') || replyLower.includes('listo') && replyLower.includes('contacto') || replyLower.includes('ya tengo');
+            const isAskingForMore = replyLower.includes('número') && replyLower.includes('también') || replyLower.includes('teléfono') && replyLower.includes('también');
+            if (!alreadyConfirmed || isAskingForMore) {
+              const meetingContact = extractedContacts.find(c => c.type === 'meeting');
+              const meetingDate = bookedMeetingLabelDate || meetingContact?.metadata?.date || pendingMeetingInfo?.date || meetingInfo.date || '';
+              const meetingTime = bookedMeetingLabelTime || meetingContact?.metadata?.time || pendingMeetingInfo?.time || meetingInfo.time || '';
+              const dateTimeStr = `${meetingDate ? meetingDate : ''}${meetingDate && meetingTime ? ' ' : ''}${meetingTime ? `a las ${meetingTime}` : ''}`.trim();
+              const confirmation = (meetingDate || meetingTime)
+                ? (vendorName ? ` Perfecto, ya tengo tu contacto. Quedamos para ${dateTimeStr} y ${vendorName} te contactará pronto.` : ` Perfecto, ya tengo tu contacto. Quedamos para ${dateTimeStr} y te contactaremos pronto.`)
+                : (vendorName ? ` Perfecto, ya tengo tu contacto. ${vendorName} te contactará pronto.` : ` Perfecto, ya tengo tu contacto. Te contactaremos pronto.`);
+              parsedResponse.reply = parsedResponse.reply
+                .replace(/¿Tenés un número de teléfono también\?.*/gi, '')
+                .replace(/Así es más fácil contactarte.*/gi, '')
+                .trim() + confirmation;
+            }
+          }
+        }
+      } else if (meetingInfo.intent && !hasContactInMessage && !hasPreviousContact) {
         // El usuario confirmó que quiere agendar, pero aún no dio contacto
         const hasMeetingDateTime = Boolean(
           (meetingInfo.date || pendingMeetingInfo?.date) &&
@@ -2022,14 +2351,11 @@ REGLA CRITICA DE MEMORIA:
         );
         
         if (!hasMeetingDateTime) {
-          // Si aún no hay día y hora, no pedir contacto en esta etapa.
-          // Además limpiamos una posible solicitud prematura generada por el modelo.
           parsedResponse.reply = parsedResponse.reply
             .replace(/\s*para concretar la reuni[oó]n,?\s*necesito tu n[uú]mero(?: de contacto)? o email[^?]*\?/gi, '')
             .replace(/\s*necesito tu n[uú]mero(?: de contacto)? o email[^?]*\?/gi, '')
             .trim();
         } else {
-        // Verificar si el bot ya pidió contacto
         const replyLower = parsedResponse.reply.toLowerCase();
         const alreadyAskedForContact = 
           replyLower.includes('contacto') || 
@@ -2038,18 +2364,12 @@ REGLA CRITICA DE MEMORIA:
           replyLower.includes('teléfono') ||
           replyLower.includes('telefono');
         
-        // Solo agregar solicitud si el bot NO la mencionó ya
         if (!alreadyAskedForContact) {
           const contactRequest = vendorName 
             ? ` Para concretar la reunión, necesito tu número de contacto o email para que ${vendorName} pueda contactarte. ¿Me lo podés dejar?`
             : ` Para concretar la reunión, necesito tu número de contacto o email para que te podamos contactar. ¿Me lo podés dejar?`;
           
           parsedResponse.reply = parsedResponse.reply.trim() + contactRequest;
-          // Logging reducido
-          // log('info', 'Usuario confirmó reunión pero sin contacto - solicitando contacto');
-        } else {
-          // Logging reducido
-          // log('info', 'Bot ya solicitó contacto en su respuesta, no duplicar');
         }
         }
       } else if (hasContactInMessage && !meetingInfo.intent) {
@@ -2090,216 +2410,6 @@ REGLA CRITICA DE MEMORIA:
               : ` Perfecto, ya tengo tu contacto. Te contactaremos pronto.`;
             parsedResponse.reply = parsedResponse.reply.trim() + confirmation;
           }
-        }
-      } else if (hasMeetingConfirmed && hasContact) {
-        // ⬅️ NUEVO: Si hay reunión Y contacto, confirmar y resumir
-        if (effectiveCalendarSettings.is_enabled) {
-          const { data: existingMeeting } = await supabaseAdmin
-            .from('bot_meetings')
-            .select('scheduled_at, duration_minutes')
-            .eq('bot_id', botId)
-            .eq('session_id', sessionId)
-            .eq('status', 'booked')
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-
-          if (existingMeeting?.scheduled_at) {
-            const existingDate = new Date(existingMeeting.scheduled_at);
-            bookedMeetingIso = existingDate.toISOString();
-            bookedMeetingLabelDate = new Intl.DateTimeFormat('es-AR', {
-              timeZone: effectiveCalendarSettings.timezone,
-              weekday: 'long',
-              day: '2-digit',
-              month: '2-digit',
-            }).format(existingDate);
-            bookedMeetingLabelTime = new Intl.DateTimeFormat('es-AR', {
-              timeZone: effectiveCalendarSettings.timezone,
-              hour: '2-digit',
-              minute: '2-digit',
-              hour12: false,
-            }).format(existingDate);
-          } else {
-            const fromMemory = (sessionMemory?.metadata as any)?.last_offered_calendar_slot as { startsAtIso: string; dateLabel: string; timeLabel: string } | undefined;
-            const useMemorySlot = fromMemory?.startsAtIso && availableSlots.some((s) => s.startsAtIso === fromMemory.startsAtIso);
-
-            let startsAtIso: string | null = null;
-            let slotDateLabel: string | null = null;
-            let slotTimeLabel: string | null = null;
-            let dateText: string | null = null;
-            let timeText: string | null = null;
-
-            if (useMemorySlot && fromMemory) {
-              startsAtIso = fromMemory.startsAtIso;
-              slotDateLabel = fromMemory.dateLabel;
-              slotTimeLabel = fromMemory.timeLabel;
-              dateText = fromMemory.dateLabel;
-              timeText = fromMemory.timeLabel;
-            } else {
-              const selectedDate = meetingInfo.date || pendingMeetingInfo?.date || null;
-              const selectedTime = meetingInfo.time || pendingMeetingInfo?.time || null;
-              const ymd = parseDateTextToYmd(selectedDate, effectiveCalendarSettings.timezone);
-              const hm = parseHHmm(selectedTime || '');
-              if (ymd && hm) {
-                const startsAt = zonedDateTimeToUtc(ymd, hm.hour, hm.minute, effectiveCalendarSettings.timezone);
-                startsAtIso = startsAt.toISOString();
-                slotDateLabel = new Intl.DateTimeFormat('es-AR', { timeZone: effectiveCalendarSettings.timezone, weekday: 'long', day: '2-digit', month: '2-digit' }).format(startsAt);
-                slotTimeLabel = new Intl.DateTimeFormat('es-AR', { timeZone: effectiveCalendarSettings.timezone, hour: '2-digit', minute: '2-digit', hour12: false }).format(startsAt);
-                dateText = selectedDate;
-                timeText = selectedTime;
-              }
-            }
-
-            if (startsAtIso) {
-              const normalizedStart = normalizeSlotToMinute(startsAtIso);
-              const slotAvailable = availableSlots.some((s) => normalizeSlotToMinute(s.startsAtIso) === normalizedStart);
-              if (!slotAvailable) {
-                parsedResponse.reply = `Ese horario ya está ocupado. ${buildAskPreferredTimeReply(effectiveCalendarSettings.meeting_duration_minutes)}`;
-              } else {
-                const slotStartNextMinIso = new Date(new Date(normalizedStart).getTime() + 60000).toISOString();
-                // Verificación en vivo: otro chat pudo haber reservado este slot (mismo minuto normalizado)
-                const { data: overlappingMeetings } = await supabaseAdmin
-                  .from('bot_meetings')
-                  .select('id, scheduled_at, duration_minutes')
-                  .eq('bot_id', botId)
-                  .eq('status', 'booked')
-                  .gte('scheduled_at', normalizedStart)
-                  .lt('scheduled_at', slotStartNextMinIso);
-
-                const alreadyTaken = Array.isArray(overlappingMeetings) && overlappingMeetings.length > 0;
-
-                if (alreadyTaken) {
-                  const requestedMs = new Date(startsAtIso).getTime();
-                  const { data: freshBooked } = await supabaseAdmin
-                    .from('bot_meetings')
-                    .select('scheduled_at, status')
-                    .eq('bot_id', botId)
-                    .eq('status', 'booked')
-                    .gte('scheduled_at', new Date().toISOString());
-                  const freshSlots = generateAvailableSlots({
-                    timezone: effectiveCalendarSettings.timezone,
-                    durationMinutes: effectiveCalendarSettings.meeting_duration_minutes,
-                    availability: availabilityRows,
-                    bookedMeetings: (freshBooked || []) as CalendarMeetingRow[],
-                    daysAhead: 14,
-                  });
-                  const nextBest = findExactOrClosestSlot(requestedMs, freshSlots, effectiveCalendarSettings.meeting_duration_minutes);
-                  if (nextBest?.exact) {
-                    lastOfferedSlot = nextBest.exact;
-                    parsedResponse.reply = `Ese horario ya está ocupado. ${buildOfferExactSlotReply(nextBest.exact)}`;
-                  } else if (nextBest?.closest) {
-                    lastOfferedSlot = nextBest.closest;
-                    parsedResponse.reply = `Ese horario ya está ocupado. ${buildOfferClosestSlotReply(nextBest.closest)}`;
-                  } else {
-                    parsedResponse.reply = `Ese horario ya está ocupado. ${buildAskPreferredTimeReply(effectiveCalendarSettings.meeting_duration_minutes)}`;
-                  }
-                } else {
-                  const leadPhone = extractedContacts.find((c) => c.type === 'phone' || c.type === 'whatsapp')?.value || null;
-                  const slotToBook = normalizeSlotToMinute(startsAtIso);
-                  const { date: scheduledDate, time: scheduledTime } = toLocalDateAndTime(slotToBook, effectiveCalendarSettings.timezone);
-                  const { error: bookingError } = await supabaseAdmin
-                    .from('bot_meetings')
-                    .insert({
-                      bot_id: botId,
-                      session_id: sessionId,
-                      lead_phone: leadPhone,
-                      scheduled_at: slotToBook,
-                      scheduled_date: scheduledDate,
-                      scheduled_time: scheduledTime,
-                      duration_minutes: effectiveCalendarSettings.meeting_duration_minutes,
-                      status: 'booked',
-                      source_message: message.substring(0, 500),
-                      metadata: { date_text: dateText, time_text: timeText },
-                    });
-
-                  if (!bookingError) {
-                    bookedMeetingIso = slotToBook;
-                    bookedMeetingLabelDate = slotDateLabel;
-                    bookedMeetingLabelTime = slotTimeLabel;
-                  } else {
-                    // Cualquier error (p. ej. restricción única: otro chat ya reservó) → ofrecer el más cercano
-                      const requestedMs = new Date(startsAtIso).getTime();
-                      const { data: freshBooked } = await supabaseAdmin
-                        .from('bot_meetings')
-                        .select('scheduled_at, status')
-                        .eq('bot_id', botId)
-                        .eq('status', 'booked')
-                        .gte('scheduled_at', new Date().toISOString());
-                      const freshSlots = generateAvailableSlots({
-                        timezone: effectiveCalendarSettings.timezone,
-                        durationMinutes: effectiveCalendarSettings.meeting_duration_minutes,
-                        availability: availabilityRows,
-                        bookedMeetings: (freshBooked || []) as CalendarMeetingRow[],
-                        daysAhead: 14,
-                      });
-                      const nextBest = findExactOrClosestSlot(requestedMs, freshSlots, effectiveCalendarSettings.meeting_duration_minutes);
-                      if (nextBest?.closest) {
-                        lastOfferedSlot = nextBest.closest;
-                        parsedResponse.reply = `Ese horario ya no está disponible. ${buildOfferClosestSlotReply(nextBest.closest)}`;
-                      } else {
-                        parsedResponse.reply = `Ese horario ya no está disponible. ${buildAskPreferredTimeReply(effectiveCalendarSettings.meeting_duration_minutes)}`;
-                      }
-                  }
-                }
-              }
-            }
-          }
-        }
-
-        const replyLower = parsedResponse.reply.toLowerCase();
-        const alreadyConfirmed = 
-          replyLower.includes('perfecto') && replyLower.includes('contacto') ||
-          replyLower.includes('listo') && replyLower.includes('contacto') ||
-          replyLower.includes('ya tengo');
-        
-        // ⬅️ CRÍTICO: Verificar que NO esté pidiendo más información
-        const isAskingForMore = 
-          replyLower.includes('número') && replyLower.includes('también') ||
-          replyLower.includes('teléfono') && replyLower.includes('también');
-        
-        if (!alreadyConfirmed && !isAskingForMore) {
-          // Buscar fecha y hora de la reunión (puede estar en el mensaje actual o en pendingMeetingInfo)
-          const meetingContact = extractedContacts.find(c => c.type === 'meeting');
-          const meetingDate = bookedMeetingLabelDate || meetingContact?.metadata?.date || pendingMeetingInfo?.date || meetingInfo.date || '';
-          const meetingTime = bookedMeetingLabelTime || meetingContact?.metadata?.time || pendingMeetingInfo?.time || meetingInfo.time || '';
-          
-          let confirmation = '';
-          if (meetingDate || meetingTime) {
-            const dateTimeStr = `${meetingDate ? meetingDate : ''}${meetingDate && meetingTime ? ' ' : ''}${meetingTime ? `a las ${meetingTime}` : ''}`.trim();
-            confirmation = vendorName
-              ? ` Perfecto, ya tengo tu contacto. Quedamos para ${dateTimeStr} y ${vendorName} te contactará pronto.`
-              : ` Perfecto, ya tengo tu contacto. Quedamos para ${dateTimeStr} y te contactaremos pronto.`;
-          } else {
-            confirmation = vendorName
-              ? ` Perfecto, ya tengo tu contacto. ${vendorName} te contactará pronto para coordinar.`
-              : ` Perfecto, ya tengo tu contacto. Te contactaremos pronto para coordinar.`;
-          }
-          
-          parsedResponse.reply = parsedResponse.reply.trim() + confirmation;
-        } else if (isAskingForMore) {
-          // ⬅️ CRÍTICO: Si está pidiendo más información, eliminarlo y solo confirmar
-          parsedResponse.reply = parsedResponse.reply
-            .replace(/¿Tenés un número de teléfono también\?.*/gi, '')
-            .replace(/Así es más fácil contactarte.*/gi, '')
-            .trim();
-          
-          const meetingContact = extractedContacts.find(c => c.type === 'meeting');
-          const meetingDate = bookedMeetingLabelDate || meetingContact?.metadata?.date || pendingMeetingInfo?.date || meetingInfo.date || '';
-          const meetingTime = bookedMeetingLabelTime || meetingContact?.metadata?.time || pendingMeetingInfo?.time || meetingInfo.time || '';
-          
-          let confirmation = '';
-          if (meetingDate || meetingTime) {
-            const dateTimeStr = `${meetingDate ? meetingDate : ''}${meetingDate && meetingTime ? ' ' : ''}${meetingTime ? `a las ${meetingTime}` : ''}`.trim();
-            confirmation = vendorName
-              ? ` Perfecto, ya tengo tu contacto. Quedamos para ${dateTimeStr} y ${vendorName} te contactará pronto.`
-              : ` Perfecto, ya tengo tu contacto. Quedamos para ${dateTimeStr} y te contactaremos pronto.`;
-          } else {
-            confirmation = vendorName
-              ? ` Perfecto, ya tengo tu contacto. ${vendorName} te contactará pronto.`
-              : ` Perfecto, ya tengo tu contacto. Te contactaremos pronto.`;
-          }
-          
-          parsedResponse.reply = parsedResponse.reply.trim() + confirmation;
         }
       }
 

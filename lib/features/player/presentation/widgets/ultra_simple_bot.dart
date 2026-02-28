@@ -429,6 +429,8 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
           }
         });
       } else if (previous == false && current == true) {
+        ref.read(isClosingChatProvider.notifier).state = false;
+        ref.read(riveEntryTriggerProvider.notifier).state++;
         // ⬅️ ESTRATEGIA DETERMINISTA: El chat actual es SIEMPRE el activo
         // No consultamos la BD para "adivinar" cuál es más reciente.
         // El chat que el usuario está viendo ES la fuente de verdad.
@@ -651,7 +653,7 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
               ),
           ),
 
-          // BURBUJA FLOTANTE (posición condicional: más espacio si wpp true para ambas burbujas)
+          // BURBUJA FLOTANTE: misma posición siempre (con o sin WhatsApp). La de WhatsApp se agrega arriba sin mover esta.
           // ⬅️ Si el bot está desactivado en la fábrica, no mostrar ninguna burbuja (el HTML reserva 0)
             Consumer(
               builder: (context, ref, _) {
@@ -659,12 +661,8 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
                 final bool isMobileBubble = screenW < 600;
                 final botConfig = ref.watch(botConfigProvider).asData?.value;
                 if (botConfig == null || !botConfig.enabled) return const SizedBox.shrink();
-                final bool wpp = botConfig.wpp;
-                // wpp true: más margen inferior para que no se corten ambas burbujas (100px)
-                // wpp false: solo espacio para el bot
-                final double padBottom = wpp
-                    ? (isMobileBubble ? 22.0 : 56.0)
-                    : (isMobileBubble ? 12.0 : 24.0);
+                // Siempre el mismo margen para la burbuja del bot (no subir cuando se activa wpp)
+                final double padBottom = isMobileBubble ? 12.0 : 24.0;
                 final double padRight = isMobileBubble ? 16.0 : 40.0;
                 return Positioned(
                   bottom: padBottom,
@@ -723,14 +721,13 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
                   isOpen) {
                 return const SizedBox.shrink();
               }
-              
-              // ⬅️ Mismo margen que la burbuja del bot (condicional por wpp)
+              // Burbuja del bot usa siempre 12/24; WhatsApp va justo arriba sin mover el bot
               final double kFloatingSize = botConfig.bubbleSize;
               const double kGap = 12.0;
-              final double padBottom = (isMobile ? 22.0 : 56.0);
+              final double padBottomBot = isMobile ? 12.0 : 24.0;
               final double padRight = isMobile ? 16.0 : 40.0;
               return Positioned(
-                bottom: padBottom + kFloatingSize + kGap,
+                bottom: padBottomBot + kFloatingSize + kGap,
                 right: padRight,
                 child: AnimatedScale(
                   scale: _showBubbles ? 1.0 : 0.0,

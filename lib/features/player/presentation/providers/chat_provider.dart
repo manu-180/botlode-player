@@ -1,6 +1,7 @@
 // Archivo: lib/features/player/presentation/providers/chat_provider.dart
 import 'package:botlode_player/core/services/chat_persistence_service.dart';
 import 'package:botlode_player/features/player/domain/models/bot_config.dart';
+import 'package:botlode_player/features/player/domain/models/bot_response.dart';
 import 'package:botlode_player/features/player/domain/models/chat_message.dart';
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/chat_repository_provider.dart';
@@ -47,7 +48,7 @@ class ChatState {
 }
 
 // --- PROVIDER (CONTROLLER) ---
-@riverpod
+@Riverpod(keepAlive: true)
 class ChatController extends _$ChatController {
   final _uuid = const Uuid();
   // ⬅️ NUEVO: Session ID persistente (sobrevive a recargas)
@@ -78,10 +79,13 @@ class ChatController extends _$ChatController {
     final storedMessages = ChatPersistenceService.getStoredMessages();
     
     // ⬅️ NUEVO: Obtener mensaje inicial del bot (si está disponible)
+    // Usar ref.read para NO reconstruir este Notifier cuando cambie la config;
+    // si usáramos ref.watch, al actualizarse botConfigProvider se volvería a ejecutar build()
+    // y se perdería currentMood (ej. "happy") volviendo al estado inicial con 'neutral'.
     String defaultInitialMessage = 'Sistema en línea. ¿En qué puedo ayudarte hoy?';
     BotConfig? botConfig;
     try {
-      final botConfigAsync = ref.watch(botConfigProvider);
+      final botConfigAsync = ref.read(botConfigProvider);
       botConfig = botConfigAsync.asData?.value;
       if (botConfig?.initialMessage != null && botConfig!.initialMessage!.trim().isNotEmpty) {
         defaultInitialMessage = botConfig.initialMessage!;
@@ -169,12 +173,16 @@ class ChatController extends _$ChatController {
       timestamp: DateTime.now().subtract(const Duration(hours: 3)), // ⬅️ Hora de Argentina (UTC-3)
     );
 
+    // ⬅️ Tiempo mínimo que debe mostrarse "Procesando..." para que siempre se vea (evita parpadeos)
+    const minLoadingDisplayDuration = Duration(milliseconds: 600);
+    final loadingStartedAt = DateTime.now();
+
     state = state.copyWith(
       messages: [...state.messages, userMsg],
-      isLoading: true, 
-      currentMood: 'thinking', 
+      isLoading: true,
+      currentMood: 'thinking',
     );
-    
+
     // ⬅️ NUEVO: Guardar mensajes después de agregar el del usuario
     ChatPersistenceService.saveMessages(state.messages);
 
@@ -195,18 +203,35 @@ class ChatController extends _$ChatController {
       state = state.copyWith(chatId: effectiveChatId);
     }
 
-    final response = await repository.sendMessage(
-      message: text,
-      sessionId: _sessionId,
-      chatId: effectiveChatId, // ⬅️ Asegurar que no sea null
-      botId: botId, 
-    );
+    BotResponse response;
+    try {
+      response = await repository.sendMessage(
+        message: text,
+        sessionId: _sessionId,
+        chatId: effectiveChatId,
+        botId: botId,
+      );
+    } catch (e) {
+      // Asegurar tiempo mínimo de "Procesando..." incluso al fallar
+      final elapsed = DateTime.now().difference(loadingStartedAt);
+      if (elapsed < minLoadingDisplayDuration) {
+        await Future.delayed(minLoadingDisplayDuration - elapsed);
+      }
+      state = state.copyWith(isLoading: false, currentMood: 'confused');
+      rethrow;
+    }
+
+    // ⬅️ Asegurar que "Procesando..." se muestre al menos minLoadingDisplayDuration
+    final elapsed = DateTime.now().difference(loadingStartedAt);
+    if (elapsed < minLoadingDisplayDuration) {
+      await Future.delayed(minLoadingDisplayDuration - elapsed);
+    }
 
     final botMsg = ChatMessage(
       id: _uuid.v4(),
       text: response.reply,
       role: MessageRole.bot,
-      timestamp: DateTime.now().subtract(const Duration(hours: 3)), // ⬅️ Hora de Argentina (UTC-3)
+      timestamp: DateTime.now().subtract(const Duration(hours: 3)),
     );
 
     final updatedMessages = [...state.messages, botMsg];
@@ -215,8 +240,7 @@ class ChatController extends _$ChatController {
       isLoading: false,
       currentMood: response.mood,
     );
-    
-    // ⬅️ NUEVO: Guardar mensajes después de recibir respuesta del bot
+
     ChatPersistenceService.saveMessages(updatedMessages);
   }
 

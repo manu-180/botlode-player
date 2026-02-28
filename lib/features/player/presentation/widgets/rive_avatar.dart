@@ -16,7 +16,9 @@ import 'package:rive/rive.dart';
 /// - Fluidez al volver al centro cuando el mouse sale del rango
 class BotAvatarWidget extends ConsumerStatefulWidget {
   final bool isBubble;
-  const BotAvatarWidget({super.key, this.isBubble = false});
+  /// Tamaño fijo cuando se usa en header del chat (ej. 88). Si null, usa 68 (burbuja) o 300 (chat completo).
+  final double? size;
+  const BotAvatarWidget({super.key, this.isBubble = false, this.size});
 
   @override
   ConsumerState<BotAvatarWidget> createState() => _BotAvatarWidgetState();
@@ -30,6 +32,15 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
   SMIBool? _errorInput;
   SMINumber? _downloadInput;
   int? _savedMood;
+
+  // ⬅️ UX PREMIUM: inputs opcionales (si el .riv los tiene, se usan)
+  SMITrigger? _helloTrigger;
+  SMITrigger? _goodbyeTrigger;
+  SMIBool? _hoveredInput;
+  SMITrigger? _listeningTrigger;
+  SMIBool? _isTypingInput;
+  SMIBool? _anticipatingInput;
+  SMIBool? _reducedMotionInput;
 
   late Ticker _ticker;
   double _targetX = 50.0;
@@ -138,18 +149,31 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       _lookYInput = controller.getNumberInput('LookY');
       _errorInput = controller.getBoolInput('Error');
       _downloadInput = controller.getNumberInput('Download'); // ⬅️ Modo "procesando" (como botlode_web)
-      
+
+      // ⬅️ UX PREMIUM: triggers/inputs opcionales (añadir en Rive si quieres las animaciones)
+      _helloTrigger = controller.getTriggerInput('Hello');
+      _goodbyeTrigger = controller.getTriggerInput('Goodbye');
+      _listeningTrigger = controller.getTriggerInput('Listening');
+      _hoveredInput = controller.getBoolInput('Hovered');
+      _isTypingInput = controller.getBoolInput('IsTyping');
+      _anticipatingInput = controller.getBoolInput('Anticipating');
+      _reducedMotionInput = controller.getBoolInput('ReducedMotion');
+
       // ⬅️ NOTA: Para que el círculo cambie de color según el estado emocional,
       // debes configurar en Rive que el color del círculo de "Face download" 
       // se controle mediante el input "Mood". El código ya está listo para esto.
       
       _errorInput?.value = false;
-      // Sincronizar con estado actual: si ya está pensando, mostrar animación de procesando de una
       final chatState = ref.read(chatControllerProvider);
       _downloadInput?.value = chatState.isLoading ? 1.0 : 0.0;
       _moodInput?.value = ref.read(botMoodProvider).toDouble();
-      _lookXInput?.value = 50; 
-      _lookYInput?.value = 50; 
+      _lookXInput?.value = 50;
+      _lookYInput?.value = 50;
+      // UX PREMIUM: valores iniciales de inputs opcionales
+      _isTypingInput?.value = ref.read(userIsTypingProvider);
+      _hoveredInput?.value = ref.read(avatarHoveredProvider);
+      _anticipatingInput?.value = false;
+      _reducedMotionInput?.value = ref.read(reducedMotionProvider);
     }
   }
 
@@ -182,25 +206,46 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
     // el círculo siempre sea verde, independientemente del estado emocional
     ref.listen(chatControllerProvider, (prev, next) {
       if (_downloadInput != null) {
-        // Activar Download (1.0) cuando isLoading es true, desactivar (0.0) cuando es false
         _downloadInput!.value = next.isLoading ? 1.0 : 0.0;
       }
-      
       if (_moodInput != null) {
         if (next.isLoading) {
-          // ⬅️ Cuando está pensando, forzar mood a 0 (verde/neutral) para que el círculo sea verde
           _moodInput!.value = 0.0;
         } else {
-          // ⬅️ Cuando termina de pensar, restaurar el mood real del bot
           if (_savedMood != null) {
             _moodInput!.value = _savedMood!.toDouble();
           } else {
-            // Si no hay mood guardado, usar el mood actual
-            final currentMoodIndex = ref.read(botMoodProvider);
-            _moodInput!.value = currentMoodIndex.toDouble();
+            _moodInput!.value = ref.read(botMoodProvider).toDouble();
           }
         }
       }
+      // ⬅️ UX PREMIUM: Anticipación cuando el bot acaba de responder (orejas arriba, etc.)
+      if (prev != null && prev.isLoading && !next.isLoading && _anticipatingInput != null) {
+        _anticipatingInput!.value = true;
+        Future.delayed(const Duration(milliseconds: 250), () {
+          if (mounted && _anticipatingInput != null) _anticipatingInput!.value = false;
+        });
+      }
+    });
+
+    // ⬅️ UX PREMIUM: Sincronizar inputs opcionales con providers
+    ref.listen(userIsTypingProvider, (_, isTyping) {
+      if (_isTypingInput != null) _isTypingInput!.value = isTyping;
+    });
+    ref.listen(avatarHoveredProvider, (_, hovered) {
+      if (_hoveredInput != null) _hoveredInput!.value = hovered;
+    });
+    ref.listen(avatarListeningTriggerProvider, (_, count) {
+      if (count > 0 && _listeningTrigger != null) _listeningTrigger!.fire();
+    });
+    ref.listen(riveEntryTriggerProvider, (_, count) {
+      if (count > 0 && _helloTrigger != null) _helloTrigger!.fire();
+    });
+    ref.listen(riveExitTriggerProvider, (_, count) {
+      if (count > 0 && _goodbyeTrigger != null) _goodbyeTrigger!.fire();
+    });
+    ref.listen(reducedMotionProvider, (_, reduced) {
+      if (_reducedMotionInput != null) _reducedMotionInput!.value = reduced;
     });
 
     // ⬅️ Aplicar modo "procesando" (Download 1.0) cuando isLoading; 0.0 cuando no (como botlode_web)
@@ -208,9 +253,9 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       _downloadInput!.value = chatState.isLoading ? 1.0 : 0.0;
     }
 
-    // ⬅️ Tamaño según contexto: Burbuja más pequeña, Chat más grande
-    final double avatarSize = widget.isBubble ? 68.0 : 300.0;
-    
+    // ⬅️ Tamaño según contexto: size explícito, burbuja 68, chat completo 300
+    final double avatarSize = widget.size ?? (widget.isBubble ? 68.0 : 300.0);
+
     return SizedBox(
       width: avatarSize, 
       height: avatarSize,

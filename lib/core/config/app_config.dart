@@ -34,5 +34,6 @@ class AppConfig {
     return '$cleanUrl/functions/v1/botlode-brain'; 
   }
 
-  static const String fallbackBotId = "0b99e786-fa91-42ba-9578-5784f5049140"; 
+  // Bot por defecto cuando no hay ?botId= en la URL (para probar)
+  static const String fallbackBotId = "0038971a-da75-4ddc-8663-d52a6b8f2936"; 
 }

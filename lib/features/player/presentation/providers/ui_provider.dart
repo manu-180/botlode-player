@@ -1,4 +1,5 @@
 // Archivo: lib/features/player/presentation/providers/ui_provider.dart
+import 'dart:async';
 import 'dart:ui';
 import 'package:botlode_player/core/config/supabase_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/chat_provider.dart';
@@ -39,6 +40,64 @@ final activeSessionIdProvider = StateProvider<String?>((ref) => null);
 // ⬅️ NUEVO: Ocultar Rive al abrir desde la burbuja (móvil) para ganar espacio.
 // Se activa al hacer click en la burbuja; se desactiva al hacer tap en el área del chat.
 final hideRiveForSpaceProvider = StateProvider<bool>((ref) => false);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// UX PREMIUM RIVE: Entrada/salida, typing, hover, listening, mood decay, reduced motion
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Usuario está escribiendo en el input (texto no vacío). El gato puede reaccionar (atento).
+final userIsTypingProvider = StateProvider<bool>((ref) => false);
+
+/// Hover sobre el avatar del gato. Para reacción sutil (oreja, parpadeo).
+final avatarHoveredProvider = StateProvider<bool>((ref) => false);
+
+/// Incrementar para disparar gesto "te escucho" en Rive (al hacer tap en el gato).
+final avatarListeningTriggerProvider = StateProvider<int>((ref) => 0);
+
+/// Incrementar cuando el chat se ABRE para reproducir animación "hola" en Rive.
+final riveEntryTriggerProvider = StateProvider<int>((ref) => 0);
+
+/// Incrementar cuando el chat se CIERRA para reproducir animación "hasta luego" en Rive.
+final riveExitTriggerProvider = StateProvider<int>((ref) => 0);
+
+/// True mientras se está cerrando el chat (300ms de animación). Evita que el cierre retrasado cierre si el usuario reabrió.
+final isClosingChatProvider = StateProvider<bool>((ref) => false);
+
+/// Segundos antes de volver a neutral (0 = no decay). Mínimo 6 recomendado.
+final moodDecaySecondsProvider = StateProvider<int>((ref) => 6);
+
+/// Reduced motion para accesibilidad: idle más quieto en Rive.
+final reducedMotionProvider = StateProvider<bool>((ref) => false);
+
+/// Incrementar cuando el bot acaba de enviar mensaje (anticipación / "acabo de hablar").
+final botJustSpokeTriggerProvider = StateProvider<int>((ref) => 0);
+
+/// Controlador para decay del mood: volver a neutral tras N segundos sin que el usuario escriba de nuevo.
+class MoodDecayController {
+  MoodDecayController(this._ref);
+  final Ref _ref;
+  Timer? _timer;
+
+  void startDecay() {
+    _timer?.cancel();
+    final seconds = _ref.read(moodDecaySecondsProvider);
+    if (seconds <= 0) return;
+    _timer = Timer(Duration(seconds: seconds), () {
+      try {
+        _ref.read(botMoodProvider.notifier).state = 0;
+      } catch (_) {}
+    });
+  }
+
+  void cancelDecay() {
+    _timer?.cancel();
+    _timer = null;
+  }
+}
+
+final moodDecayProvider = Provider<MoodDecayController>((ref) {
+  return MoodDecayController(ref);
+});
 
 // ⬅️ BLINDAJE INPUT: Cuando el HTML padre envía CMD_FOCUS_INPUT (chat abierto en iframe),
 // se incrementa este valor. ChatPanelView lo escucha y fuerza requestFocus en el input.

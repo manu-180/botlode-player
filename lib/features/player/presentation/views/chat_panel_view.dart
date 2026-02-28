@@ -83,24 +83,35 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
     }
   }
 
-  /// Cerrar chat (extraído para reusar en header compacto y completo)
+  /// Cerrar chat: dispara animación "hasta luego" en Rive, luego cierra tras 300ms.
   void _closeChat() {
+    ref.read(isClosingChatProvider.notifier).state = true;
     ref.read(hideRiveForSpaceProvider.notifier).state = false;
     ref.read(isHoveredExternalProvider.notifier).state = false;
+    ref.read(avatarHoveredProvider.notifier).state = false;
+    ref.read(userIsTypingProvider.notifier).state = false;
+    ref.read(riveExitTriggerProvider.notifier).state++;
     try {
       ref.read(presenceManagerProvider).setOffline();
     } catch (e) {
       // Error silenciado
     }
-    ref.read(chatOpenProvider.notifier).set(false);
+    Future.delayed(const Duration(milliseconds: 300), () {
+      if (!mounted) return;
+      if (ref.read(isClosingChatProvider)) {
+        ref.read(chatOpenProvider.notifier).set(false);
+        ref.read(isClosingChatProvider.notifier).state = false;
+      }
+    });
   }
 
   void _sendMessage() {
     final text = _textController.text;
     if (text.trim().isEmpty) return;
     _textController.clear();
-    
-    // ⬅️ NUEVO: Cerrar teclado al enviar mensaje para que vuelva el Rive
+    ref.read(userIsTypingProvider.notifier).state = false;
+    ref.read(moodDecayProvider).cancelDecay();
+
     FocusManager.instance.primaryFocus?.unfocus();
     
     // ⬅️ CRÍTICO: Marcar este chat como activo INMEDIATAMENTE y de forma SÍNCRONA
@@ -166,8 +177,8 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
     final isKeyboardLikely = isMobile &&
         !chatState.isLoading &&
         hideRiveForSpace;
-    // ⬅️ 48px compacto: solo status + botones en una fila. 200px completo: Rive + status + botones
-    final double headerHeight = isKeyboardLikely ? 48.0 : 200.0;
+    // ⬅️ 48px compacto: solo status + botones. ~130px completo: avatar (112) + poco padding abajo
+    final double headerHeight = isKeyboardLikely ? 48.0 : 130.0;
 
     // --- ESCUCHA DE APERTURA/CIERRE ---
     ref.listen(chatOpenProvider, (previous, isOpen) {
@@ -201,9 +212,10 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
 
     ref.listen(chatControllerProvider, (prev, next) {
       if (next.messages.length > (prev?.messages.length ?? 0) && _scrollController.hasClients) _scrollController.jumpTo(0.0);
-      if (prev?.currentMood != next.currentMood) ref.read(botMoodProvider.notifier).state = _getMoodIndex(next.currentMood);
-
-      // Al entrar en carga (primer mensaje o cualquier envío), mostrar Rive de una para evitar parpadeo al terminar
+      if (prev?.currentMood != next.currentMood) {
+        ref.read(botMoodProvider.notifier).state = _getMoodIndex(next.currentMood);
+        ref.read(moodDecayProvider).startDecay();
+      }
       if (next.isLoading) {
         ref.read(hideRiveForSpaceProvider.notifier).state = false;
       }
@@ -267,80 +279,74 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                                       currentSessionId: chatState.sessionId,
                                     ),
                                     const Spacer(),
-                                    IconButton(
-                                      icon: const Icon(Icons.refresh_rounded, size: 20), 
-                                      onPressed: () => ref.read(chatResetProvider)(),
-                                      color: isDarkMode ? Colors.white70 : Colors.black54,
-                                      tooltip: "Reiniciar",
-                                      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                                      padding: EdgeInsets.zero,
-                                      visualDensity: VisualDensity.compact,
-                                    ),
-                                    const SizedBox(width: 2),
-                                    IconButton(
-                                      icon: const Icon(Icons.close_rounded, size: 20), 
-                                      onPressed: _closeChat,
-                                      color: isDarkMode ? Colors.white70 : Colors.black54,
-                                      tooltip: "Cerrar",
-                                      constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
-                                      padding: EdgeInsets.zero,
-                                      visualDensity: VisualDensity.compact,
+                                    _HeaderActionsPill(
+                                      isDarkMode: isDarkMode,
+                                      onReload: () => ref.read(chatResetProvider)(),
+                                      onClose: _closeChat,
                                     ),
                                   ],
                                 ),
                               )
                             // ══════════════════════════════════════════════════════
-                            // ⬅️ HEADER COMPLETO: Rive avatar + status + botones
+                            // ⬅️ HEADER COMPLETO: Avatar izq (más pequeño) + nombre + indicador | botones der
                             // ══════════════════════════════════════════════════════
-                            : Stack(
-                                children: [
-                                  // Avatar Rive (fondo completo); tap en el Rive lo oculta para ganar espacio
-                                  Positioned.fill(
-                                    child: GestureDetector(
-                                      behavior: HitTestBehavior.opaque,
-                                      onTap: () {
-                                        ref.read(hideRiveForSpaceProvider.notifier).state = true;
-                                      },
-                                      child: const Padding(
-                                        padding: EdgeInsets.only(bottom: 20),
-                                        child: BotAvatarWidget(),
+                            : Padding(
+                                padding: EdgeInsets.fromLTRB(horizontalPadding, 12, horizontalPadding, 6),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    // Avatar: hover = reacción sutil, tap = gesto "te escucho" (no oculta)
+                                    MouseRegion(
+                                      onEnter: (_) => ref.read(avatarHoveredProvider.notifier).state = true,
+                                      onExit: (_) => ref.read(avatarHoveredProvider.notifier).state = false,
+                                      child: GestureDetector(
+                                        behavior: HitTestBehavior.opaque,
+                                        onTap: () {
+                                          ref.read(avatarListeningTriggerProvider.notifier).state++;
+                                        },
+                                        child: const BotAvatarWidget(size: 112),
                                       ),
                                     ),
-                                  ),
-                                  // Botones arriba-derecha
-                                  Positioned(
-                                    top: 16, right: horizontalPadding,
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min, 
-                                      children: [
-                                        IconButton(
-                                          icon: const Icon(Icons.refresh_rounded), 
-                                          onPressed: () => ref.read(chatResetProvider)(),
-                                          color: isDarkMode ? Colors.white70 : Colors.black54,
-                                          tooltip: "Reiniciar",
-                                        ),
-                                        const SizedBox(width: 4),
-                                        IconButton(
-                                          icon: const Icon(Icons.close_rounded), 
-                                          onPressed: _closeChat,
-                                          color: isDarkMode ? Colors.white70 : Colors.black54,
-                                          tooltip: "Cerrar",
-                                        ),
-                                      ],
+                                    const SizedBox(width: 0),
+                                    // Nombre arriba del indicador
+                                    Expanded(
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: [
+                                          Text(
+                                            botConfig?.name ?? 'Bot',
+                                            style: TextStyle(
+                                              color: isDarkMode ? Colors.white : const Color(0xFF1A1A1A),
+                                              fontSize: 16,
+                                              fontWeight: FontWeight.w700,
+                                              letterSpacing: 0.6,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          const SizedBox(height: 6),
+                                          StatusIndicator(
+                                            isLoading: chatState.isLoading,
+                                            isOnline: isOnline,
+                                            mood: chatState.currentMood,
+                                            isDarkMode: isDarkMode,
+                                            currentSessionId: chatState.sessionId,
+                                          ),
+                                        ],
+                                      ),
                                     ),
-                                  ),
-                                  // Status abajo-izquierda
-                                  Positioned(
-                                    bottom: 12, left: horizontalPadding,
-                                    child: StatusIndicator(
-                                      isLoading: chatState.isLoading, 
-                                      isOnline: isOnline, 
-                                      mood: chatState.currentMood, 
-                                      isDarkMode: isDarkMode,
-                                      currentSessionId: chatState.sessionId,
+                                    Align(
+                                      alignment: Alignment.topCenter,
+                                      child: _HeaderActionsPill(
+                                        isDarkMode: isDarkMode,
+                                        onReload: () => ref.read(chatResetProvider)(),
+                                        onClose: _closeChat,
+                                      ),
                                     ),
-                                  ),
-                                ],
+                                  ],
+                                ),
                               ),
                         ),
                         
@@ -362,29 +368,19 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                               physics: const BouncingScrollPhysics(),
                               itemCount: reversedMessages.length + (chatState.isLoading ? 1 : 0),
                               itemBuilder: (context, index) {
-                                if (chatState.isLoading) {
-
-                                  if (index == 0) return Padding(
-                                    padding: const EdgeInsets.only(left: 16, top: 8, bottom: 20), 
-                                    child: Row(
-                                      children: [
-                                        SizedBox(
-                                          width: 12, 
-                                          height: 12, 
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2, 
-                                            color: isDarkMode ? Colors.white38 : Colors.black38,
-                                          )
-                                        ), 
-                                        const SizedBox(width: 8), 
-                                        _ThinkingIndicator(isDarkMode: isDarkMode)
-                                      ]
-                                    )
+                                // reverse: true → index 0 se dibuja al final = abajo (donde aparece el próximo mensaje). Indicador ahí.
+                                if (chatState.isLoading && index == 0) {
+                                  return Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: Padding(
+                                      padding: const EdgeInsets.only(left: 16, top: 8, bottom: 20),
+                                      child: _ThinkingIndicator(isDarkMode: isDarkMode),
+                                    ),
                                   );
-                                  final msg = reversedMessages[index - 1];
-                                  return ChatBubble(message: msg, botThemeColor: themeColor, isDarkMode: isDarkMode);
-                                } 
-                                return ChatBubble(message: reversedMessages[index], botThemeColor: themeColor, isDarkMode: isDarkMode);
+                                }
+                                final msgIndex = chatState.isLoading ? index - 1 : index;
+                                final msg = reversedMessages[msgIndex];
+                                return ChatBubble(message: msg, botThemeColor: themeColor, isDarkMode: isDarkMode);
                               },
                             ),
                             ),
@@ -428,8 +424,10 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                               }
                             },
                             onInputTapped: () {
-                              // Tap en el input (aunque ya esté enfocado) → ocultar Rive
                               ref.read(hideRiveForSpaceProvider.notifier).state = true;
+                            },
+                            onTextChanged: (hasText) {
+                              ref.read(userIsTypingProvider.notifier).state = hasText;
                             },
                           ),
                         ),
@@ -460,6 +458,8 @@ class _ProfessionalInputField extends StatefulWidget {
   final void Function(bool focused, bool isProgrammatic)? onFocusChanged;
   /// Se llama cuando el usuario hace tap en el input (aunque ya esté enfocado), para ocultar el Rive.
   final VoidCallback? onInputTapped;
+  /// Se llama cuando el texto del input pasa a tener contenido o a estar vacío (para "está escribiendo").
+  final void Function(bool hasText)? onTextChanged;
 
   const _ProfessionalInputField({
     this.focusInputTrigger,
@@ -471,9 +471,10 @@ class _ProfessionalInputField extends StatefulWidget {
     required this.inputFill,
     required this.inputBorder,
     required this.inputBorderFocused,
-    required this.onSend,
+    required     this.onSend,
     this.onFocusChanged,
     this.onInputTapped,
+    this.onTextChanged,
   });
 
   @override
@@ -508,7 +509,11 @@ class _ProfessionalInputFieldState extends State<_ProfessionalInputField> {
     });
     
     widget.controller.addListener(() {
-      setState(() => _hasText = widget.controller.text.trim().isNotEmpty);
+      final hasText = widget.controller.text.trim().isNotEmpty;
+      if (_hasText != hasText) {
+        setState(() => _hasText = hasText);
+        widget.onTextChanged?.call(hasText);
+      }
     });
   }
 
@@ -608,7 +613,7 @@ class _ProfessionalInputFieldState extends State<_ProfessionalInputField> {
                 cursorColor: widget.isDarkMode ? Colors.white70 : Colors.black87,
                 decoration: InputDecoration(
                   hintText: widget.isLoading 
-                      ? "El bot está respondiendo..." 
+                      ? "Escribe un mensaje..." 
                       : (widget.isOnline ? "Escribe un mensaje..." : "Sin conexión"),
                   hintStyle: TextStyle(
                     color: widget.isDarkMode ? Colors.white.withOpacity(0.4) : Colors.black.withOpacity(0.4),
@@ -891,6 +896,82 @@ class _ThinkingIndicatorState extends State<_ThinkingIndicator>
           ),
         );
       },
+    );
+  }
+}
+
+/// Pastilla de acciones del header: reload + cerrar. Diseño nivel senior (agrupado, ghost, sutil).
+class _HeaderActionsPill extends StatelessWidget {
+  final bool isDarkMode;
+  final VoidCallback onReload;
+  final VoidCallback onClose;
+
+  const _HeaderActionsPill({
+    required this.isDarkMode,
+    required this.onReload,
+    required this.onClose,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final fill = isDarkMode
+        ? Colors.white.withOpacity(0.06)
+        : Colors.black.withOpacity(0.06);
+    final border = isDarkMode
+        ? Colors.white.withOpacity(0.12)
+        : Colors.black.withOpacity(0.08);
+    final iconColor = isDarkMode ? Colors.white70 : Colors.black54;
+    // Overlay sutil (sin círculo grande): solo un tinte suave al hover/press
+    final overlayColor = (isDarkMode ? Colors.white : Colors.black).withOpacity(0.07);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: fill,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: border, width: 1),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          IconButton(
+            onPressed: onReload,
+            icon: const Icon(Icons.refresh_rounded, size: 18),
+            color: iconColor,
+            tooltip: 'Nuevo chat',
+            style: IconButton.styleFrom(
+              minimumSize: const Size(36, 36),
+              padding: EdgeInsets.zero,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              splashFactory: NoSplash.splashFactory,
+              overlayColor: overlayColor,
+            ),
+          ),
+          Container(
+            width: 1,
+            height: 16,
+            color: border,
+          ),
+          IconButton(
+            onPressed: onClose,
+            icon: const Icon(Icons.close_rounded, size: 18),
+            color: iconColor,
+            tooltip: 'Cerrar',
+            style: IconButton.styleFrom(
+              minimumSize: const Size(36, 36),
+              padding: EdgeInsets.zero,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              splashFactory: NoSplash.splashFactory,
+              overlayColor: overlayColor,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
