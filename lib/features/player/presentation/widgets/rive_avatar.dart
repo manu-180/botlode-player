@@ -33,8 +33,6 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
   SMINumber? _downloadInput;
   int? _savedMood;
 
-  int _moodEnforceCounter = 0;
-
   // ⬅️ UX PREMIUM: inputs opcionales (si el .riv los tiene, se usan)
   SMITrigger? _helloTrigger;
   SMITrigger? _goodbyeTrigger;
@@ -130,20 +128,11 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       _lookYInput!.value = _currentY;
     } catch (_) {}
 
-    // Enforcement continuo del mood: la state machine de Rive tiene transiciones con exit-time
-    // que devuelven la animación a idle aunque el input Mood siga en el valor correcto.
-    // Re-seteamos el valor en cada frame para que la condición se mantenga activa.
-    // Cada ~3s hacemos un toggle breve (0 → real) para forzar un re-trigger de la transición.
+    // Enforcement continuo del mood: re-aplicar el valor en cada frame para que la state machine
+    // de Rive no vuelva a idle por exit-time. Sin toggle a 0 para evitar parpadeos.
     if (_moodInput != null) {
       try {
-        final target = ref.read(botMoodProvider).toDouble();
-        _moodEnforceCounter++;
-        if (_moodEnforceCounter >= 180 && target > 0) {
-          _moodEnforceCounter = 0;
-          _moodInput!.value = 0;
-        } else {
-          _moodInput!.value = target;
-        }
+        _moodInput!.value = ref.read(botMoodProvider).toDouble();
       } catch (_) {}
     }
   }
@@ -209,10 +198,7 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
     // leyendo directamente de botMoodProvider. Este listener solo actualiza _savedMood como cache.
     ref.listen(botMoodProvider, (prev, next) {
       _savedMood = next;
-      if (_moodInput != null) {
-        _moodInput!.value = next.toDouble();
-        _moodEnforceCounter = 0;
-      }
+      if (_moodInput != null) _moodInput!.value = next.toDouble();
     });
 
     // Download (modo "procesando") y anticipación
