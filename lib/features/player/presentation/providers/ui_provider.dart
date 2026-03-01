@@ -63,8 +63,8 @@ final riveExitTriggerProvider = StateProvider<int>((ref) => 0);
 /// True mientras se está cerrando el chat (300ms de animación). Evita que el cierre retrasado cierre si el usuario reabrió.
 final isClosingChatProvider = StateProvider<bool>((ref) => false);
 
-/// Segundos antes de volver a neutral (0 = no decay). Mínimo 6 recomendado.
-final moodDecaySecondsProvider = StateProvider<int>((ref) => 6);
+/// Segundos antes de volver a neutral (0 = no decay). Emoción se mantiene hasta que el usuario envíe otro mensaje.
+final moodDecaySecondsProvider = StateProvider<int>((ref) => 0);
 
 /// Reduced motion para accesibilidad: idle más quieto en Rive.
 final reducedMotionProvider = StateProvider<bool>((ref) => false);

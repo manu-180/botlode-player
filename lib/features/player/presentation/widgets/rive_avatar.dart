@@ -33,6 +33,8 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
   SMINumber? _downloadInput;
   int? _savedMood;
 
+  int _moodEnforceCounter = 0;
+
   // ⬅️ UX PREMIUM: inputs opcionales (si el .riv los tiene, se usan)
   SMITrigger? _helloTrigger;
   SMITrigger? _goodbyeTrigger;
@@ -127,6 +129,23 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       _lookXInput!.value = _currentX;
       _lookYInput!.value = _currentY;
     } catch (_) {}
+
+    // Enforcement continuo del mood: la state machine de Rive tiene transiciones con exit-time
+    // que devuelven la animación a idle aunque el input Mood siga en el valor correcto.
+    // Re-seteamos el valor en cada frame para que la condición se mantenga activa.
+    // Cada ~3s hacemos un toggle breve (0 → real) para forzar un re-trigger de la transición.
+    if (_moodInput != null) {
+      try {
+        final target = ref.read(botMoodProvider).toDouble();
+        _moodEnforceCounter++;
+        if (_moodEnforceCounter >= 180 && target > 0) {
+          _moodEnforceCounter = 0;
+          _moodInput!.value = 0;
+        } else {
+          _moodInput!.value = target;
+        }
+      } catch (_) {}
+    }
   }
 
   void _onRiveInit(Artboard artboard) {
@@ -186,40 +205,21 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
     // ⬅️ Reconstruir cuando cambie isLoading para aplicar modo "procesando" al Rive (igual que botlode_web)
     final chatState = ref.watch(chatControllerProvider);
 
-    // Listener para cambios de mood
+    // Mood: el ticker (_onTick) se encarga de reforzar el valor del input Mood en cada frame
+    // leyendo directamente de botMoodProvider. Este listener solo actualiza _savedMood como cache.
     ref.listen(botMoodProvider, (prev, next) {
-       if (_moodInput != null) {
-         // Guardar el mood real
-         _savedMood = next;
-         
-         // Solo actualizar el mood si NO está pensando
-         // Si está pensando, mantenemos el mood en 0 (verde) para el círculo
-         final chatState = ref.read(chatControllerProvider);
-         if (!chatState.isLoading) {
-           _moodInput!.value = next.toDouble();
-         }
-       }
+      _savedMood = next;
+      if (_moodInput != null) {
+        _moodInput!.value = next.toDouble();
+        _moodEnforceCounter = 0;
+      }
     });
 
-    // ⬅️ Listener para activar "Face download" cuando el bot está pensando
-    // IMPORTANTE: Cuando está pensando, forzamos el mood a 0 (verde) para que
-    // el círculo siempre sea verde, independientemente del estado emocional
+    // Download (modo "procesando") y anticipación
     ref.listen(chatControllerProvider, (prev, next) {
       if (_downloadInput != null) {
         _downloadInput!.value = next.isLoading ? 1.0 : 0.0;
       }
-      if (_moodInput != null) {
-        if (next.isLoading) {
-          _moodInput!.value = 0.0;
-        } else {
-          if (_savedMood != null) {
-            _moodInput!.value = _savedMood!.toDouble();
-          } else {
-            _moodInput!.value = ref.read(botMoodProvider).toDouble();
-          }
-        }
-      }
-      // ⬅️ UX PREMIUM: Anticipación cuando el bot acaba de responder (orejas arriba, etc.)
       if (prev != null && prev.isLoading && !next.isLoading && _anticipatingInput != null) {
         _anticipatingInput!.value = true;
         Future.delayed(const Duration(milliseconds: 250), () {

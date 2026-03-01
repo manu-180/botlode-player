@@ -213,8 +213,11 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
     ref.listen(chatControllerProvider, (prev, next) {
       if (next.messages.length > (prev?.messages.length ?? 0) && _scrollController.hasClients) _scrollController.jumpTo(0.0);
       if (prev?.currentMood != next.currentMood) {
-        ref.read(botMoodProvider.notifier).state = _getMoodIndex(next.currentMood);
-        ref.read(moodDecayProvider).startDecay();
+        // 'thinking' es el estado de carga interna, no un mood real: ignorarlo para que el
+        // avatar mantenga la emoción anterior mientras el bot procesa la respuesta.
+        if (next.currentMood != 'thinking') {
+          ref.read(botMoodProvider.notifier).state = _getMoodIndex(next.currentMood);
+        }
       }
       if (next.isLoading) {
         ref.read(hideRiveForSpaceProvider.notifier).state = false;
