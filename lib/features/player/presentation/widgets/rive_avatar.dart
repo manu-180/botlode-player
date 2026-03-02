@@ -1,4 +1,5 @@
 // Archivo: lib/features/player/presentation/widgets/rive_avatar.dart
+import 'dart:async';
 import 'dart:ui';
 import 'package:botlode_player/features/player/presentation/providers/bot_state_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/chat_provider.dart';
@@ -40,6 +41,8 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
   SMIBool? _isTypingInput;
 
   late Ticker _ticker;
+  /// Timer independiente del Ticker para reforzar el mood en iframe/embed (evita parpadeo a neutral cuando rAF se throttlea).
+  Timer? _moodReinforceTimer;
   double _targetX = 50.0;
   double _targetY = 50.0;
   double _currentX = 50.0;
@@ -57,10 +60,21 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
   void initState() {
     super.initState();
     _ticker = createTicker(_onTick)..start();
+    // Refuerzo de mood por timer: en iframe/embed el Ticker puede pausarse (throttling), y la state machine
+    // de Rive vuelve a neutral por exit-time. Este timer mantiene el mood estable sin depender del frame rate.
+    _moodReinforceTimer = Timer.periodic(const Duration(milliseconds: 150), (_) {
+      if (!mounted) return;
+      try {
+        final mood = ref.read(botMoodProvider).toDouble();
+        if (_moodInput != null) _moodInput!.value = mood;
+      } catch (_) {}
+    });
   }
 
   @override
   void dispose() {
+    _moodReinforceTimer?.cancel();
+    _moodReinforceTimer = null;
     _ticker.dispose();
     _controller?.dispose();
     super.dispose();
