@@ -35,12 +35,9 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
 
   // ⬅️ UX PREMIUM: inputs opcionales (si el .riv los tiene, se usan)
   SMITrigger? _helloTrigger;
-  SMITrigger? _goodbyeTrigger;
   SMIBool? _hoveredInput;
   SMITrigger? _listeningTrigger;
   SMIBool? _isTypingInput;
-  SMIBool? _anticipatingInput;
-  SMIBool? _reducedMotionInput;
 
   late Ticker _ticker;
   double _targetX = 50.0;
@@ -160,12 +157,9 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
 
       // ⬅️ UX PREMIUM: triggers/inputs opcionales (añadir en Rive si quieres las animaciones)
       _helloTrigger = controller.getTriggerInput('Hello');
-      _goodbyeTrigger = controller.getTriggerInput('Goodbye');
       _listeningTrigger = controller.getTriggerInput('Listening');
       _hoveredInput = controller.getBoolInput('Hovered');
       _isTypingInput = controller.getBoolInput('IsTyping');
-      _anticipatingInput = controller.getBoolInput('Anticipating');
-      _reducedMotionInput = controller.getBoolInput('ReducedMotion');
 
       // ⬅️ NOTA: Para que el círculo cambie de color según el estado emocional,
       // debes configurar en Rive que el color del círculo de "Face download" 
@@ -180,8 +174,6 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       // UX PREMIUM: valores iniciales de inputs opcionales
       _isTypingInput?.value = ref.read(userIsTypingProvider);
       _hoveredInput?.value = ref.read(avatarHoveredProvider);
-      _anticipatingInput?.value = false;
-      _reducedMotionInput?.value = ref.read(reducedMotionProvider);
     }
   }
 
@@ -201,16 +193,10 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       if (_moodInput != null) _moodInput!.value = next.toDouble();
     });
 
-    // Download (modo "procesando") y anticipación
+    // Download (modo "procesando")
     ref.listen(chatControllerProvider, (prev, next) {
       if (_downloadInput != null) {
         _downloadInput!.value = next.isLoading ? 1.0 : 0.0;
-      }
-      if (prev != null && prev.isLoading && !next.isLoading && _anticipatingInput != null) {
-        _anticipatingInput!.value = true;
-        Future.delayed(const Duration(milliseconds: 250), () {
-          if (mounted && _anticipatingInput != null) _anticipatingInput!.value = false;
-        });
       }
     });
 
@@ -228,10 +214,8 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       if (count > 0 && _helloTrigger != null) _helloTrigger!.fire();
     });
     ref.listen(riveExitTriggerProvider, (_, count) {
-      if (count > 0 && _goodbyeTrigger != null) _goodbyeTrigger!.fire();
-    });
-    ref.listen(reducedMotionProvider, (_, reduced) {
-      if (_reducedMotionInput != null) _reducedMotionInput!.value = reduced;
+      // Misma animación "Gesture Hello" al cerrar que al abrir
+      if (count > 0 && _helloTrigger != null) _helloTrigger!.fire();
     });
 
     // ⬅️ Aplicar modo "procesando" (Download 1.0) cuando isLoading; 0.0 cuando no (como botlode_web)
