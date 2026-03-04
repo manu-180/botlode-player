@@ -37,6 +37,8 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
   // ⬅️ UX PREMIUM: inputs opcionales (si el .riv los tiene, se usan)
   SMITrigger? _helloTrigger;
   SMIBool? _hoveredInput;
+  SMIBool? _hoverFromRightInput; // true = derecha, false = izquierda
+  SMIBool? _hoverFromTopInput;   // true = arriba, false = abajo → 4 cuadrantes con HoverFromRight
   SMITrigger? _listeningTrigger;
   SMIBool? _isTypingInput;
 
@@ -111,6 +113,12 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       if (_isTracking && !_wasTrackingPreviously) _trackingFrames = 0;
       if (_isTracking) _trackingFrames++; else _trackingFrames = 0;
       _wasTrackingPreviously = _isTracking;
+
+      // Cuadrantes del hover: izquierda/arriba, izquierda/abajo, derecha/arriba, derecha/abajo (para gesto "pegarte")
+      if (ref.read(avatarHoveredProvider) && globalPointer != null) {
+        if (_hoverFromRightInput != null) _hoverFromRightInput!.value = globalPointer.dx > widgetCenter.dx;
+        if (_hoverFromTopInput != null) _hoverFromTopInput!.value = globalPointer.dy < widgetCenter.dy; // Y menor = arriba
+      }
     } catch (e) {
       _targetX = 50.0;
       _targetY = 50.0;
@@ -173,6 +181,8 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       _helloTrigger = controller.getTriggerInput('Hello');
       _listeningTrigger = controller.getTriggerInput('Listening');
       _hoveredInput = controller.getBoolInput('Hovered');
+      _hoverFromRightInput = controller.getBoolInput('HoverFromRight');
+      _hoverFromTopInput = controller.getBoolInput('HoverFromTop');
       _isTypingInput = controller.getBoolInput('IsTyping');
 
       // ⬅️ NOTA: Para que el círculo cambie de color según el estado emocional,
@@ -188,6 +198,8 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       // UX PREMIUM: valores iniciales de inputs opcionales
       _isTypingInput?.value = ref.read(userIsTypingProvider);
       _hoveredInput?.value = ref.read(avatarHoveredProvider);
+      _hoverFromRightInput?.value = true;
+      _hoverFromTopInput?.value = true; // el ticker actualiza ambos al hacer hover (4 cuadrantes)
     }
   }
 
