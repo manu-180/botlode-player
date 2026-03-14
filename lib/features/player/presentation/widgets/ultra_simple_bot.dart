@@ -430,7 +430,13 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
         });
       } else if (previous == false && current == true) {
         ref.read(isClosingChatProvider.notifier).state = false;
-        ref.read(riveEntryTriggerProvider.notifier).state++;
+        // ⬅️ Retrasar Hello hasta que el avatar del CHAT esté montado (no el de la burbuja)
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted && ref.read(chatOpenProvider)) {
+            ref.read(riveEntryTriggerProvider.notifier).state++;
+            debugPrint('[Rive Hello] riveEntryTriggerProvider++ (chat abierto, avatar ya montado)');
+          }
+        });
         // ⬅️ ESTRATEGIA DETERMINISTA: El chat actual es SIEMPRE el activo
         // No consultamos la BD para "adivinar" cuál es más reciente.
         // El chat que el usuario está viendo ES la fuente de verdad.

@@ -91,6 +91,7 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
     ref.read(avatarHoveredProvider.notifier).state = false;
     ref.read(userIsTypingProvider.notifier).state = false;
     ref.read(riveExitTriggerProvider.notifier).state++;
+    debugPrint('[Rive Hello] riveExitTriggerProvider++ (click X cerrar chat)');
     try {
       ref.read(presenceManagerProvider).setOffline();
     } catch (e) {
@@ -286,6 +287,10 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                                       isDarkMode: isDarkMode,
                                       onReload: () => ref.read(chatResetProvider)(),
                                       onClose: _closeChat,
+                                      onCloseButtonHover: () {
+                                        ref.read(riveExitTriggerProvider.notifier).state++;
+                                        debugPrint('[Rive Hello] riveExitTriggerProvider++ (hover X, header compacto)');
+                                      },
                                     ),
                                   ],
                                 ),
@@ -346,6 +351,10 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                                         isDarkMode: isDarkMode,
                                         onReload: () => ref.read(chatResetProvider)(),
                                         onClose: _closeChat,
+                                        onCloseButtonHover: () {
+                                          ref.read(riveExitTriggerProvider.notifier).state++;
+                                          debugPrint('[Rive Hello] riveExitTriggerProvider++ (hover X, header completo)');
+                                        },
                                       ),
                                     ),
                                   ],
@@ -902,11 +911,13 @@ class _HeaderActionsPill extends StatelessWidget {
   final bool isDarkMode;
   final VoidCallback onReload;
   final VoidCallback onClose;
+  final VoidCallback? onCloseButtonHover;
 
   const _HeaderActionsPill({
     required this.isDarkMode,
     required this.onReload,
     required this.onClose,
+    this.onCloseButtonHover,
   });
 
   @override
@@ -951,20 +962,23 @@ class _HeaderActionsPill extends StatelessWidget {
             height: 16,
             color: border,
           ),
-          IconButton(
-            onPressed: onClose,
-            icon: const Icon(Icons.close_rounded, size: 18),
-            color: iconColor,
-            tooltip: 'Cerrar',
-            style: IconButton.styleFrom(
-              minimumSize: const Size(36, 36),
-              padding: EdgeInsets.zero,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(18),
+          MouseRegion(
+            onEnter: (_) => onCloseButtonHover?.call(),
+            child: IconButton(
+              onPressed: onClose,
+              icon: const Icon(Icons.close_rounded, size: 18),
+              color: iconColor,
+              tooltip: 'Cerrar',
+              style: IconButton.styleFrom(
+                minimumSize: const Size(36, 36),
+                padding: EdgeInsets.zero,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                splashFactory: NoSplash.splashFactory,
+                overlayColor: overlayColor,
               ),
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              splashFactory: NoSplash.splashFactory,
-              overlayColor: overlayColor,
             ),
           ),
         ],

@@ -54,6 +54,10 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
   bool _wasTrackingPreviously = false;
   int _trackingFrames = 0;
 
+  /// Cooldown para Hello: evita "StateMachineController.apply exceeded max iterations"
+  static const _helloCooldown = Duration(milliseconds: 1500);
+  DateTime? _lastHelloFireTime;
+
   /// Sensibilidad y rango: 450px máximo para que no siga por toda la pantalla
   double get _sensitivity => widget.isBubble ? 400.0 : 600.0;
   double get _maxDistance => 450.0;
@@ -179,6 +183,20 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
 
       // ⬅️ UX PREMIUM: triggers/inputs opcionales (añadir en Rive si quieres las animaciones)
       _helloTrigger = controller.getTriggerInput('Hello');
+      debugPrint('[Rive Hello] _onRiveInit: Hello trigger ${_helloTrigger != null ? "OK" : "NULL (no existe en .riv)"}');
+      if (_helloTrigger != null) {
+        final entry = ref.read(riveEntryTriggerProvider);
+        final exit = ref.read(riveExitTriggerProvider);
+        if (entry > 0 || exit > 0) {
+          SchedulerBinding.instance.addPostFrameCallback((_) {
+            if (!mounted || _helloTrigger == null) return;
+            if (_lastHelloFireTime != null && DateTime.now().difference(_lastHelloFireTime!) < _helloCooldown) return;
+            _lastHelloFireTime = DateTime.now();
+            _helloTrigger!.fire();
+            debugPrint('[Rive Hello] fire() en init (entry/exit pendiente)');
+          });
+        }
+      }
       _listeningTrigger = controller.getTriggerInput('Listening');
       _hoveredInput = controller.getBoolInput('Hovered');
       _hoverFromRightInput = controller.getBoolInput('HoverFromRight');
@@ -237,11 +255,32 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       if (count > 0 && _listeningTrigger != null) _listeningTrigger!.fire();
     });
     ref.listen(riveEntryTriggerProvider, (_, count) {
-      if (count > 0 && _helloTrigger != null) _helloTrigger!.fire();
+      if (count <= 0) return;
+      if (_helloTrigger == null) {
+        debugPrint('[Rive Hello] ENTRY count=$count pero _helloTrigger=null (avatar aún no init o .riv sin Hello)');
+        return;
+      }
+      if (_lastHelloFireTime != null && DateTime.now().difference(_lastHelloFireTime!) < _helloCooldown) {
+        debugPrint('[Rive Hello] ENTRY count=$count skip por cooldown');
+        return;
+      }
+      _lastHelloFireTime = DateTime.now();
+      _helloTrigger!.fire();
+      debugPrint('[Rive Hello] ENTRY fire() OK');
     });
     ref.listen(riveExitTriggerProvider, (_, count) {
-      // Misma animación "Gesture Hello" al cerrar que al abrir
-      if (count > 0 && _helloTrigger != null) _helloTrigger!.fire();
+      if (count <= 0) return;
+      if (_helloTrigger == null) {
+        debugPrint('[Rive Hello] EXIT count=$count pero _helloTrigger=null (avatar aún no init o .riv sin Hello)');
+        return;
+      }
+      if (_lastHelloFireTime != null && DateTime.now().difference(_lastHelloFireTime!) < _helloCooldown) {
+        debugPrint('[Rive Hello] EXIT count=$count skip por cooldown');
+        return;
+      }
+      _lastHelloFireTime = DateTime.now();
+      _helloTrigger!.fire();
+      debugPrint('[Rive Hello] EXIT fire() OK');
     });
 
     // ⬅️ Aplicar modo "procesando" (Download 1.0) cuando isLoading; 0.0 cuando no (como botlode_web)
