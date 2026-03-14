@@ -430,12 +430,14 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
         });
       } else if (previous == false && current == true) {
         ref.read(isClosingChatProvider.notifier).state = false;
-        // ⬅️ Retrasar Hello hasta que el avatar del CHAT esté montado (no el de la burbuja)
+        // Retrasar Hello: esperar montaje del avatar + ~1s tras abrir chat.
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted && ref.read(chatOpenProvider)) {
-            ref.read(riveEntryTriggerProvider.notifier).state++;
-            debugPrint('[Rive Hello] riveEntryTriggerProvider++ (chat abierto, avatar ya montado)');
-          }
+          Future.delayed(const Duration(seconds: 1), () {
+            if (mounted && ref.read(chatOpenProvider)) {
+              ref.read(riveEntryTriggerProvider.notifier).state++;
+              debugPrint('[Rive Hello] riveEntryTriggerProvider++ (chat abierto + delay 1s)');
+            }
+          });
         });
         // ⬅️ ESTRATEGIA DETERMINISTA: El chat actual es SIEMPRE el activo
         // No consultamos la BD para "adivinar" cuál es más reciente.

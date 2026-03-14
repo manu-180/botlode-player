@@ -57,6 +57,12 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
   /// Cooldown para Hello: evita "StateMachineController.apply exceeded max iterations"
   static const _helloCooldown = Duration(milliseconds: 1500);
   DateTime? _lastHelloFireTime;
+  static const List<String> _helloTriggerCandidates = <String>[
+    'Hello',
+    'Gesture Hello',
+    'GestureHello',
+    'gesture_hello',
+  ];
 
   /// Sensibilidad y rango: 450px máximo para que no siga por toda la pantalla
   double get _sensitivity => widget.isBubble ? 400.0 : 600.0;
@@ -181,9 +187,18 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       _errorInput = controller.getBoolInput('Error');
       _downloadInput = controller.getNumberInput('Download'); // ⬅️ Modo "procesando" (como botlode_web)
 
-      // ⬅️ UX PREMIUM: triggers/inputs opcionales (añadir en Rive si quieres las animaciones)
-      _helloTrigger = controller.getTriggerInput('Hello');
-      debugPrint('[Rive Hello] _onRiveInit: Hello trigger ${_helloTrigger != null ? "OK" : "NULL (no existe en .riv)"}');
+      // UX: el nombre del trigger puede variar según el archivo .riv.
+      // Probamos varios alias para evitar roturas por naming.
+      for (final name in _helloTriggerCandidates) {
+        _helloTrigger = controller.getTriggerInput(name);
+        if (_helloTrigger != null) {
+          debugPrint('[Rive Hello] _onRiveInit: trigger "$name" OK');
+          break;
+        }
+      }
+      if (_helloTrigger == null) {
+        debugPrint('[Rive Hello] _onRiveInit: trigger Hello no encontrado (aliases: $_helloTriggerCandidates)');
+      }
       if (_helloTrigger != null) {
         final entry = ref.read(riveEntryTriggerProvider);
         final exit = ref.read(riveExitTriggerProvider);
