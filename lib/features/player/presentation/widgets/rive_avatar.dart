@@ -38,9 +38,18 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
   SMITrigger? _helloTrigger;
   SMIBool? _hoveredInput;
   SMIBool? _hoverFromRightInput; // true = derecha, false = izquierda
-  SMIBool? _hoverFromTopInput;   // true = arriba, false = abajo → 4 cuadrantes con HoverFromRight
+  SMIBool? _hoverFromTopInput;   // true = arriba, false = abajo → 4 cuadrantes
   SMITrigger? _listeningTrigger;
+  SMITrigger? _gestureTopLeftTrigger;
+  SMITrigger? _gestureTopRightTrigger;
+  SMITrigger? _gestureBottomLeftTrigger;
+  SMITrigger? _gestureBottomRightTrigger;
   SMIBool? _isTypingInput;
+
+  /// Cuadrante actual del hover (0=TL, 1=TR, 2=BL, 3=BR). Null cuando no hay hover.
+  int? _lastHoverQuadrant;
+  static const _quadrantCooldown = Duration(milliseconds: 1200);
+  final List<DateTime?> _lastQuadrantFireTime = List.filled(4, null);
 
   late Ticker _ticker;
   /// Timer independiente del Ticker para reforzar el mood en iframe/embed (evita parpadeo a neutral cuando rAF se throttlea).
@@ -54,9 +63,10 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
   bool _wasTrackingPreviously = false;
   int _trackingFrames = 0;
 
-  /// Cooldown para Hello: evita "StateMachineController.apply exceeded max iterations"
+  /// Cooldowns independientes: ENTRY y EXIT no se bloquean entre sí.
   static const _helloCooldown = Duration(milliseconds: 1500);
-  DateTime? _lastHelloFireTime;
+  DateTime? _lastEntryFireTime;
+  DateTime? _lastExitFireTime;
   static const List<String> _helloTriggerCandidates = <String>[
     'Hello',
     'Gesture Hello',
@@ -124,10 +134,39 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       if (_isTracking) _trackingFrames++; else _trackingFrames = 0;
       _wasTrackingPreviously = _isTracking;
 
-      // Cuadrantes del hover: izquierda/arriba, izquierda/abajo, derecha/arriba, derecha/abajo (para gesto "pegarte")
-      if (ref.read(avatarHoveredProvider) && globalPointer != null) {
-        if (_hoverFromRightInput != null) _hoverFromRightInput!.value = globalPointer.dx > widgetCenter.dx;
-        if (_hoverFromTopInput != null) _hoverFromTopInput!.value = globalPointer.dy < widgetCenter.dy; // Y menor = arriba
+      // Cuadrantes del hover: actualizar booleans y disparar gesto al entrar en cada cuadrante
+      final hovered = ref.read(avatarHoveredProvider);
+      if (hovered && globalPointer != null) {
+        final fromRight = globalPointer.dx > widgetCenter.dx;
+        final fromTop = globalPointer.dy < widgetCenter.dy; // Y menor = arriba
+        if (_hoverFromRightInput != null) _hoverFromRightInput!.value = fromRight;
+        if (_hoverFromTopInput != null) _hoverFromTopInput!.value = fromTop;
+        // 0=TL, 1=TR, 2=BL, 3=BR
+        final quadrant = (fromRight ? 1 : 0) + (fromTop ? 0 : 2);
+        if (quadrant != _lastHoverQuadrant) {
+          _lastHoverQuadrant = quadrant;
+          final now = DateTime.now();
+          if (_lastQuadrantFireTime[quadrant] == null ||
+              now.difference(_lastQuadrantFireTime[quadrant]!) >= _quadrantCooldown) {
+            _lastQuadrantFireTime[quadrant] = now;
+            switch (quadrant) {
+              case 0:
+                _gestureTopLeftTrigger?.fire();
+                break;
+              case 1:
+                _gestureTopRightTrigger?.fire();
+                break;
+              case 2:
+                _gestureBottomLeftTrigger?.fire();
+                break;
+              case 3:
+                _gestureBottomRightTrigger?.fire();
+                break;
+            }
+          }
+        }
+      } else {
+        _lastHoverQuadrant = null;
       }
     } catch (e) {
       _targetX = 50.0;
@@ -199,16 +238,17 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       if (_helloTrigger == null) {
         debugPrint('[Rive Hello] _onRiveInit: trigger Hello no encontrado (aliases: $_helloTriggerCandidates)');
       }
+      // Solo disparar en init por EXIT pendiente (ej. usuario cerró con X). No tocamos
+      // _lastEntryFireTime para no bloquear el ENTRY que llegará 1s después al abrir el chat.
       if (_helloTrigger != null) {
-        final entry = ref.read(riveEntryTriggerProvider);
         final exit = ref.read(riveExitTriggerProvider);
-        if (entry > 0 || exit > 0) {
+        if (exit > 0) {
           SchedulerBinding.instance.addPostFrameCallback((_) {
             if (!mounted || _helloTrigger == null) return;
-            if (_lastHelloFireTime != null && DateTime.now().difference(_lastHelloFireTime!) < _helloCooldown) return;
-            _lastHelloFireTime = DateTime.now();
+            if (_lastExitFireTime != null && DateTime.now().difference(_lastExitFireTime!) < _helloCooldown) return;
+            _lastExitFireTime = DateTime.now();
             _helloTrigger!.fire();
-            debugPrint('[Rive Hello] fire() en init (entry/exit pendiente)');
+            debugPrint('[Rive Hello] fire() en init (exit pendiente)');
           });
         }
       }
@@ -216,6 +256,10 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       _hoveredInput = controller.getBoolInput('Hovered');
       _hoverFromRightInput = controller.getBoolInput('HoverFromRight');
       _hoverFromTopInput = controller.getBoolInput('HoverFromTop');
+      _gestureTopLeftTrigger = controller.getTriggerInput('GestureTopLeft');
+      _gestureTopRightTrigger = controller.getTriggerInput('GestureTopRight');
+      _gestureBottomLeftTrigger = controller.getTriggerInput('GestureBottomLeft');
+      _gestureBottomRightTrigger = controller.getTriggerInput('GestureBottomRight');
       _isTypingInput = controller.getBoolInput('IsTyping');
 
       // ⬅️ NOTA: Para que el círculo cambie de color según el estado emocional,
@@ -275,11 +319,11 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
         debugPrint('[Rive Hello] ENTRY count=$count pero _helloTrigger=null (avatar aún no init o .riv sin Hello)');
         return;
       }
-      if (_lastHelloFireTime != null && DateTime.now().difference(_lastHelloFireTime!) < _helloCooldown) {
+      if (_lastEntryFireTime != null && DateTime.now().difference(_lastEntryFireTime!) < _helloCooldown) {
         debugPrint('[Rive Hello] ENTRY count=$count skip por cooldown');
         return;
       }
-      _lastHelloFireTime = DateTime.now();
+      _lastEntryFireTime = DateTime.now();
       _helloTrigger!.fire();
       debugPrint('[Rive Hello] ENTRY fire() OK');
     });
@@ -289,11 +333,11 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
         debugPrint('[Rive Hello] EXIT count=$count pero _helloTrigger=null (avatar aún no init o .riv sin Hello)');
         return;
       }
-      if (_lastHelloFireTime != null && DateTime.now().difference(_lastHelloFireTime!) < _helloCooldown) {
+      if (_lastExitFireTime != null && DateTime.now().difference(_lastExitFireTime!) < _helloCooldown) {
         debugPrint('[Rive Hello] EXIT count=$count skip por cooldown');
         return;
       }
-      _lastHelloFireTime = DateTime.now();
+      _lastExitFireTime = DateTime.now();
       _helloTrigger!.fire();
       debugPrint('[Rive Hello] EXIT fire() OK');
     });

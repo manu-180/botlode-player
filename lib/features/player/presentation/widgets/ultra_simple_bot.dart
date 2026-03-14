@@ -430,12 +430,12 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
         });
       } else if (previous == false && current == true) {
         ref.read(isClosingChatProvider.notifier).state = false;
-        // Retrasar Hello: esperar montaje del avatar + ~1s tras abrir chat.
+        // Saludo al abrir: delay corto para que monte el avatar del chat y encuentre el trigger.
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          Future.delayed(const Duration(seconds: 1), () {
+          Future.delayed(const Duration(milliseconds: 250), () {
             if (mounted && ref.read(chatOpenProvider)) {
               ref.read(riveEntryTriggerProvider.notifier).state++;
-              debugPrint('[Rive Hello] riveEntryTriggerProvider++ (chat abierto + delay 1s)');
+              debugPrint('[Rive Hello] riveEntryTriggerProvider++ (chat abierto)');
             }
           });
         });
