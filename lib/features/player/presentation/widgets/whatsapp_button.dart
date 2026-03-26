@@ -2,7 +2,7 @@ import 'dart:html' as html;
 import 'package:flutter/material.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
-/// Botón flotante de WhatsApp con animación de escala al hover (igual que bot).
+/// Botón flotante de WhatsApp (hover/escala desactivados en producción).
 /// Se posiciona arriba de la burbuja del bot.
 class WhatsAppButton extends StatefulWidget {
   final String phoneNumber;
@@ -21,8 +21,6 @@ class WhatsAppButton extends StatefulWidget {
 }
 
 class _WhatsAppButtonState extends State<WhatsAppButton> {
-  bool _isHovered = false;
-
   void _openWhatsApp(String phoneNumber) {
     final cleanNumber = phoneNumber.replaceAll(RegExp(r'[^\d+]'), '');
     final url = 'https://wa.me/$cleanNumber';
@@ -41,57 +39,53 @@ class _WhatsAppButtonState extends State<WhatsAppButton> {
 
     final borderColor = Colors.white.withOpacity(0.2);
     
-    // Mismo efecto que la burbuja del bot
-    final double targetScale = _isHovered ? 1.1 : 1.0;
-    final double targetBlur = _isHovered ? 15.0 : 12.0;
+    // Hover desactivado (producción), misma sombra base que sin hover.
+    const double targetScale = 1.0;
+    const double targetBlur = 12.0;
 
-    return MouseRegion(
-      onEnter: (_) => setState(() => _isHovered = true),
-      onExit: (_) => setState(() => _isHovered = false),
-      child: AnimatedScale(
-        scale: targetScale,
-        duration: const Duration(milliseconds: 250),
-        curve: Curves.easeOutCubic,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTap: () => _openWhatsApp(widget.phoneNumber),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 250),
-            curve: Curves.easeOutCubic,
-            width: buttonSize,
-            height: buttonSize,
-            decoration: BoxDecoration(
-              color: buttonColor,
-              borderRadius: BorderRadius.circular(buttonSize / 2),
-              border: Border.all(
-                color: borderColor,
-                width: 1.0,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(widget.isDarkMode ? 0.35 : 0.2),
-                  blurRadius: targetBlur,
-                  offset: const Offset(0, 4),
-                ),
-                BoxShadow(
-                  color: buttonColor.withOpacity(0.25),
-                  blurRadius: 14,
-                  spreadRadius: -2,
-                ),
-              ],
+    return AnimatedScale(
+      scale: targetScale,
+      duration: const Duration(milliseconds: 250),
+      curve: Curves.easeOutCubic,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => _openWhatsApp(widget.phoneNumber),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOutCubic,
+          width: buttonSize,
+          height: buttonSize,
+          decoration: BoxDecoration(
+            color: buttonColor,
+            borderRadius: BorderRadius.circular(buttonSize / 2),
+            border: Border.all(
+              color: borderColor,
+              width: 1.0,
             ),
-            child: Material(
-              color: Colors.transparent,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(widget.isDarkMode ? 0.35 : 0.2),
+                blurRadius: targetBlur,
+                offset: const Offset(0, 4),
+              ),
+              BoxShadow(
+                color: buttonColor.withOpacity(0.25),
+                blurRadius: 14,
+                spreadRadius: -2,
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            borderRadius: BorderRadius.circular(buttonSize / 2),
+            child: InkWell(
               borderRadius: BorderRadius.circular(buttonSize / 2),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(buttonSize / 2),
-                onTap: () => _openWhatsApp(widget.phoneNumber),
-                child: Center(
-                  child: FaIcon(
-                    FontAwesomeIcons.whatsapp,
-                    color: Colors.white,
-                    size: iconSize,
-                  ),
+              onTap: () => _openWhatsApp(widget.phoneNumber),
+              child: Center(
+                child: FaIcon(
+                  FontAwesomeIcons.whatsapp,
+                  color: Colors.white,
+                  size: iconSize,
                 ),
               ),
             ),

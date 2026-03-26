@@ -7,7 +7,7 @@ import 'package:botlode_player/features/player/presentation/providers/head_track
 import 'package:botlode_player/features/player/presentation/providers/loader_provider.dart';
 import 'package:botlode_player/features/player/presentation/providers/ui_provider.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
+import 'package:flutter/scheduler.dart' show Ticker;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:rive/rive.dart';
 
@@ -37,7 +37,8 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
   SMINumber? _downloadInput;
 
   // ⬅️ UX PREMIUM: inputs opcionales (si el .riv los tiene, se usan)
-  SMITrigger? _helloTrigger;
+  // --- Saludo Hello (gesto ENTRY/EXIT): desactivado temporalmente para producción ---
+  // SMITrigger? _helloTrigger;
   SMIBool? _hoveredInput;
   SMIBool? _hoverFromRightInput; // true = derecha, false = izquierda
   SMIBool? _hoverFromTopInput;   // true = arriba, false = abajo → 4 cuadrantes
@@ -90,16 +91,16 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
   bool _wasTrackingPreviously = false;
   int _trackingFrames = 0;
 
-  /// Cooldowns independientes: ENTRY y EXIT no se bloquean entre sí.
-  static const _helloCooldown = Duration(milliseconds: 1500);
-  DateTime? _lastEntryFireTime;
-  DateTime? _lastExitFireTime;
-  static const List<String> _helloTriggerCandidates = <String>[
-    'Hello',
-    'Gesture Hello',
-    'GestureHello',
-    'gesture_hello',
-  ];
+  // --- Hello ENTRY/EXIT (retomar junto con listeners y bloque en _onRiveInit) ---
+  // static const _helloCooldown = Duration(milliseconds: 1500);
+  // DateTime? _lastEntryFireTime;
+  // DateTime? _lastExitFireTime;
+  // static const List<String> _helloTriggerCandidates = <String>[
+  //   'Hello',
+  //   'Gesture Hello',
+  //   'GestureHello',
+  //   'gesture_hello',
+  // ];
 
   /// Sensibilidad y rango: 450px máximo para que no siga por toda la pantalla
   double get _sensitivity => widget.isBubble ? 400.0 : 600.0;
@@ -359,32 +360,29 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       _errorInput = controller.getBoolInput('Error');
       _downloadInput = controller.getNumberInput('Download'); // ⬅️ Modo "procesando" (como botlode_web)
 
-      // UX: el nombre del trigger puede variar según el archivo .riv.
-      // Probamos varios alias para evitar roturas por naming.
-      for (final name in _helloTriggerCandidates) {
-        _helloTrigger = controller.getTriggerInput(name);
-        if (_helloTrigger != null) {
-          debugPrint('[Rive Hello] _onRiveInit: trigger "$name" OK');
-          break;
-        }
-      }
-      if (_helloTrigger == null) {
-        debugPrint('[Rive Hello] _onRiveInit: trigger Hello no encontrado (aliases: $_helloTriggerCandidates)');
-      }
-      // Solo disparar en init por EXIT pendiente (ej. usuario cerró con X). No tocamos
-      // _lastEntryFireTime para no bloquear el ENTRY que llegará 1s después al abrir el chat.
-      if (_helloTrigger != null) {
-        final exit = ref.read(riveExitTriggerProvider);
-        if (exit > 0) {
-          SchedulerBinding.instance.addPostFrameCallback((_) {
-            if (!mounted || _helloTrigger == null) return;
-            if (_lastExitFireTime != null && DateTime.now().difference(_lastExitFireTime!) < _helloCooldown) return;
-            _lastExitFireTime = DateTime.now();
-            _helloTrigger!.fire();
-            debugPrint('[Rive Hello] fire() en init (exit pendiente)');
-          });
-        }
-      }
+      // UX: saludo Hello (ENTRY/EXIT) — desactivado temporalmente para producción.
+      // for (final name in _helloTriggerCandidates) {
+      //   _helloTrigger = controller.getTriggerInput(name);
+      //   if (_helloTrigger != null) {
+      //     debugPrint('[Rive Hello] _onRiveInit: trigger "$name" OK');
+      //     break;
+      //   }
+      // }
+      // if (_helloTrigger == null) {
+      //   debugPrint('[Rive Hello] _onRiveInit: trigger Hello no encontrado (aliases: $_helloTriggerCandidates)');
+      // }
+      // if (_helloTrigger != null) {
+      //   final exit = ref.read(riveExitTriggerProvider);
+      //   if (exit > 0) {
+      //     SchedulerBinding.instance.addPostFrameCallback((_) {
+      //       if (!mounted || _helloTrigger == null) return;
+      //       if (_lastExitFireTime != null && DateTime.now().difference(_lastExitFireTime!) < _helloCooldown) return;
+      //       _lastExitFireTime = DateTime.now();
+      //       _helloTrigger!.fire();
+      //       debugPrint('[Rive Hello] fire() en init (exit pendiente)');
+      //     });
+      //   }
+      // }
       _listeningTrigger = controller.getTriggerInput('Listening');
       _hoveredInput = controller.getBoolInput('Hovered');
       _hoverFromRightInput = controller.getBoolInput('HoverFromRight');
@@ -462,40 +460,41 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
     ref.listen(userIsTypingProvider, (_, isTyping) {
       if (_isTypingInput != null) _isTypingInput!.value = isTyping;
     });
-    ref.listen(avatarHoveredProvider, (_, hovered) {
-      if (_hoveredInput != null) _hoveredInput!.value = hovered;
-    });
+    // Hover en avatar (input Rive Hovered): desactivado temporalmente (producción).
+    // ref.listen(avatarHoveredProvider, (_, hovered) {
+    //   if (_hoveredInput != null) _hoveredInput!.value = hovered;
+    // });
     ref.listen(avatarListeningTriggerProvider, (_, count) {
       if (count > 0 && _listeningTrigger != null) _listeningTrigger!.fire();
     });
-    ref.listen(riveEntryTriggerProvider, (_, count) {
-      if (count <= 0) return;
-      if (_helloTrigger == null) {
-        debugPrint('[Rive Hello] ENTRY count=$count pero _helloTrigger=null (avatar aún no init o .riv sin Hello)');
-        return;
-      }
-      if (_lastEntryFireTime != null && DateTime.now().difference(_lastEntryFireTime!) < _helloCooldown) {
-        debugPrint('[Rive Hello] ENTRY count=$count skip por cooldown');
-        return;
-      }
-      _lastEntryFireTime = DateTime.now();
-      _helloTrigger!.fire();
-      debugPrint('[Rive Hello] ENTRY fire() OK');
-    });
-    ref.listen(riveExitTriggerProvider, (_, count) {
-      if (count <= 0) return;
-      if (_helloTrigger == null) {
-        debugPrint('[Rive Hello] EXIT count=$count pero _helloTrigger=null (avatar aún no init o .riv sin Hello)');
-        return;
-      }
-      if (_lastExitFireTime != null && DateTime.now().difference(_lastExitFireTime!) < _helloCooldown) {
-        debugPrint('[Rive Hello] EXIT count=$count skip por cooldown');
-        return;
-      }
-      _lastExitFireTime = DateTime.now();
-      _helloTrigger!.fire();
-      debugPrint('[Rive Hello] EXIT fire() OK');
-    });
+    // ref.listen(riveEntryTriggerProvider, (_, count) {
+    //   if (count <= 0) return;
+    //   if (_helloTrigger == null) {
+    //     debugPrint('[Rive Hello] ENTRY count=$count pero _helloTrigger=null (avatar aún no init o .riv sin Hello)');
+    //     return;
+    //   }
+    //   if (_lastEntryFireTime != null && DateTime.now().difference(_lastEntryFireTime!) < _helloCooldown) {
+    //     debugPrint('[Rive Hello] ENTRY count=$count skip por cooldown');
+    //     return;
+    //   }
+    //   _lastEntryFireTime = DateTime.now();
+    //   _helloTrigger!.fire();
+    //   debugPrint('[Rive Hello] ENTRY fire() OK');
+    // });
+    // ref.listen(riveExitTriggerProvider, (_, count) {
+    //   if (count <= 0) return;
+    //   if (_helloTrigger == null) {
+    //     debugPrint('[Rive Hello] EXIT count=$count pero _helloTrigger=null (avatar aún no init o .riv sin Hello)');
+    //     return;
+    //   }
+    //   if (_lastExitFireTime != null && DateTime.now().difference(_lastExitFireTime!) < _helloCooldown) {
+    //     debugPrint('[Rive Hello] EXIT count=$count skip por cooldown');
+    //     return;
+    //   }
+    //   _lastExitFireTime = DateTime.now();
+    //   _helloTrigger!.fire();
+    //   debugPrint('[Rive Hello] EXIT fire() OK');
+    // });
 
     // ⬅️ Aplicar modo "procesando" (Download 1.0) cuando isLoading; 0.0 cuando no (como botlode_web)
     if (_downloadInput != null) {
@@ -512,7 +511,9 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
         data: (riveFile) {
           return RepaintBoundary(
             child: RiveAnimation.direct(
-              riveFile, fit: BoxFit.contain, onInit: _onRiveInit,
+              riveFile,
+              fit: widget.isBubble ? BoxFit.cover : BoxFit.contain,
+              onInit: _onRiveInit,
             ),
           );
         },

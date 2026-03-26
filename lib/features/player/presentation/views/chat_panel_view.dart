@@ -83,15 +83,15 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
     }
   }
 
-  /// Cerrar chat: dispara animación "hasta luego" en Rive, luego cierra tras 300ms.
+  /// Cerrar chat: (Rive EXIT desactivado temporalmente) cierra tras 300ms.
   void _closeChat() {
     ref.read(isClosingChatProvider.notifier).state = true;
     ref.read(hideRiveForSpaceProvider.notifier).state = false;
     ref.read(isHoveredExternalProvider.notifier).state = false;
     ref.read(avatarHoveredProvider.notifier).state = false;
     ref.read(userIsTypingProvider.notifier).state = false;
-    ref.read(riveExitTriggerProvider.notifier).state++;
-    debugPrint('[Rive Hello] riveExitTriggerProvider++ (click X cerrar chat)');
+    // ref.read(riveExitTriggerProvider.notifier).state++;
+    // debugPrint('[Rive Hello] riveExitTriggerProvider++ (click X cerrar chat)');
     try {
       ref.read(presenceManagerProvider).setOffline();
     } catch (e) {
@@ -287,10 +287,6 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                                       isDarkMode: isDarkMode,
                                       onReload: () => ref.read(chatResetProvider)(),
                                       onClose: _closeChat,
-                                      onCloseButtonHover: () {
-                                        ref.read(riveExitTriggerProvider.notifier).state++;
-                                        debugPrint('[Rive Hello] riveExitTriggerProvider++ (hover X, header compacto)');
-                                      },
                                     ),
                                   ],
                                 ),
@@ -303,17 +299,13 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.center,
                                   children: [
-                                    // Avatar: hover = reacción sutil, tap = gesto "te escucho" (no oculta)
-                                    MouseRegion(
-                                      onEnter: (_) => ref.read(avatarHoveredProvider.notifier).state = true,
-                                      onExit: (_) => ref.read(avatarHoveredProvider.notifier).state = false,
-                                      child: GestureDetector(
-                                        behavior: HitTestBehavior.opaque,
-                                        onTap: () {
-                                          ref.read(avatarListeningTriggerProvider.notifier).state++;
-                                        },
-                                        child: const BotAvatarWidget(size: 112),
-                                      ),
+                                    // Hover en avatar (Rive): desactivado temporalmente para producción.
+                                    GestureDetector(
+                                      behavior: HitTestBehavior.opaque,
+                                      onTap: () {
+                                        ref.read(avatarListeningTriggerProvider.notifier).state++;
+                                      },
+                                      child: const BotAvatarWidget(size: 112),
                                     ),
                                     const SizedBox(width: 0),
                                     // Nombre arriba del indicador
@@ -351,10 +343,6 @@ class _ChatPanelViewState extends ConsumerState<ChatPanelView> with WidgetsBindi
                                         isDarkMode: isDarkMode,
                                         onReload: () => ref.read(chatResetProvider)(),
                                         onClose: _closeChat,
-                                        onCloseButtonHover: () {
-                                          ref.read(riveExitTriggerProvider.notifier).state++;
-                                          debugPrint('[Rive Hello] riveExitTriggerProvider++ (hover X, header completo)');
-                                        },
                                       ),
                                     ),
                                   ],
@@ -911,13 +899,11 @@ class _HeaderActionsPill extends StatelessWidget {
   final bool isDarkMode;
   final VoidCallback onReload;
   final VoidCallback onClose;
-  final VoidCallback? onCloseButtonHover;
 
   const _HeaderActionsPill({
     required this.isDarkMode,
     required this.onReload,
     required this.onClose,
-    this.onCloseButtonHover,
   });
 
   @override
@@ -962,23 +948,20 @@ class _HeaderActionsPill extends StatelessWidget {
             height: 16,
             color: border,
           ),
-          MouseRegion(
-            onEnter: (_) => onCloseButtonHover?.call(),
-            child: IconButton(
-              onPressed: onClose,
-              icon: const Icon(Icons.close_rounded, size: 18),
-              color: iconColor,
-              tooltip: 'Cerrar',
-              style: IconButton.styleFrom(
-                minimumSize: const Size(36, 36),
-                padding: EdgeInsets.zero,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(18),
-                ),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                splashFactory: NoSplash.splashFactory,
-                overlayColor: overlayColor,
+          IconButton(
+            onPressed: onClose,
+            icon: const Icon(Icons.close_rounded, size: 18),
+            color: iconColor,
+            tooltip: 'Cerrar',
+            style: IconButton.styleFrom(
+              minimumSize: const Size(36, 36),
+              padding: EdgeInsets.zero,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
               ),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              splashFactory: NoSplash.splashFactory,
+              overlayColor: overlayColor,
             ),
           ),
         ],

@@ -34,7 +34,6 @@ class UltraSimpleBot extends ConsumerStatefulWidget {
 
 class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot> 
     with SingleTickerProviderStateMixin {
-  bool _isHovered = false;
   bool _wasNetworkOffline = false; // ⬅️ Para enviar NETWORK_OFFLINE/ONLINE al padre solo una vez por transición
   PresenceManager? _presenceManager; // ⬅️ NUEVO: Mantener referencia al manager
   bool _lastKnownOpenState = false; // ⬅️ NUEVO: Trackear último estado conocido
@@ -82,19 +81,10 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
               final phone = botConfig.telefono!.replaceAll(RegExp(r'[^\d+]'), '');
               html.window.open('https://wa.me/$phone', '_blank');
             }
-          } else if (type == 'HITZONE_ENTER_BOT') {
-            // Hover sobre la burbuja → notificar al padre para expandir
-            if (!_isHovered) {
-              setState(() => _isHovered = true);
-              html.window.parent?.postMessage('CMD_HOVER_START', '*');
-            }
-          } else if (type == 'HITZONE_LEAVE_BOT') {
-            // Hover terminó → notificar al padre para contraer
-            if (_isHovered) {
-              setState(() => _isHovered = false);
-              html.window.parent?.postMessage('CMD_HOVER_END', '*');
-            }
           }
+          // Hover burbuja / CMD_HOVER_* al padre: desactivado temporalmente (producción).
+          // else if (type == 'HITZONE_ENTER_BOT') { ... }
+          // else if (type == 'HITZONE_LEAVE_BOT') { ... }
         }
         // Canal 2: String simple (fallback para interop Dart-JS problemática)
         else if (data is String) {
@@ -430,15 +420,15 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
         });
       } else if (previous == false && current == true) {
         ref.read(isClosingChatProvider.notifier).state = false;
-        // Saludo al abrir: delay corto para que monte el avatar del chat y encuentre el trigger.
-        WidgetsBinding.instance.addPostFrameCallback((_) {
-          Future.delayed(const Duration(milliseconds: 250), () {
-            if (mounted && ref.read(chatOpenProvider)) {
-              ref.read(riveEntryTriggerProvider.notifier).state++;
-              debugPrint('[Rive Hello] riveEntryTriggerProvider++ (chat abierto)');
-            }
-          });
-        });
+        // Saludo al abrir (Rive ENTRY): desactivado temporalmente para producción — retomar con listeners en rive_avatar.
+        // WidgetsBinding.instance.addPostFrameCallback((_) {
+        //   Future.delayed(const Duration(milliseconds: 250), () {
+        //     if (mounted && ref.read(chatOpenProvider)) {
+        //       ref.read(riveEntryTriggerProvider.notifier).state++;
+        //       debugPrint('[Rive Hello] riveEntryTriggerProvider++ (chat abierto)');
+        //     }
+        //   });
+        // });
         // ⬅️ ESTRATEGIA DETERMINISTA: El chat actual es SIEMPRE el activo
         // No consultamos la BD para "adivinar" cuál es más reciente.
         // El chat que el usuario está viendo ES la fuente de verdad.
@@ -686,8 +676,6 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
                         ignoring: !_showBubbles,
                         child: MouseRegion(
                           cursor: SystemMouseCursors.click,
-                          onEnter: (_) => setState(() => _isHovered = true),
-                          onExit: (_) => setState(() => _isHovered = false),
                           child: Consumer(
                             builder: (context, ref, _) {
                               final botConfig = ref.watch(botConfigProvider);
@@ -777,11 +765,12 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
         
         // ⬅️ Tamaño dinámico desde BD (sync en tiempo real)
         final double bubbleSize = botConfig.asData?.value.bubbleSize ?? 86.0;
-        final double headSize = bubbleSize * 0.837; // Proporción 72/86 ≈ 0.837
+        // ~15% más pequeño que 0.96×burbuja (ajuste fino tras BoxFit.cover)
+        final double headSize = bubbleSize * 0.96 * 0.85;
         
-        // ⬅️ NUEVA ESTRATEGIA: Scale en lugar de expandir horizontalmente
-        final double targetScale = _isHovered ? 1.1 : 1.0; // 10% más grande en hover
-        final double targetBlur = _isHovered ? 15.0 : 10.0; // Shadow más pronunciado en hover
+        // Hover (escala/sombra): desactivado temporalmente para producción.
+        const double targetScale = 1.0;
+        const double targetBlur = 10.0;
         
         // ⬅️ COLORES ADAPTATIVOS según tema
         final bubbleColor = isDarkMode 
@@ -832,7 +821,7 @@ class _UltraSimpleBotState extends ConsumerState<UltraSimpleBot>
                         final riveLoader = ref.watch(riveHeadFileLoaderProvider); 
                         
                         return riveLoader.when(
-                          data: (_) => const BotAvatarWidget(isBubble: true),
+                          data: (_) => BotAvatarWidget(isBubble: true, size: headSize),
                           loading: () => const Center(
                             child: CircularProgressIndicator(
                               color: Colors.white,
