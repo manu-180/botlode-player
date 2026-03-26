@@ -30,9 +30,11 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
   SMINumber? _moodInput;
   SMINumber? _lookXInput;
   SMINumber? _lookYInput;
+  /// Brazo siguiendo el mouse: mismos valores que LookX/LookY cuando hay hover (opcional en .riv).
+  SMINumber? _armLookXInput;
+  SMINumber? _armLookYInput;
   SMIBool? _errorInput;
   SMINumber? _downloadInput;
-  int? _savedMood;
 
   // ⬅️ UX PREMIUM: inputs opcionales (si el .riv los tiene, se usan)
   SMITrigger? _helloTrigger;
@@ -44,12 +46,37 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
   SMITrigger? _gestureTopRightTrigger;
   SMITrigger? _gestureBottomLeftTrigger;
   SMITrigger? _gestureBottomRightTrigger;
+  /// Modo "manotazo dirigido": dispara una animación one-shot al objetivo actual.
+  SMITrigger? _strikeTrigger;
+  SMINumber? _strikeTargetXInput;
+  SMINumber? _strikeTargetYInput;
+  SMIBool? _strikeUseRightHandInput;
   SMIBool? _isTypingInput;
 
   /// Cuadrante actual del hover (0=TL, 1=TR, 2=BL, 3=BR). Null cuando no hay hover.
   int? _lastHoverQuadrant;
   static const _quadrantCooldown = Duration(milliseconds: 1200);
   final List<DateTime?> _lastQuadrantFireTime = List.filled(4, null);
+  static const _strikeCooldown = Duration(milliseconds: 650);
+  static const double _minStrikeDistance = 8.0;
+  DateTime? _lastStrikeFireTime;
+  double _lastStrikeX = 50.0;
+  double _lastStrikeY = 50.0;
+
+  /// Ciclo "manotazo": ir a la posición del mouse → volver a reposo → repetir (no seguimiento continuo).
+  static const int _strikeOutMs = 220;   // ms que la mano va hacia el objetivo
+  static const int _strikeReturnMs = 380; // ms que la mano vuelve a 50/50
+  DateTime? _strikeCycleStartTime;
+  double _capturedStrikeX = 50.0;
+  double _capturedStrikeY = 50.0;
+
+  /// Logs de depuración para gestos por cuadrante (poner true para ver en consola).
+  static const bool _debugQuadrantGestures = false;
+  static const bool _debugStrikeGestures = true;
+  /// Logs para StrikeTarget/HandTarget (hover + valores enviados).
+  static const bool _debugHandTarget = true;
+  int _tickCount = 0;
+  bool _lastHoveredForLog = false;
 
   late Ticker _ticker;
   /// Timer independiente del Ticker para reforzar el mood en iframe/embed (evita parpadeo a neutral cuando rAF se throttlea).
@@ -102,9 +129,41 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
     super.dispose();
   }
 
+  void _tryFireStrike({
+    required double targetX,
+    required double targetY,
+  }) {
+    if (_strikeTrigger == null || _strikeTargetXInput == null || _strikeTargetYInput == null) {
+      return;
+    }
+    final now = DateTime.now();
+    final bool cooldownOk = _lastStrikeFireTime == null ||
+        now.difference(_lastStrikeFireTime!) >= _strikeCooldown;
+    final dx = targetX - _lastStrikeX;
+    final dy = targetY - _lastStrikeY;
+    final bool movedEnough = (dx * dx + dy * dy) >= (_minStrikeDistance * _minStrikeDistance);
+    if (!cooldownOk || !movedEnough) return;
+
+    _strikeTargetXInput!.value = targetX;
+    _strikeTargetYInput!.value = targetY;
+    if (_strikeUseRightHandInput != null) {
+      _strikeUseRightHandInput!.value = targetX >= 50.0;
+    }
+    _strikeTrigger!.fire();
+    _lastStrikeFireTime = now;
+    _lastStrikeX = targetX;
+    _lastStrikeY = targetY;
+    if (_debugStrikeGestures) {
+      debugPrint('[Rive Strike] fire() x=${targetX.toStringAsFixed(1)} y=${targetY.toStringAsFixed(1)} '
+          'hand=${targetX >= 50.0 ? "right" : "left"}');
+    }
+  }
+
   void _onTick(Duration elapsed) {
     if (!mounted || _lookXInput == null || _lookYInput == null) return;
 
+    final bool hovered = ref.read(avatarHoveredProvider);
+    final bool enableBodyGestures = !widget.isBubble;
     // Calcular tracking en cada frame (como botlode_web): posición real del widget
     try {
       final globalPointer = ref.read(pointerPositionProvider);
@@ -134,34 +193,46 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       if (_isTracking) _trackingFrames++; else _trackingFrames = 0;
       _wasTrackingPreviously = _isTracking;
 
-      // Cuadrantes del hover: actualizar booleans y disparar gesto al entrar en cada cuadrante
-      final hovered = ref.read(avatarHoveredProvider);
-      if (hovered && globalPointer != null) {
+      // Cuadrantes/strike solo para avatar completo (chat), no para burbuja de cabeza.
+      if (enableBodyGestures && hovered && globalPointer != null) {
         final fromRight = globalPointer.dx > widgetCenter.dx;
         final fromTop = globalPointer.dy < widgetCenter.dy; // Y menor = arriba
         if (_hoverFromRightInput != null) _hoverFromRightInput!.value = fromRight;
         if (_hoverFromTopInput != null) _hoverFromTopInput!.value = fromTop;
-        // 0=TL, 1=TR, 2=BL, 3=BR
-        final quadrant = (fromRight ? 1 : 0) + (fromTop ? 0 : 2);
-        if (quadrant != _lastHoverQuadrant) {
-          _lastHoverQuadrant = quadrant;
-          final now = DateTime.now();
-          if (_lastQuadrantFireTime[quadrant] == null ||
-              now.difference(_lastQuadrantFireTime[quadrant]!) >= _quadrantCooldown) {
-            _lastQuadrantFireTime[quadrant] = now;
-            switch (quadrant) {
-              case 0:
-                _gestureTopLeftTrigger?.fire();
-                break;
-              case 1:
-                _gestureTopRightTrigger?.fire();
-                break;
-              case 2:
-                _gestureBottomLeftTrigger?.fire();
-                break;
-              case 3:
-                _gestureBottomRightTrigger?.fire();
-                break;
+        // Modo pro: objetivo continuo + trigger one-shot (si el .riv tiene Strike + targets).
+        final strikeTargetY = (_targetY - 15.0).clamp(0.0, 100.0);
+        if (_strikeTrigger != null && _strikeTargetXInput != null && _strikeTargetYInput != null) {
+          _tryFireStrike(targetX: _targetX, targetY: strikeTargetY);
+        } else {
+          // Fallback legacy: cuadrantes
+          final quadrant = (fromRight ? 1 : 0) + (fromTop ? 0 : 2); // 0=TL, 1=TR, 2=BL, 3=BR
+          if (quadrant != _lastHoverQuadrant) {
+            final now = DateTime.now();
+            final cooldownOk = _lastQuadrantFireTime[quadrant] == null ||
+                now.difference(_lastQuadrantFireTime[quadrant]!) >= _quadrantCooldown;
+            if (_debugQuadrantGestures) {
+              const names = ['TopLeft', 'TopRight', 'BottomLeft', 'BottomRight'];
+              debugPrint('[Rive Quadrant] cambio → $quadrant (${names[quadrant]}): '
+                  'fromRight=$fromRight fromTop=$fromTop cooldownOk=$cooldownOk '
+                  'triggerTL=${_gestureTopLeftTrigger != null}');
+            }
+            _lastHoverQuadrant = quadrant;
+            if (cooldownOk) {
+              _lastQuadrantFireTime[quadrant] = now;
+              switch (quadrant) {
+                case 0:
+                  _gestureTopLeftTrigger?.fire();
+                  break;
+                case 1:
+                  _gestureTopRightTrigger?.fire();
+                  break;
+                case 2:
+                  _gestureBottomLeftTrigger?.fire();
+                  break;
+                case 3:
+                  _gestureBottomRightTrigger?.fire();
+                  break;
+              }
             }
           }
         }
@@ -191,9 +262,69 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
     _currentX = lerpDouble(_currentX, _targetX, smoothFactor) ?? 50;
     _currentY = lerpDouble(_currentY, calibratedTargetY, smoothFactor) ?? 50;
 
+    _tickCount++;
     try {
       _lookXInput!.value = _currentX;
       _lookYInput!.value = _currentY;
+      // StrikeTargetX/Y solo en avatar completo (chat). Modo "manotazo": ir a posición → volver a reposo → repetir.
+      if (enableBodyGestures && _strikeTargetXInput != null && _strikeTargetYInput != null) {
+        if (hovered) {
+          final now = DateTime.now();
+          if (_strikeCycleStartTime == null) {
+            _strikeCycleStartTime = now;
+            _capturedStrikeX = _currentX;
+            _capturedStrikeY = _currentY;
+          }
+          int elapsedMs = now.difference(_strikeCycleStartTime!).inMilliseconds;
+          final cycleLength = _strikeOutMs + _strikeReturnMs;
+          if (elapsedMs >= cycleLength) {
+            _strikeCycleStartTime = now;
+            _capturedStrikeX = _currentX;
+            _capturedStrikeY = _currentY;
+            elapsedMs = 0;
+          }
+          final inOutPhase = elapsedMs < _strikeOutMs;
+          final sendX = inOutPhase ? _capturedStrikeX : 50.0;
+          final sendY = inOutPhase ? _capturedStrikeY : 50.0;
+          _strikeTargetXInput!.value = sendX;
+          _strikeTargetYInput!.value = sendY;
+          if (_strikeUseRightHandInput != null) {
+            _strikeUseRightHandInput!.value = sendX >= 50.0;
+          }
+          if (_debugHandTarget) {
+            if (!_lastHoveredForLog) {
+              debugPrint('[HandTarget] hover ENTRÓ → modo manotazo (ir → volver → repetir)');
+              _lastHoveredForLog = true;
+            } else if (_tickCount % 90 == 0) {
+              debugPrint('[HandTarget] fase=${inOutPhase ? "ir" : "volver"} enviando X=${sendX.toStringAsFixed(1)} Y=${sendY.toStringAsFixed(1)}');
+            }
+          }
+        } else {
+          _strikeCycleStartTime = null;
+          _strikeTargetXInput!.value = 50.0;
+          _strikeTargetYInput!.value = 50.0;
+          if (_debugHandTarget && _lastHoveredForLog) {
+            debugPrint('[HandTarget] hover SALIÓ → enviando 50, 50');
+            _lastHoveredForLog = false;
+          }
+        }
+      } else if (_debugHandTarget && enableBodyGestures && hovered && _tickCount % 90 == 0) {
+        debugPrint('[HandTarget] hover=true pero StrikeTargetX o StrikeTargetY son null (¿inputs en .riv?)');
+      }
+      if (_debugHandTarget && enableBodyGestures && _tickCount % 120 == 0) {
+        debugPrint('[HandTarget] estado: hovered=$hovered strikeInputs=${_strikeTargetXInput != null && _strikeTargetYInput != null} look=($_currentX, $_currentY)');
+      }
+      // ArmLook (si existe y no usamos Strike/Blend): brazo sigue al mouse continuo.
+      if (_armLookXInput != null && _armLookYInput != null) {
+        final hasStrikeInputs = _strikeTargetXInput != null && _strikeTargetYInput != null;
+        if (hovered && !hasStrikeInputs) {
+          _armLookXInput!.value = _currentX;
+          _armLookYInput!.value = _currentY;
+        } else {
+          _armLookXInput!.value = 50.0;
+          _armLookYInput!.value = 50.0;
+        }
+      }
     } catch (_) {}
 
     // Enforcement continuo del mood: re-aplicar el valor en cada frame para que la state machine
@@ -223,6 +354,8 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       _moodInput = controller.getNumberInput('Mood');
       _lookXInput = controller.getNumberInput('LookX');
       _lookYInput = controller.getNumberInput('LookY');
+      _armLookXInput = controller.getNumberInput('ArmLookX');
+      _armLookYInput = controller.getNumberInput('ArmLookY');
       _errorInput = controller.getBoolInput('Error');
       _downloadInput = controller.getNumberInput('Download'); // ⬅️ Modo "procesando" (como botlode_web)
 
@@ -260,7 +393,26 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       _gestureTopRightTrigger = controller.getTriggerInput('GestureTopRight');
       _gestureBottomLeftTrigger = controller.getTriggerInput('GestureBottomLeft');
       _gestureBottomRightTrigger = controller.getTriggerInput('GestureBottomRight');
+      _strikeTrigger = controller.getTriggerInput('Strike');
+      _strikeTargetXInput = controller.getNumberInput('StrikeTargetX');
+      _strikeTargetYInput = controller.getNumberInput('StrikeTargetY');
+      _strikeUseRightHandInput = controller.getBoolInput('StrikeUseRightHand');
       _isTypingInput = controller.getBoolInput('IsTyping');
+      if (!widget.isBubble) {
+        if (_strikeTrigger != null && _strikeTargetXInput != null && _strikeTargetYInput != null) {
+          debugPrint('[Rive Strike] modo strike habilitado (Strike + StrikeTargetX/Y detectados)');
+          if (_debugHandTarget) {
+            debugPrint('[HandTarget] StrikeTargetX y StrikeTargetY encontrados → el brazo puede seguir al mouse');
+          }
+        } else {
+          if (_debugStrikeGestures) {
+            debugPrint('[Rive Strike] modo strike NO activo (faltan inputs en .riv), usando fallback por cuadrantes');
+          }
+          if (_debugHandTarget) {
+            debugPrint('[HandTarget] StrikeTargetX o StrikeTargetY NO encontrados → revisar nombres en State Machine del .riv');
+          }
+        }
+      }
 
       // ⬅️ NOTA: Para que el círculo cambie de color según el estado emocional,
       // debes configurar en Rive que el color del círculo de "Face download" 
@@ -272,6 +424,10 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
       _moodInput?.value = ref.read(botMoodProvider).toDouble();
       _lookXInput?.value = 50;
       _lookYInput?.value = 50;
+      if (_armLookXInput != null) _armLookXInput!.value = 50;
+      if (_armLookYInput != null) _armLookYInput!.value = 50;
+      if (_strikeTargetXInput != null) _strikeTargetXInput!.value = 50;
+      if (_strikeTargetYInput != null) _strikeTargetYInput!.value = 50;
       // UX PREMIUM: valores iniciales de inputs opcionales
       _isTypingInput?.value = ref.read(userIsTypingProvider);
       _hoveredInput?.value = ref.read(avatarHoveredProvider);
@@ -290,9 +446,8 @@ class _BotAvatarWidgetState extends ConsumerState<BotAvatarWidget> with SingleTi
     final chatState = ref.watch(chatControllerProvider);
 
     // Mood: el ticker (_onTick) se encarga de reforzar el valor del input Mood en cada frame
-    // leyendo directamente de botMoodProvider. Este listener solo actualiza _savedMood como cache.
+    // leyendo directamente de botMoodProvider.
     ref.listen(botMoodProvider, (prev, next) {
-      _savedMood = next;
       if (_moodInput != null) _moodInput!.value = next.toDouble();
     });
 
